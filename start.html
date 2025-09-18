@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information Hub - Entry Point</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .entry-container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 10px;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="entry-container">
+        <h1><i class="fas fa-sitemap"></i> Information Hub</h1>
+        <div class="spinner"></div>
+        <p>Checking authentication status...</p>
+        <div id="manualEntry" style="display: none; margin-top: 20px;">
+            <p>Or manually choose an option:</p>
+            <a href="auth.html" class="btn">Login</a>
+            <a href="index.html" class="btn">Go to Hub</a>
+        </div>
+    </div>
+
+    <script>
+        // Check authentication status
+        const session = localStorage.getItem('hubSession');
+        
+        setTimeout(() => {
+            if (session) {
+                // User is authenticated, redirect to main hub
+                window.location.href = 'index.html';
+            } else {
+                // User is not authenticated, redirect to login
+                window.location.href = 'auth.html';
+            }
+        }, 2000);
+
+        // Show manual entry options after 3 seconds
+        setTimeout(() => {
+            document.getElementById('manualEntry').style.display = 'block';
+        }, 3000);
+    </script>
+</body>
+</html>
+

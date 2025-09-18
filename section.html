@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Section - Information Hub</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <div style="text-align: center;">
+            <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+            <h2>Loading Section...</h2>
+            <p>Please wait while we load the section content.</p>
+        </div>
+    </div>
+    
+    <div id="mainContent" style="display: none;">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-title">
+                    <i id="sectionIcon" class="fas fa-cogs"></i>
+                    <h1 id="sectionName">Section Name</h1>
+                </div>
+                
+                <button class="back-btn" onclick="goBackToHub()">
+                    <i class="fas fa-arrow-left"></i> Back to Hub
+                </button>
+            </div>
+
+            <div id="sectionIntro" class="section-intro" style="margin:-4px 0 16px 0;color:#556;">
+            </div>
+
+            <div class="nav-tabs">
+                <div class="nav-tab active" onclick="switchTab('playbooks')">
+                    <i class="fas fa-book"></i> Playbooks
+                </div>
+                <div class="nav-tab" onclick="switchTab('box-links')">
+                    <i class="fas fa-link"></i> Box Links
+                </div>
+                <div class="nav-tab" onclick="switchTab('dashboards')">
+                    <i class="fas fa-chart-bar"></i> Dashboards
+                </div>
+            </div>
+
+            <div class="search-filter-container">
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="Search resources..." class="search-input">
+                    <i class="fas fa-search search-icon"></i>
+                </div>
+                <div class="filter-container">
+                    <select id="categoryFilter" class="filter-select">
+                        <option value="">All Categories</option>
+                        <option value="process">Process</option>
+                        <option value="procedure">Procedure</option>
+                        <option value="guide">Guide</option>
+                        <option value="template">Template</option>
+                        <option value="checklist">Checklist</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="content-section active" id="playbooks-section">
+                <button class="add-resource-btn" onclick="addResource('playbooks')" style="display: none;">
+                    <i class="fas fa-plus"></i> Add Playbook
+                </button>
+                <div class="resource-grid" id="playbooks-grid"></div>
+            </div>
+
+            <div class="content-section" id="box-links-section">
+                <button class="add-resource-btn" onclick="addResource('box-links')" style="display: none;">
+                    <i class="fas fa-plus"></i> Add Box Link
+                </button>
+                <div class="resource-grid" id="box-links-grid"></div>
+            </div>
+
+            <div class="content-section" id="dashboards-section">
+                <button class="add-resource-btn" onclick="addResource('dashboards')" style="display: none;">
+                    <i class="fas fa-plus"></i> Add Dashboard
+                </button>
+                <div class="resource-grid" id="dashboards-grid"></div>
+            </div>
+
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <i class="fas fa-folder-open"></i>
+                <h3>No resources found</h3>
+                <p>Add your first resource to get started!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="database.js"></script>
+    <script src="excel-export.js"></script>
+    <script src="auth-script.js"></script>
+    <script src="section-script.js"></script>
+    
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</body>
+</html>
+

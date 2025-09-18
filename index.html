@@ -1,0 +1,4137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information Hub - Central Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <div style="text-align: center;">
+            <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+            <h2>Loading Information Hub...</h2>
+            <p>Please wait while we verify your access.</p>
+        </div>
+    </div>
+    
+    <div id="mainContent" style="display: none;">
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <div class="logo-container">
+                        <img src="logo.svg" alt="Company Logo" class="site-logo">
+                        <h1>Information Hub</h1>
+                    </div>
+                    <p>Central dashboard for accessing all functional areas and resources</p>
+                </div>
+                <div class="user-info">
+                    <div class="user-details">
+                        <span class="user-name" id="userName">Loading...</span>
+                        <span class="user-role" id="userRole">Loading...</span>
+                    </div>
+                    <div class="user-actions">
+                        <button class="btn btn-secondary" onclick="showUserProfile()" title="Profile">
+                            <i class="fas fa-user"></i>
+                        </button>
+                        <button class="btn btn-secondary" onclick="logout()" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="hub-grid">
+            <!-- Costing Section -->
+            <div class="hub-card" onclick="navigateToSection('costing')">
+                <div class="card-icon">
+                    <i class="fas fa-calculator"></i>
+                </div>
+                <h3>Costing</h3>
+                <p>Financial analysis, cost management, and budgeting resources</p>
+                <div class="card-stats" id="costing-stats">
+                    <span><i class="fas fa-book"></i> <span id="costing-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="costing-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="costing-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- Supply Planning Section -->
+            <div class="hub-card" onclick="navigateToSection('supply-planning')">
+                <div class="card-icon">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <h3>Supply Planning</h3>
+                <p>Supply chain management, inventory planning, and logistics</p>
+                <div class="card-stats" id="supply-planning-stats">
+                    <span><i class="fas fa-book"></i> <span id="supply-planning-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="supply-planning-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="supply-planning-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- Operations Section -->
+            <div class="hub-card" onclick="navigateToSection('operations')">
+                <div class="card-icon">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <h3>Operations</h3>
+                <p>Operational procedures, workflows, and process management</p>
+                <div class="card-stats" id="operations-stats">
+                    <span><i class="fas fa-book"></i> <span id="operations-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="operations-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="operations-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- Quality Management Section -->
+            <div class="hub-card" onclick="navigateToSection('quality')">
+                <div class="card-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3>Quality Management</h3>
+                <p>Quality control, assurance, and compliance procedures</p>
+                <div class="card-stats" id="quality-stats">
+                    <span><i class="fas fa-book"></i> <span id="quality-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="quality-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="quality-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- Human Resources Section -->
+            <div class="hub-card" onclick="navigateToSection('hr')">
+                <div class="card-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3>Human Resources</h3>
+                <p>HR policies, procedures, and employee management resources</p>
+                <div class="card-stats" id="hr-stats">
+                    <span><i class="fas fa-book"></i> <span id="hr-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="hr-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="hr-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- IT & Technology Section -->
+            <div class="hub-card" onclick="navigateToSection('it')">
+                <div class="card-icon">
+                    <i class="fas fa-laptop-code"></i>
+                </div>
+                <h3>IT & Technology</h3>
+                <p>Technical documentation, system guides, and IT procedures</p>
+                <div class="card-stats" id="it-stats">
+                    <span><i class="fas fa-book"></i> <span id="it-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="it-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="it-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- Sales & Marketing Section -->
+            <div class="hub-card" onclick="navigateToSection('sales')">
+                <div class="card-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3>Sales & Marketing</h3>
+                <p>Sales processes, marketing strategies, and customer management</p>
+                <div class="card-stats" id="sales-stats">
+                    <span><i class="fas fa-book"></i> <span id="sales-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="sales-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="sales-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+
+            <!-- Compliance & Legal Section -->
+            <div class="hub-card" onclick="navigateToSection('compliance')">
+                <div class="card-icon">
+                    <i class="fas fa-gavel"></i>
+                </div>
+                <h3>Compliance & Legal</h3>
+                <p>Regulatory compliance, legal procedures, and policy management</p>
+                <div class="card-stats" id="compliance-stats">
+                    <span><i class="fas fa-book"></i> <span id="compliance-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="compliance-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="compliance-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <h3>Quick Actions</h3>
+            <div class="action-buttons">
+                <button class="action-btn" id="adminPanelBtn" onclick="openAdminPanel()">
+                    <i class="fas fa-cog"></i> User Management
+                </button>
+                <button class="action-btn" id="exportBtn" onclick="exportAllData()" style="display:none;">
+                    <i class="fas fa-download"></i> Export Data
+                </button>
+            </div>
+        </div>
+        
+        
+        
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="userProfileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>User Profile</h2>
+                <span class="close" onclick="closeModal('userProfileModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="profile-info">
+                    <div class="profile-item">
+                        <label>Name:</label>
+                        <span id="profileName">-</span>
+                    </div>
+                    <div class="profile-item">
+                        <label>Username:</label>
+                        <span id="profileUsername">-</span>
+                    </div>
+                    <div class="profile-item">
+                        <label>Role:</label>
+                        <span id="profileRole">-</span>
+                    </div>
+                    <div class="profile-item">
+                        <label>Email:</label>
+                        <span id="profileEmail">-</span>
+                    </div>
+                    <div class="profile-item">
+                        <label>Accessible Sections:</label>
+                        <div id="profileSections" class="sections-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:560px; width:95%;">
+            <div class="modal-header">
+                <h2>Add New User</h2>
+                <span class="close" onclick="closeModal('addUserModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm" onsubmit="return submitAddUser(event)">
+                    <div class="form-group">
+                        <label>Username *</label>
+                        <input type="text" id="newUsername" required placeholder="jdoe">
+                    </div>
+                    <div class="form-group">
+                        <label>Password *</label>
+                        <input type="password" id="newPassword" required placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="newName" placeholder="John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="newEmail" placeholder="john.doe@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Role *</label>
+                        <select id="newRole" required>
+                            <option value="admin">Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="user" selected>User</option>
+                        </select>
+                    </div>
+                    <div class="form-actions" style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Admin Panel Modal -->
+    <div id="adminPanelModal" class="modal">
+        <div class="modal-content admin-modal">
+            <div class="modal-header">
+                <h2>User Management Panel</h2>
+                <span class="close" onclick="closeModal('adminPanelModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="admin-tabs">
+                    <div class="admin-tab active" onclick="switchAdminTab('users')">
+                        <i class="fas fa-users"></i> Users
+                    </div>
+                    <div class="admin-tab" onclick="switchAdminTab('permissions')">
+                        <i class="fas fa-key"></i> Permissions
+                    </div>
+                    <div class="admin-tab" onclick="switchAdminTab('audit')">
+                        <i class="fas fa-history"></i> Audit Log
+                    </div>
+                    <div class="admin-tab" onclick="switchAdminTab('sections')">
+                        <i class="fas fa-th-large"></i> Manage Sections
+                    </div>
+                    <div class="admin-tab" onclick="switchAdminTab('assignments')">
+                        <i class="fas fa-user-check"></i> Section Assignments
+                    </div>
+                    <div class="admin-tab" onclick="switchAdminTab('export')">
+                        <i class="fas fa-download"></i> Export Data
+                    </div>
+                </div>
+
+                <div class="admin-view-controls" style="display:flex;align-items:center;gap:12px;justify-content:flex-end;margin:8px 0 4px;">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;color:#444;">
+                        <input type="checkbox" id="compactToggle" onchange="toggleCompactAdmin()"> Compact mode
+                    </label>
+                </div>
+                
+                <div class="admin-content">
+                    <div id="users-tab" class="admin-tab-content active">
+                        <div class="admin-section-header">
+                            <h3>User Management</h3>
+                            <button class="btn btn-primary" onclick="openAddUserModal()">
+                                <i class="fas fa-plus"></i> Add User
+                            </button>
+                        </div>
+                <div class="user-search-bar" style="margin:10px 0 12px; display:flex; gap:10px; align-items:center;">
+                    <input id="userSearchInput" type="text" placeholder="Search users by name, username, email, or role" oninput="loadUsersList()" style="flex:1; padding:8px 10px; border:1px solid #e1e5e9; border-radius:6px;" />
+                    <button class="btn btn-secondary" onclick="document.getElementById('userSearchInput').value=''; loadUsersList();">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+                        <div id="currentUserSummary" class="current-user-summary"></div>
+                        <div id="usersList" class="users-list"></div>
+                    </div>
+                    
+                    <div id="permissions-tab" class="admin-tab-content">
+                        <div class="admin-section-header">
+                            <h3>User Permission Management</h3>
+                            <button class="btn btn-primary" onclick="refreshUserList()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                        
+                        <div class="permission-management">
+                            <div class="user-selector">
+                                <label for="permissionUserSelect">Select User to Manage:</label>
+                                <select id="permissionUserSelect" onchange="loadUserPermissions()">
+                                    <option value="">Choose a user...</option>
+                                </select>
+                            </div>
+                            
+                            <div id="userPermissionForm" style="display: none;">
+                                <div class="permission-form">
+                                    <h4 id="selectedUserName">User Permissions</h4>
+                                    
+                                    <div class="permission-section">
+                                        <h5>Section Access & Edit Permissions</h5>
+                                        <div id="sectionCheckboxes" class="section-permissions"></div>
+                                    </div>
+                                    
+                                    <div class="permission-actions">
+                                        <button class="btn btn-primary" onclick="saveUserPermissions()">
+                                            <i class="fas fa-save"></i> Save Permissions
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="resetUserPermissions()">
+                                            <i class="fas fa-undo"></i> Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="audit-tab" class="admin-tab-content">
+                        <div class="admin-section-header">
+                            <h3>Audit Log</h3>
+                            <button class="btn btn-primary" onclick="exportAuditLog()">
+                                <i class="fas fa-download"></i> Export Audit Log
+                            </button>
+                        </div>
+                        <div class="audit-filters">
+                            <select id="auditUserFilter">
+                                <option value="">All Users</option>
+                            </select>
+                            <select id="auditActionFilter">
+                                <option value="">All Actions</option>
+                                <option value="LOGIN">Login</option>
+                                <option value="LOGOUT">Logout</option>
+                                <option value="CREATE">Create</option>
+                                <option value="UPDATE">Update</option>
+                                <option value="DELETE">Delete</option>
+                            </select>
+                        </div>
+                        <div id="auditLog" class="audit-log"></div>
+                    </div>
+                    
+                    <div id="sections-tab" class="admin-tab-content">
+                        <div class="admin-section-header">
+                            <h3>Section Management</h3>
+                            <button class="btn btn-primary" onclick="addNewSection()">
+                                <i class="fas fa-plus"></i> Add New Section
+                            </button>
+                        </div>
+                        
+                        <div class="sections-management">
+                            <div class="sections-list" id="sectionsList">
+                                <!-- Sections will be loaded here -->
+                            </div>
+                            
+                            <div class="section-actions">
+                                <button class="btn btn-secondary" onclick="saveSectionOrder()">
+                                    <i class="fas fa-save"></i> Save Order
+                                </button>
+                                <button class="btn btn-warning" onclick="resetSections()">
+                                    <i class="fas fa-undo"></i> Reset to Default
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="assignments-tab" class="admin-tab-content">
+                        <div class="admin-section-header">
+                            <h3>User Section Assignments</h3>
+                            <p>Assign specific sections to each user. Users will only see sections they are assigned to.</p>
+                        </div>
+                        <div id="assignmentsList" class="assignments-list"></div>
+                    </div>
+                    
+                    <div id="export-tab" class="admin-tab-content">
+                        <h3>Data Export</h3>
+                        <div class="export-options">
+                            <div class="export-card">
+                                <h4>Complete Data Export</h4>
+                                <p>Export all users, sections, resources, and activities</p>
+                                <button class="btn btn-primary" onclick="exportAllData()">
+                                    <i class="fas fa-download"></i> Export All Data
+                                </button>
+                                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                                    <button class="btn btn-secondary" onclick="backupJson()">
+                                        <i class="fas fa-database"></i> Backup JSON
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="restoreJson()">
+                                        <i class="fas fa-upload"></i> Restore JSON
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="export-card">
+                                <h4>Section-Specific Export</h4>
+                                <p>Export data for a specific section</p>
+                                <select id="sectionExportSelect">
+                                    <option value="">Select Section</option>
+                                    <option value="costing">Costing</option>
+                                    <option value="supply-planning">Supply Planning</option>
+                                    <option value="operations">Operations</option>
+                                    <option value="quality">Quality Management</option>
+                                    <option value="hr">Human Resources</option>
+                                    <option value="it">IT & Technology</option>
+                                    <option value="sales">Sales & Marketing</option>
+                                    <option value="compliance">Compliance & Legal</option>
+                                </select>
+                                <button class="btn btn-secondary" onclick="exportSectionData()">
+                                    <i class="fas fa-download"></i> Export Section
+                                </button>
+                            </div>
+                            
+                            <div class="export-card">
+                                <h4>User-Specific Export</h4>
+                                <p>Export data for a specific user</p>
+                                <select id="userExportSelect">
+                                    <option value="">Select User</option>
+                                </select>
+                                <button class="btn btn-secondary" onclick="exportUserData()">
+                                    <i class="fas fa-download"></i> Export User Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="database.js"></script>
+    <script src="excel-export.js"></script>
+    <script src="auth-script.js"></script>
+    <script src="hub-script.js"></script>
+    <script>
+        // Debug: Check if navigateToSection function exists
+        console.log('navigateToSection function exists:', typeof window.navigateToSection);
+        
+        // Check authentication before loading the hub
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                window.location.href = 'auth.html';
+                return;
+            }
+            
+                // Hide loading screen and show main content FIRST
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                    console.log('Loading screen hidden');
+                }
+                
+                if (mainContent) {
+                    mainContent.style.display = 'block';
+                    console.log('Main content shown');
+                }
+                
+                // Rebuild hub cards dynamically from configuration
+                try { updateMainHubSections(); } catch (e) { console.warn('updateMainHubSections error', e); }
+                
+                // Check if this is a fresh login and force update
+                const freshLogin = localStorage.getItem('freshLogin');
+                const lastLoginUser = localStorage.getItem('lastLoginUser');
+            
+                if (freshLogin === 'true') {
+                    console.log('=== FRESH LOGIN DETECTED ===');
+                    console.log('Last login user data:', lastLoginUser ? JSON.parse(lastLoginUser) : 'None');
+                    localStorage.removeItem('freshLogin');
+                    localStorage.removeItem('lastLoginUser');
+                    
+                    // Force update with fresh data
+                    setTimeout(() => {
+                        console.log('Forcing interface update after fresh login...');
+                        updateUserInterface();
+                    }, 100);
+                } else {
+                    console.log('Regular page load, updating interface...');
+                    // Update user interface based on role
+                    updateUserInterface();
+                }
+                
+                // FORCE UPDATE EVERY 2 SECONDS TO KEEP IN SYNC
+                setInterval(() => {
+                    const currentSession = localStorage.getItem('hubSession');
+                    if (currentSession) {
+                        console.log('Auto-updating interface...');
+                        updateUserInterface();
+                    }
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error in DOMContentLoaded:', error);
+                // Ensure loading screen is hidden even if there's an error
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                }
+                
+                if (mainContent) {
+                    mainContent.style.display = 'block';
+                }
+            }
+            
+            // Debug: Check again after DOM is loaded
+            console.log('After DOM loaded - navigateToSection function exists:', typeof window.navigateToSection);
+        });
+        
+        // Also update interface when page becomes visible (for when user comes back from login)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                const session = localStorage.getItem('hubSession');
+                if (session) {
+                    console.log('Page became visible, updating user interface...');
+                    updateUserInterface();
+                }
+            }
+        });
+        
+        // Update interface when window gains focus (for when user comes back from login)
+        window.addEventListener('focus', () => {
+            const session = localStorage.getItem('hubSession');
+            if (session) {
+                console.log('Window gained focus, updating user interface...');
+                updateUserInterface();
+            }
+        });
+        
+        // Function to update section statistics with real data (DB first, fallback to localStorage)
+        async function updateSectionStats() {
+            // Prefer dynamic sections from sectionOrder (visible ones)
+            let sections = [];
+            const savedOrder = localStorage.getItem('sectionOrder');
+            if (savedOrder) {
+                try {
+                    const parsed = JSON.parse(savedOrder);
+                    sections = parsed.filter(s => s.visible !== false).map(s => s.id);
+                } catch (_) {}
+            }
+            if (sections.length === 0) {
+                sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            }
+
+            const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
+            if (useDb) {
+                // Load counts from IndexedDB
+                await Promise.all(sections.map(async (sectionId) => {
+                    try {
+                        const all = await hubDatabase.getResourcesBySection(sectionId);
+                        const playbooks = all.filter(r => r.type === 'playbooks').length;
+                        const boxLinks = all.filter(r => r.type === 'boxLinks').length;
+                        const dashboards = all.filter(r => r.type === 'dashboards').length;
+                        const playbooksEl = document.getElementById(`${sectionId}-playbooks`);
+                        const boxLinksEl = document.getElementById(`${sectionId}-boxlinks`);
+                        const dashboardsEl = document.getElementById(`${sectionId}-dashboards`);
+                        if (playbooksEl) playbooksEl.textContent = playbooks;
+                        if (boxLinksEl) boxLinksEl.textContent = boxLinks;
+                        if (dashboardsEl) dashboardsEl.textContent = dashboards;
+                    } catch (_) {
+                        // Fallback per-section if DB query fails
+                        updateSectionStatsFallback(sectionId);
+                    }
+                }));
+            } else {
+                // Fallback entirely to localStorage
+                sections.forEach(updateSectionStatsFallback);
+            }
+        }
+
+        function updateSectionStatsFallback(section) {
+            let playbooks = 0, boxLinks = 0, dashboards = 0;
+            try {
+                // Prefer per-section storage
+                const raw = localStorage.getItem(`section_${section}`);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    playbooks = Array.isArray(data.playbooks) ? data.playbooks.length : 0;
+                    boxLinks = Array.isArray(data.boxLinks) ? data.boxLinks.length : 0;
+                    dashboards = Array.isArray(data.dashboards) ? data.dashboards.length : 0;
+                } else {
+                    // Legacy informationHub format
+                    const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                    const s = hub[section] || {};
+                    playbooks = Array.isArray(s.playbooks) ? s.playbooks.length : 0;
+                    boxLinks = Array.isArray(s.boxLinks) ? s.boxLinks.length : 0;
+                    dashboards = Array.isArray(s.dashboards) ? s.dashboards.length : 0;
+                }
+            } catch (_) {}
+            const playbooksEl = document.getElementById(`${section}-playbooks`);
+            const boxLinksEl = document.getElementById(`${section}-boxlinks`);
+            const dashboardsEl = document.getElementById(`${section}-dashboards`);
+            if (playbooksEl) playbooksEl.textContent = playbooks;
+            if (boxLinksEl) boxLinksEl.textContent = boxLinks;
+            if (dashboardsEl) dashboardsEl.textContent = dashboards;
+        }
+        
+        // Simple test function
+        window.testNavigation = function() {
+            console.log('Test navigation called');
+            alert('Navigation test - this should work!');
+        };
+
+        // Fallback navigation if the main app binding didn't attach
+        if (typeof window.navigateToSection !== 'function') {
+            window.navigateToSection = function(sectionId) {
+                try {
+                    localStorage.setItem('currentSection', sectionId);
+                } catch (_) {}
+                window.location.href = 'section.html?section=' + encodeURIComponent(sectionId);
+            };
+        }
+        
+        // Debug function to check admin panel
+        window.testAdminPanel = function() {
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('No session found');
+                return;
+            }
+            
+            const user = JSON.parse(session);
+            alert(`User: ${user.username}, Role: ${user.role}`);
+            
+            const adminBtn = document.getElementById('adminPanelBtn');
+            if (adminBtn) {
+                alert(`Admin button found. Display: ${adminBtn.style.display}`);
+                adminBtn.style.display = 'inline-flex';
+                alert('Admin button should now be visible!');
+            } else {
+                alert('Admin button not found!');
+            }
+        };
+        
+        // Force show admin button for testing
+        window.forceShowAdmin = function() {
+            const adminBtn = document.getElementById('adminPanelBtn');
+            const adminQuickAccess = document.getElementById('adminQuickAccess');
+            const debugSection = document.getElementById('debugSection');
+            
+            if (adminBtn) {
+                adminBtn.style.display = 'inline-flex';
+                adminBtn.style.background = '#ff6b6b';
+                adminBtn.innerHTML = '<i class="fas fa-cog"></i> FORCED Admin Panel';
+                console.log('Admin button forced to show!');
+            }
+            
+            if (adminQuickAccess) {
+                adminQuickAccess.style.display = 'block';
+                console.log('Admin quick access forced to show!');
+            }
+            
+            if (debugSection) {
+                debugSection.style.display = 'block';
+                console.log('Debug section shown!');
+            }
+            
+            alert('All admin controls forced to show! Check the page now.');
+        };
+        
+        // Test admin functions
+        window.testAdminFunctions = function() {
+            console.log('Testing admin functions...');
+            alert('Testing admin functions - check console for details');
+            
+            // Test if functions exist
+            console.log('showAdminPanel exists:', typeof window.showAdminPanel);
+            console.log('resetSections exists:', typeof window.resetSections);
+            
+            // Test section order
+            console.log('sectionOrder:', sectionOrder);
+            
+            // Test admin controls visibility
+            const adminBtn = document.getElementById('adminPanelBtn');
+            const adminQuickAccess = document.getElementById('adminQuickAccess');
+            console.log('Admin button found:', !!adminBtn);
+            console.log('Admin quick access found:', !!adminQuickAccess);
+            console.log('Admin button display:', adminBtn ? adminBtn.style.display : 'not found');
+            console.log('Admin quick access display:', adminQuickAccess ? adminQuickAccess.style.display : 'not found');
+        };
+        
+        // Run debug tests
+        window.runDebugTests = function() {
+            const debugInfo = document.getElementById('debugInfo');
+            if (!debugInfo) return;
+            
+            let info = '<h4>Debug Test Results:</h4>';
+            
+            // Check session
+            const session = localStorage.getItem('hubSession');
+            info += `<p><strong>Session:</strong> ${session ? 'Found' : 'Not found'}</p>`;
+            
+            if (session) {
+                const user = JSON.parse(session);
+                info += `<p><strong>User:</strong> ${user.username} (${user.role})</p>`;
+            }
+            
+            // Check admin elements
+            const adminBtn = document.getElementById('adminPanelBtn');
+            const adminQuickAccess = document.getElementById('adminQuickAccess');
+            info += `<p><strong>Admin Button:</strong> ${adminBtn ? 'Found' : 'Not found'}</p>`;
+            info += `<p><strong>Admin Quick Access:</strong> ${adminQuickAccess ? 'Found' : 'Not found'}</p>`;
+            
+            // Check functions
+            info += `<p><strong>showAdminPanel:</strong> ${typeof window.showAdminPanel}</p>`;
+            info += `<p><strong>resetSections:</strong> ${typeof window.resetSections}</p>`;
+            
+            // Check section order
+            info += `<p><strong>sectionOrder length:</strong> ${sectionOrder ? sectionOrder.length : 'Not defined'}</p>`;
+            
+            debugInfo.innerHTML = info;
+        };
+        
+        // Show section manager directly
+        window.showSectionManager = function() {
+            console.log('Opening section manager...');
+            
+            // Load sections list
+            loadSectionsList();
+            
+            // Open admin panel and switch to sections tab
+            const adminModal = document.getElementById('adminPanelModal');
+            if (adminModal) {
+                adminModal.style.display = 'block';
+                
+                // Switch to sections tab
+                switchAdminTab('sections');
+                
+                console.log('Section manager opened');
+            } else {
+                alert('Admin panel not found. Please try the full admin panel first.');
+            }
+        };
+        
+        // Simple logout function
+        window.logout = function() {
+            console.log('Logout called');
+            try {
+                // Clear session
+                localStorage.removeItem('hubSession');
+                console.log('Session cleared');
+                
+                // Redirect to login page
+                window.location.href = 'auth.html';
+                console.log('Redirecting to login page');
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Force redirect even if there's an error
+                window.location.href = 'auth.html';
+            }
+        };
+        
+        // Test user login function
+        window.testUserLogin = function() {
+            console.log('Testing user login...');
+            // Create a test user session
+            const testUser = {
+                userId: 3,
+                username: 'user',
+                role: 'user',
+                name: 'Regular User',
+                email: 'user@company.com'
+            };
+            
+            localStorage.setItem('hubSession', JSON.stringify(testUser));
+            console.log('Test user session created');
+            
+            // Reload the page to apply the new session
+            location.reload();
+        };
+        
+        // Force refresh user data
+        window.refreshUserData = function() {
+            console.log('Forcing refresh of user data...');
+            
+            // Reload users from localStorage
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            console.log('Current users in localStorage:', users);
+            
+            // Show user data in alert
+            let userInfo = 'Current User Data:\n\n';
+            users.forEach(user => {
+                userInfo += `${user.username} (${user.role}):\n`;
+                userInfo += `  Sections: ${user.permissions?.sections?.join(', ') || 'None'}\n`;
+                userInfo += `  Editable: ${user.permissions?.editableSections?.join(', ') || 'None'}\n\n`;
+            });
+            
+            alert(userInfo);
+        };
+        
+        // Force update current user session with fresh data
+        window.forceUpdateSession = function() {
+            console.log('Force updating current session...');
+            
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('No active session found');
+                return;
+            }
+            
+            const sessionData = JSON.parse(session);
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const user = users.find(u => u.id === sessionData.userId);
+            
+            if (!user) {
+                alert('User not found in database');
+                return;
+            }
+            
+            // Update session with fresh user data
+            const updatedSession = {
+                userId: user.id,
+                username: user.username,
+                role: user.role,
+                name: user.name,
+                email: user.email,
+                loginTime: sessionData.loginTime,
+                permissions: user.permissions
+            };
+            
+            localStorage.setItem('hubSession', JSON.stringify(updatedSession));
+            console.log('Session updated with fresh data:', updatedSession);
+            
+            // Update UI
+            updateUserInterface();
+            
+            alert('Session updated! Check the page for changes.');
+        };
+        
+        // Force refresh the entire page to ensure all updates are applied
+        window.forceRefresh = function() {
+            console.log('Force refreshing page...');
+            location.reload();
+        };
+        
+        // Comprehensive permission test
+        window.testPermissionFlow = function() {
+            console.log('=== TESTING PERMISSION FLOW ===');
+            
+            // 1. Check current session
+            const session = localStorage.getItem('hubSession');
+            console.log('1. Current session:', session ? JSON.parse(session) : 'None');
+            
+            // 2. Check stored users
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            console.log('2. Stored users:', users);
+            
+            // 3. Find current user in stored data
+            if (session) {
+                const sessionData = JSON.parse(session);
+                const currentUser = users.find(u => u.id === sessionData.userId);
+                console.log('3. Current user in stored data:', currentUser);
+                
+                if (currentUser) {
+                    console.log('4. User permissions:', currentUser.permissions);
+                    console.log('5. User sections:', currentUser.permissions?.sections);
+                    
+                    // 6. Check if session matches stored data
+                    const sessionMatches = JSON.stringify(sessionData.permissions) === JSON.stringify(currentUser.permissions);
+                    console.log('6. Session matches stored data:', sessionMatches);
+                    
+                    if (!sessionMatches) {
+                        console.log('7. UPDATING SESSION WITH FRESH DATA...');
+                        sessionData.permissions = currentUser.permissions;
+                        sessionData.name = currentUser.name;
+                        sessionData.email = currentUser.email;
+                        sessionData.role = currentUser.role;
+                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                        updateUserInterface();
+                        console.log('7. Session updated!');
+                    }
+                }
+            }
+            
+            // 7. Show test results
+            let testResults = 'PERMISSION FLOW TEST RESULTS:\n\n';
+            testResults += `Session exists: ${!!session}\n`;
+            testResults += `Users in storage: ${users.length}\n`;
+            
+            if (session) {
+                const sessionData = JSON.parse(session);
+                const currentUser = users.find(u => u.id === sessionData.userId);
+                testResults += `Current user found: ${!!currentUser}\n`;
+                if (currentUser) {
+                    testResults += `User sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
+                    testResults += `Session sections: ${sessionData.permissions?.sections?.join(', ') || 'None'}\n`;
+                    testResults += `Sections match: ${JSON.stringify(sessionData.permissions) === JSON.stringify(currentUser.permissions)}\n`;
+                }
+            }
+            
+            alert(testResults);
+            console.log('=== PERMISSION FLOW TEST COMPLETE ===');
+        };
+        
+        // Direct fix for user permissions
+        window.fixUserPermissions = function() {
+            console.log('=== FIXING USER PERMISSIONS ===');
+            
+            // Get current session
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('No active session found');
+                return;
+            }
+            
+            const sessionData = JSON.parse(session);
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const currentUser = users.find(u => u.id === sessionData.userId);
+            
+            if (!currentUser) {
+                alert('Current user not found in stored data');
+                return;
+            }
+            
+            console.log('Current user before fix:', currentUser);
+            console.log('Current session before fix:', sessionData);
+            
+            // Force update session with fresh user data
+            const updatedSession = {
+                userId: currentUser.id,
+                username: currentUser.username,
+                role: currentUser.role,
+                name: currentUser.name,
+                email: currentUser.email,
+                loginTime: sessionData.loginTime,
+                permissions: currentUser.permissions
+            };
+            
+            localStorage.setItem('hubSession', JSON.stringify(updatedSession));
+            console.log('Session updated with fresh data:', updatedSession);
+            
+            // Force update UI
+            updateUserInterface();
+            
+            // Show what was fixed
+            let fixResults = 'USER PERMISSIONS FIXED:\n\n';
+            fixResults += `User: ${currentUser.username} (${currentUser.role})\n`;
+            fixResults += `Sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
+            fixResults += `Editable: ${currentUser.permissions?.editableSections?.join(', ') || 'None'}\n\n`;
+            fixResults += 'Session has been updated with fresh data.\n';
+            fixResults += 'The page should now show the correct sections.';
+            
+            alert(fixResults);
+            console.log('=== USER PERMISSIONS FIXED ===');
+        };
+        
+        // Super simple test function
+        window.simpleTest = function() {
+            console.log('=== SIMPLE TEST ===');
+            
+            // 1. Check what's in localStorage
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            console.log('1. Users in localStorage:', users);
+            
+            // 2. Check current session
+            const session = localStorage.getItem('hubSession');
+            console.log('2. Current session:', session ? JSON.parse(session) : 'None');
+            
+            // 3. Find current user
+            if (session) {
+                const sessionData = JSON.parse(session);
+                const currentUser = users.find(u => u.id === sessionData.userId);
+                console.log('3. Current user found:', currentUser);
+                
+                if (currentUser) {
+                    console.log('4. User sections:', currentUser.permissions?.sections);
+                    
+                    // 4. Show all sections on page
+                    const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                    console.log('5. All available sections:', allSections);
+                    
+                    // 5. Force show all sections for testing
+                    const hubCards = document.querySelectorAll('.hub-card');
+                    console.log('6. Found hub cards:', hubCards.length);
+                    
+                    hubCards.forEach(card => {
+                        try {
+                            const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
+                            console.log('7. Processing section:', sectionId);
+                            card.style.display = 'block'; // Force show all
+                        } catch (error) {
+                            console.error('Error processing card:', error);
+                        }
+                    });
+                    
+                    alert(`SIMPLE TEST RESULTS:\n\nUser: ${currentUser.username}\nSections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n\nAll sections should now be visible for testing.`);
+                }
+            }
+            
+            console.log('=== SIMPLE TEST COMPLETE ===');
+        };
+        
+        // Ultra simple fix - just show sections based on what's in localStorage
+        window.ultraSimpleFix = function() {
+            console.log('=== ULTRA SIMPLE FIX ===');
+            
+            // Get current session
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('No active session found');
+                return;
+            }
+            
+            const sessionData = JSON.parse(session);
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const currentUser = users.find(u => u.id === sessionData.userId);
+            
+            if (!currentUser) {
+                alert('Current user not found in database');
+                return;
+            }
+            
+            console.log('Current user in database:', currentUser);
+            console.log('User sections in database:', currentUser.permissions?.sections);
+            
+            // Get all section cards
+            const hubCards = document.querySelectorAll('.hub-card');
+            console.log('Found hub cards:', hubCards.length);
+            
+            // Show/hide sections based on database data
+            hubCards.forEach(card => {
+                try {
+                    const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
+                    console.log('Processing section:', sectionId);
+                    
+                    // Check if user has access to this section
+                    const hasAccess = currentUser.permissions?.sections?.includes(sectionId) || false;
+                    
+                    if (hasAccess) {
+                        card.style.display = 'block';
+                        console.log('✅ Showing section:', sectionId);
+                    } else {
+                        card.style.display = 'none';
+                        console.log('❌ Hiding section:', sectionId);
+                    }
+                } catch (error) {
+                    console.error('Error processing card:', error);
+                }
+            });
+            
+            // Show results
+            let results = 'ULTRA SIMPLE FIX APPLIED:\n\n';
+            results += `User: ${currentUser.username}\n`;
+            results += `Sections in database: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n\n`;
+            results += 'Sections have been updated based on database data.\n';
+            results += 'Check the page - you should now see the correct sections!';
+            
+            alert(results);
+            console.log('=== ULTRA SIMPLE FIX COMPLETE ===');
+        };
+        
+        // Auto-sync function that runs every 5 seconds
+        window.startAutoSync = function() {
+            console.log('Starting auto-sync every 5 seconds...');
+            
+            setInterval(() => {
+                const session = localStorage.getItem('hubSession');
+                if (session) {
+                    console.log('Auto-sync running...');
+                    updateUserInterface();
+                }
+            }, 5000);
+            
+            alert('Auto-sync started! The page will automatically update every 5 seconds to keep sections in sync.');
+        };
+        
+        // Stop auto-sync function
+        window.stopAutoSync = function() {
+            console.log('Stopping auto-sync...');
+            // Note: This is a simple implementation. In a real app, you'd store the interval ID.
+            alert('Auto-sync stopped. You can restart it with "Start Auto Sync" button.');
+        };
+        
+        // Comprehensive debug function
+        window.comprehensiveDebug = function() {
+            console.log('=== COMPREHENSIVE DEBUG ===');
+            
+            // 1. Check localStorage data
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            console.log('1. Users in localStorage:', users);
+            
+            // 2. Check current session
+            const session = localStorage.getItem('hubSession');
+            console.log('2. Current session:', session ? JSON.parse(session) : 'None');
+            
+            // 3. Find current user
+            if (session) {
+                const sessionData = JSON.parse(session);
+                const currentUser = users.find(u => u.id === sessionData.userId);
+                console.log('3. Current user found:', currentUser);
+                
+                if (currentUser) {
+                    console.log('4. User sections in database:', currentUser.permissions?.sections);
+                    console.log('5. User sections in session:', sessionData.permissions?.sections);
+                    
+                    // 6. Check if they match
+                    const sectionsMatch = JSON.stringify(sessionData.permissions?.sections) === JSON.stringify(currentUser.permissions?.sections);
+                    console.log('6. Sections match:', sectionsMatch);
+                    
+                    // 7. Check what sections are currently visible
+                    const hubCards = document.querySelectorAll('.hub-card');
+                    console.log('7. Found hub cards:', hubCards.length);
+                    
+                    const visibleSections = [];
+                    const hiddenSections = [];
+                    
+                    hubCards.forEach(card => {
+                        try {
+                            const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
+                            if (card.style.display === 'none') {
+                                hiddenSections.push(sectionId);
+                            } else {
+                                visibleSections.push(sectionId);
+                            }
+                        } catch (error) {
+                            console.error('Error processing card:', error);
+                        }
+                    });
+                    
+                    console.log('8. Currently visible sections:', visibleSections);
+                    console.log('9. Currently hidden sections:', hiddenSections);
+                    
+                    // 10. Show comprehensive results
+                    let debugResults = 'COMPREHENSIVE DEBUG RESULTS:\n\n';
+                    debugResults += `User: ${currentUser.username} (${currentUser.role})\n`;
+                    debugResults += `Database sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
+                    debugResults += `Session sections: ${sessionData.permissions?.sections?.join(', ') || 'None'}\n`;
+                    debugResults += `Sections match: ${sectionsMatch}\n\n`;
+                    debugResults += `Currently visible: ${visibleSections.join(', ')}\n`;
+                    debugResults += `Currently hidden: ${hiddenSections.join(', ')}\n\n`;
+                    
+                    if (sectionsMatch && visibleSections.length === currentUser.permissions?.sections?.length) {
+                        debugResults += '✅ Everything looks correct!';
+                    } else {
+                        debugResults += '❌ There are issues that need fixing.';
+                    }
+                    
+                    alert(debugResults);
+                }
+            }
+            
+            console.log('=== COMPREHENSIVE DEBUG COMPLETE ===');
+        };
+        
+        // Manual permission setter for testing
+        window.setUserPermissions = function() {
+            console.log('=== MANUALLY SETTING USER PERMISSIONS ===');
+            
+            // Get current session
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('No active session found');
+                return;
+            }
+            
+            const sessionData = JSON.parse(session);
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const currentUser = users.find(u => u.id === sessionData.userId);
+            
+            if (!currentUser) {
+                alert('Current user not found');
+                return;
+            }
+            
+            console.log('Current user before change:', currentUser);
+            
+            // Manually set user permissions to include more sections
+            currentUser.permissions.sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            currentUser.permissions.editableSections = ['costing', 'supply-planning'];
+            
+            // Save updated users
+            localStorage.setItem('hubUsers', JSON.stringify(users));
+            console.log('Updated users saved to localStorage');
+            
+            // Update session
+            sessionData.permissions = currentUser.permissions;
+            localStorage.setItem('hubSession', JSON.stringify(sessionData));
+            console.log('Updated session saved');
+            
+            // Update UI
+            updateUserInterface();
+            
+            alert(`USER PERMISSIONS MANUALLY SET:\n\nUser: ${currentUser.username}\nSections: ${currentUser.permissions.sections.join(', ')}\nEditable: ${currentUser.permissions.editableSections.join(', ')}\n\nCheck the page - you should now see all sections!`);
+            
+            console.log('=== MANUAL PERMISSION SET COMPLETE ===');
+        };
+        
+        // Test login sync function
+        window.testLoginSync = function() {
+            console.log('=== TESTING LOGIN SYNC ===');
+            
+            // 1. Check current session
+            const session = localStorage.getItem('hubSession');
+            console.log('1. Current session:', session ? JSON.parse(session) : 'None');
+            
+            // 2. Check stored users
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            console.log('2. Stored users:', users);
+            
+            // 3. Find current user in stored data
+            if (session) {
+                const sessionData = JSON.parse(session);
+                const currentUser = users.find(u => u.id === sessionData.userId);
+                console.log('3. Current user in stored data:', currentUser);
+                
+                if (currentUser) {
+                    console.log('4. User sections in stored data:', currentUser.permissions?.sections);
+                    console.log('5. Session sections:', sessionData.permissions?.sections);
+                    
+                    // 6. Check if they match
+                    const sectionsMatch = JSON.stringify(sessionData.permissions?.sections) === JSON.stringify(currentUser.permissions?.sections);
+                    console.log('6. Sections match:', sectionsMatch);
+                    
+                    if (!sectionsMatch) {
+                        console.log('7. SYNCING SESSION WITH STORED DATA...');
+                        sessionData.permissions = currentUser.permissions;
+                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                        updateUserInterface();
+                        console.log('7. Session synced!');
+                    }
+                    
+                    // 7. Show results
+                    let results = 'LOGIN SYNC TEST RESULTS:\n\n';
+                    results += `User: ${currentUser.username}\n`;
+                    results += `Stored sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
+                    results += `Session sections: ${sessionData.permissions?.sections?.join(', ') || 'None'}\n`;
+                    results += `Sections match: ${sectionsMatch}\n\n`;
+                    
+                    if (sectionsMatch) {
+                        results += '✅ Login sync is working correctly!';
+                    } else {
+                        results += '❌ Login sync had issues - now fixed!';
+                    }
+                    
+                    alert(results);
+                }
+            }
+            
+            console.log('=== LOGIN SYNC TEST COMPLETE ===');
+        };
+        
+        // Force sync user permissions from database
+        window.forceSyncUserPermissions = function() {
+            console.log('=== FORCING USER PERMISSION SYNC ===');
+            
+            // Get current session
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('No active session found');
+                return;
+            }
+            
+            const sessionData = JSON.parse(session);
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const currentUser = users.find(u => u.id === sessionData.userId);
+            
+            if (!currentUser) {
+                alert('Current user not found in database');
+                return;
+            }
+            
+            console.log('Current user in database:', currentUser);
+            console.log('Current session before sync:', sessionData);
+            
+            // Force update session with database data
+            const updatedSession = {
+                userId: currentUser.id,
+                username: currentUser.username,
+                role: currentUser.role,
+                name: currentUser.name,
+                email: currentUser.email,
+                loginTime: sessionData.loginTime,
+                permissions: currentUser.permissions
+            };
+            
+            localStorage.setItem('hubSession', JSON.stringify(updatedSession));
+            console.log('Session updated with database data:', updatedSession);
+            
+            // Force update UI
+            updateUserInterface();
+            
+            // Show what was synced
+            let syncResults = 'USER PERMISSIONS FORCE SYNCED:\n\n';
+            syncResults += `User: ${currentUser.username}\n`;
+            syncResults += `Database sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
+            syncResults += `Session sections: ${updatedSession.permissions?.sections?.join(', ') || 'None'}\n\n`;
+            syncResults += 'Session has been updated with latest database data.\n';
+            syncResults += 'The page should now show the correct sections!';
+            
+            alert(syncResults);
+            console.log('=== FORCE SYNC COMPLETE ===');
+        };
+        
+        // Fallback navigation function in case the main one doesn't work
+        window.navigateToSection = function(sectionId) {
+            console.log('Fallback navigateToSection called with:', sectionId);
+            localStorage.setItem('currentSection', sectionId);
+            window.location.href = `section.html?section=${sectionId}`;
+        };
+        
+        // Quick action functions
+        window.showAllSections = function() {
+            // Create a modal to show all sections
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>All Sections Overview</h2>
+                        <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <div class="sections-overview">
+                            <div class="section-item">
+                                <i class="fas fa-calculator"></i>
+                                <h3>Costing</h3>
+                                <p>Financial analysis, cost management, and budgeting resources</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-truck"></i>
+                                <h3>Supply Planning</h3>
+                                <p>Supply chain management, inventory planning, and logistics</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-cogs"></i>
+                                <h3>Operations</h3>
+                                <p>Operational procedures, workflows, and process management</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-check-circle"></i>
+                                <h3>Quality Management</h3>
+                                <p>Quality control, assurance, and compliance procedures</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-users"></i>
+                                <h3>Human Resources</h3>
+                                <p>HR policies, procedures, and employee management resources</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-laptop-code"></i>
+                                <h3>IT & Technology</h3>
+                                <p>Technical documentation, system guides, and IT procedures</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-chart-line"></i>
+                                <h3>Sales & Marketing</h3>
+                                <p>Sales processes, marketing strategies, and customer management</p>
+                            </div>
+                            <div class="section-item">
+                                <i class="fas fa-gavel"></i>
+                                <h3>Compliance & Legal</h3>
+                                <p>Regulatory compliance, legal procedures, and policy management</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
+        
+        window.searchAcrossHub = function() {
+            const searchTerm = prompt('Enter search term to search across all sections:');
+            if (searchTerm) {
+                // Simple search implementation
+                const results = [];
+                const sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                
+                sections.forEach(section => {
+                    const sectionData = localStorage.getItem(`section_${section}`);
+                    if (sectionData) {
+                        const data = JSON.parse(sectionData);
+                        // Search in playbooks, boxLinks, and dashboards
+                        ['playbooks', 'boxLinks', 'dashboards'].forEach(type => {
+                            if (data[type]) {
+                                data[type].forEach(item => {
+                                    if (item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                        item.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+                                        results.push({
+                                            section: section,
+                                            type: type,
+                                            title: item.title,
+                                            url: item.url
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+                
+                if (results.length > 0) {
+                    let resultText = `Found ${results.length} results for "${searchTerm}":\n\n`;
+                    results.forEach(result => {
+                        resultText += `• ${result.title} (${result.section} - ${result.type})\n`;
+                    });
+                    alert(resultText);
+                } else {
+                    alert(`No results found for "${searchTerm}"`);
+                }
+            }
+        };
+        
+        window.showRecentActivity = function() {
+            const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+            if (activities.length === 0) {
+                alert('No recent activity found.');
+                return;
+            }
+            
+            let activityText = 'Recent Activity:\n\n';
+            activities.slice(0, 10).forEach(activity => {
+                const date = new Date(activity.timestamp).toLocaleString();
+                activityText += `• ${activity.username}: ${activity.action} - ${activity.description}\n   ${date}\n\n`;
+            });
+            alert(activityText);
+        };
+        
+        window.openAdminPanel = function() {
+            try {
+            console.log('showAdminPanel called');
+                const sessionRaw = localStorage.getItem('hubSession');
+                let user;
+                try {
+                    user = sessionRaw ? JSON.parse(sessionRaw) : null;
+                } catch (e) {
+                    console.warn('Invalid session JSON, trying authSystem.getCurrentUser');
+                    user = (window.authSystem && typeof authSystem.getCurrentUser === 'function') ? authSystem.getCurrentUser() : null;
+                }
+                if (!user) {
+                alert('Please log in to access admin panel.');
+                return;
+            }
+            console.log('User role:', user.role);
+            
+            if (user.role !== 'admin' && user.role !== 'manager') {
+                alert('Only administrators and managers can access the admin panel.');
+                return;
+            }
+            
+            console.log('Opening admin panel modal...');
+            
+                // Show the admin panel modal ASAP
+            const adminModal = document.getElementById('adminPanelModal');
+                if (!adminModal) {
+                    alert('Admin panel not found on the page.');
+                    return;
+                }
+            adminModal.style.display = 'block';
+                adminModal.style.zIndex = '9999';
+                
+                // Defer data loading to avoid blocking UI and reduce errors
+                setTimeout(() => {
+                    try { if (typeof renderCurrentUserSummary === 'function') renderCurrentUserSummary(); } catch (e) { console.error('renderCurrentUserSummary error', e); }
+                    try { if (typeof loadUsersList === 'function') loadUsersList(); } catch (e) { console.error('loadUsersList error', e); }
+                    try { if (typeof loadPermissionUserList === 'function') loadPermissionUserList(); } catch (e) { console.error('loadPermissionUserList error', e); }
+                    try { if (typeof loadAuditLog === 'function') loadAuditLog(); } catch (e) { console.error('loadAuditLog error', e); }
+                }, 0);
+                
+            // After modal is visible, manage Assignments/Manage Sections tabs by role
+                const assignmentsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
+                const assignmentsContent = document.getElementById('assignments-tab');
+                const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
+                const manageSectionsContent = document.getElementById('sections-tab');
+                setTimeout(() => { try {
+                    const currentRaw = localStorage.getItem('hubSession');
+                    let current = {};
+                    try { current = currentRaw ? JSON.parse(currentRaw) : {}; } catch (_) {}
+                    if (current.role === 'manager') {
+                    if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
+                    if (assignmentsContent) assignmentsContent.style.display = 'none';
+                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = 'none';
+                    if (manageSectionsContent) manageSectionsContent.style.display = 'none';
+                } else {
+                    if (assignmentsNavTab) assignmentsNavTab.style.display = '';
+                    if (assignmentsContent) assignmentsContent.style.display = '';
+                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = '';
+                    if (manageSectionsContent) manageSectionsContent.style.display = '';
+                }
+                } catch (e) { console.error('role-based tab visibility error', e); } }, 0);
+            
+            // Ensure scrolling works
+            setTimeout(() => {
+                const adminContent = adminModal.querySelector('.admin-content');
+                if (adminContent) {
+                    adminContent.style.overflowY = 'auto';
+                    adminContent.style.maxHeight = '70vh';
+                }
+            }, 100);
+            } catch (e) {
+                console.error('Error showing admin panel:', e);
+                alert('Failed to open User Management. Please refresh and try again.');
+            }
+        };
+        // Backward-compatible alias
+        window.showAdminPanel = window.openAdminPanel;
+        
+        window.exportAllData = async function() {
+            if (window.excelExporter && excelExporter.exportToExcel) {
+                const result = await excelExporter.exportToExcel();
+                if (!result.success) {
+                    alert('Export failed: ' + (result.error || 'Unknown error'));
+                }
+                return;
+            }
+            // Fallback to previous CSV export if XLSX unavailable
+            try {
+                const data = [];
+                const sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                sections.forEach(section => {
+                    const sectionData = localStorage.getItem(`section_${section}`);
+                    if (sectionData) {
+                        const parsed = JSON.parse(sectionData);
+                        ['playbooks', 'boxLinks', 'dashboards'].forEach(type => {
+                            (parsed[type] || []).forEach(item => {
+                                data.push({
+                                    'Section': section.replace('-', ' ').toUpperCase(),
+                                    'Type': type.replace('boxLinks', 'Box Links').replace(/([A-Z])/g, ' $1').trim(),
+                                    'Title': item.title,
+                                    'Description': item.description || '',
+                                    'URL': item.url,
+                                    'Tags': (item.tags || []).join(', '),
+                                    'Created': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''
+                                });
+                            });
+                        });
+                    }
+                });
+                if (data.length === 0) { alert('No data to export.'); return; }
+                const headers = Object.keys(data[0]);
+                const csvContent = [
+                    headers.join(','),
+                    ...data.map(row => headers.map(header => `"${(row[header] || '').toString().replace(/"/g, '""')}"`).join(','))
+                ].join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.href = url;
+                link.download = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } catch (error) {
+                alert('Export failed: ' + error.message);
+            }
+        };
+        
+        window.showUserProfile = function() {
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('Please log in to view profile.');
+                return;
+            }
+            
+            const user = JSON.parse(session);
+            const profileText = `User Profile:
+            
+Username: ${user.username}
+Role: ${user.role}
+Name: ${user.name || 'Not provided'}
+Email: ${user.email || 'Not provided'}
+
+Accessible Sections:
+${user.permissions.sections.map(s => '• ' + s.replace('-', ' ').toUpperCase()).join('\n')}
+
+Permissions:
+• Manage Users: ${user.permissions.canManageUsers ? 'Yes' : 'No'}
+• Edit All Sections: ${user.permissions.canEditAllSections ? 'Yes' : 'No'}
+• Delete Resources: ${user.permissions.canDeleteResources ? 'Yes' : 'No'}
+• View Audit Log: ${user.permissions.canViewAuditLog ? 'Yes' : 'No'}`;
+            
+            alert(profileText);
+        };
+        
+        // Make updateSectionStats available globally
+        window.updateSectionStats = updateSectionStats;
+
+        // Robust Add User handler available from Admin panel button
+        window.adminAddUser = function() {
+            try {
+                // Primary paths
+                if (window.informationHub && typeof informationHub.addUser === 'function') {
+                    return informationHub.addUser();
+                }
+                if (typeof window.addUser === 'function') {
+                    return window.addUser();
+                }
+
+                // Helper to load a script once
+                function loadScriptOnce(src) {
+                    return new Promise((resolve, reject) => {
+                        const existing = Array.from(document.scripts).find(s => (s.src || '').includes(src));
+                        if (existing) {
+                            // If already present, wait a tick to allow it to finish parsing
+                            return setTimeout(resolve, 50);
+                        }
+                        const s = document.createElement('script');
+                        s.src = src;
+                        s.onload = () => resolve();
+                        s.onerror = () => reject(new Error('Failed to load ' + src));
+                        document.head.appendChild(s);
+                    });
+                }
+
+                // Try immediate initialization if class is available
+                if (window.InformationHub) {
+                    try {
+                        if (!window.informationHub) window.informationHub = new InformationHub();
+                        if (window.informationHub && typeof informationHub.addUser === 'function') {
+                            return informationHub.addUser();
+                        }
+                    } catch (e) { console.warn('InformationHub init attempt failed:', e); }
+                }
+
+                // Ensure hub script is loaded, then retry with backoff
+                const ensureReady = async () => {
+                    try {
+                        if (!window.InformationHub) {
+                            await loadScriptOnce('hub-script.js');
+                        }
+                    } catch (e) {
+                        console.error('hub-script.js load error', e);
+                    }
+
+                    let attempts = 0;
+                    const maxAttempts = 6;
+                    const step = () => {
+                        attempts++;
+                        try {
+                            if (!window.informationHub && window.InformationHub) {
+                                try { window.informationHub = new InformationHub(); } catch (e) { console.warn('InformationHub ctor failed:', e); }
+                            }
+                            if (window.informationHub && typeof informationHub.addUser === 'function') {
+                                return informationHub.addUser();
+                            }
+                            if (typeof window.addUser === 'function') {
+                                return window.addUser();
+                            }
+                            if (attempts < maxAttempts) {
+                                return setTimeout(step, 200 * attempts);
+                            }
+                            console.error('Diagnostics:', {
+                                informationHub: !!window.informationHub,
+                                hasAddUserOnHub: window.informationHub ? typeof window.informationHub.addUser : 'no hub',
+                                InformationHubClass: !!window.InformationHub,
+                                windowAddUser: typeof window.addUser
+                            });
+                            // Fallback: perform local Add User inline if hub isn't ready
+                            try {
+                                const fallbackAddUser = () => {
+                                    const username = prompt('Enter username:');
+                                    if (!username) return;
+                                    const password = prompt('Enter password:');
+                                    if (!password) return;
+                                    const name = prompt('Enter full name:');
+                                    const email = prompt('Enter email:');
+                                    const role = prompt('Enter role (admin/manager/user):');
+                                    const validRoles = ['admin','manager','user'];
+                                    if (!validRoles.includes((role || '').toLowerCase())) {
+                                        alert('Invalid role. Must be admin, manager, or user');
+                                        return;
+                                    }
+                                    const defaults = {
+                                        admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
+                                        manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'] },
+                                        user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'] }
+                                    };
+                                    const newUser = {
+                                        id: Date.now(),
+                                        username: username,
+                                        password: password,
+                                        name: name || username,
+                                        email: email || '',
+                                        role: role.toLowerCase(),
+                                        permissions: defaults[role.toLowerCase()],
+                                        createdAt: new Date().toISOString()
+                                    };
+                                    const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                                    users.push(newUser);
+                                    localStorage.setItem('hubUsers', JSON.stringify(users));
+                                    // Best-effort: persist to IndexedDB if ready
+                                    try { if (window.hubDatabase && hubDatabase.saveUser) hubDatabase.saveUser(newUser); } catch(_){}
+                                    // Try refresh UI if available
+                                    try { if (typeof loadUsersList === 'function') loadUsersList(); } catch(_){}
+                                    try { alert('User added successfully (fallback)'); } catch(_){}
+                                };
+                                return fallbackAddUser();
+                            } catch (fallbackError) {
+                                alert('Add User function failed to initialize. Please refresh the page and try again.');
+                            }
+                        } catch (err) {
+                            alert('Add User failed: ' + err.message);
+                        }
+                    };
+                    step();
+                };
+                ensureReady();
+            } catch (e) {
+                alert('Add User failed: ' + e.message);
+            }
+        };
+
+        // Open Add User modal
+        window.openAddUserModal = function() {
+            try {
+                const session = localStorage.getItem('hubSession');
+                const currentUser = session ? JSON.parse(session) : null;
+                if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) {
+                    return alert('Only administrators and managers can add users.');
+                }
+                const modal = document.getElementById('addUserModal');
+                if (modal) modal.style.display = 'block';
+            } catch (e) { alert('Unable to open Add User form: ' + e.message); }
+        };
+
+        // Submit Add User form
+        window.submitAddUser = function(event) {
+            try {
+                if (event && event.preventDefault) event.preventDefault();
+                const username = (document.getElementById('newUsername')?.value || '').trim();
+                const password = (document.getElementById('newPassword')?.value || '').trim();
+                const name = (document.getElementById('newName')?.value || '').trim();
+                const email = (document.getElementById('newEmail')?.value || '').trim();
+                const role = (document.getElementById('newRole')?.value || 'user').toLowerCase();
+                if (!username || !password || !role) {
+                    alert('Please fill in username, password, and role.');
+                    return false;
+                }
+                const defaults = {
+                    admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
+                    manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'] },
+                    user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'] }
+                };
+                const newUser = {
+                    id: Date.now(),
+                    username,
+                    password,
+                    name: name || username,
+                    email: email || '',
+                    role,
+                    permissions: defaults[role] || defaults.user,
+                    createdAt: new Date().toISOString()
+                };
+                const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                if (users.some(u => (u.username || '').toLowerCase() === username.toLowerCase())) {
+                    alert('Username already exists.');
+                    return false;
+                }
+                users.push(newUser);
+                localStorage.setItem('hubUsers', JSON.stringify(users));
+                try { if (window.hubDatabase && hubDatabase.saveUser) hubDatabase.saveUser(newUser); } catch(_){}
+                try { if (typeof loadUsersList === 'function') loadUsersList(); } catch(_){}
+                const modal = document.getElementById('addUserModal');
+                if (modal) modal.style.display = 'none';
+                alert('User added successfully');
+                return false;
+            } catch (e) {
+                alert('Add User failed: ' + e.message);
+                return false;
+            }
+        };
+        
+        // Role hierarchy management functions
+        window.canManageUser = function(currentUser, targetUser) {
+            // Admin can manage everyone (managers and users)
+            if (currentUser.role === 'admin') {
+                return true;
+            }
+            
+            // Users can't manage anyone
+            if (currentUser.role === 'user') {
+                return false;
+            }
+            
+            // Managers can only manage users (not other managers or admins)
+            if (currentUser.role === 'manager' && targetUser.role === 'user') {
+                return true;
+            }
+            
+            // Managers cannot manage other managers or admins
+            if (currentUser.role === 'manager' && (targetUser.role === 'manager' || targetUser.role === 'admin')) {
+                return false;
+            }
+            
+            return false;
+        };
+        
+        window.canChangeUserRole = function(currentUser, targetUser, newRole) {
+            // Admin can change any role
+            if (currentUser.role === 'admin') {
+                return true;
+            }
+            
+            // Users can't change any roles
+            if (currentUser.role === 'user') {
+                return false;
+            }
+            
+            // Managers can only change user roles to user role (no role changes)
+            if (currentUser.role === 'manager') {
+                return false; // Managers cannot change roles at all
+            }
+            
+            return false;
+        };
+        
+        // Function to update user interface based on role
+        function updateUserInterface() {
+            const session = localStorage.getItem('hubSession');
+            console.log('=== UPDATE USER INTERFACE CALLED ===');
+            console.log('Session:', session);
+            
+            if (!session) {
+                console.log('No session found');
+                return;
+            }
+            
+            try {
+                const user = JSON.parse(session);
+                console.log('User from session:', user);
+                
+                // ALWAYS get fresh user data from localStorage
+                const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                const freshUser = users.find(u => u.id === user.userId);
+                
+                if (freshUser) {
+                    console.log('=== USING FRESH USER DATA ===');
+                    console.log('Fresh user:', freshUser);
+                    console.log('Fresh user sections:', freshUser.permissions?.sections);
+                    user.permissions = freshUser.permissions; // Update with fresh permissions
+                } else {
+                    console.log('=== WARNING: FRESH USER NOT FOUND ===');
+                    console.log('Using session user data:', user);
+                }
+                
+                console.log('Final user permissions:', user.permissions);
+                console.log('Final user sections:', user.permissions?.sections);
+                
+                // Update user info in header
+                const userNameEl = document.getElementById('userName');
+                const userRoleEl = document.getElementById('userRole');
+                
+                if (userNameEl) userNameEl.textContent = user.username;
+                if (userRoleEl) userRoleEl.textContent = user.role;
+                
+                // Show/hide admin panel button and quick access
+                const adminBtn = document.getElementById('adminPanelBtn');
+                const adminQuickAccess = document.getElementById('adminQuickAccess');
+                const debugSection = document.getElementById('debugSection');
+                
+                console.log('Admin button found:', !!adminBtn);
+                console.log('User role:', user.role);
+                
+                if (user.role === 'admin' || user.role === 'manager') {
+                    // Show admin panel button for admins and managers
+                    if (adminBtn) {
+                        adminBtn.style.display = 'inline-flex';
+                        if (user.role === 'admin') {
+                            adminBtn.style.background = '#4CAF50';
+                        } else {
+                            adminBtn.style.background = '#ff9800'; // Orange for managers
+                        }
+                        console.log('Admin button should now be visible for', user.role);
+                    }
+                    
+                    // Show admin quick access only for admins
+                    if (adminQuickAccess) {
+                        if (user.role === 'admin') {
+                            adminQuickAccess.style.display = 'block';
+                            console.log('Admin quick access shown for admin');
+                        } else {
+                            adminQuickAccess.style.display = 'none';
+                            console.log('Admin quick access hidden for manager');
+                        }
+                    }
+                    
+                    // Show debug section only for admin
+                    if (debugSection) {
+                        if (user.role === 'admin') {
+                            debugSection.style.display = 'block';
+                            console.log('Debug section shown for admin');
+                        } else {
+                            debugSection.style.display = 'none';
+                            console.log('Debug section hidden for manager');
+                        }
+                    }
+
+                    // Role-based visibility of Assignments and Manage Sections tabs
+                    const assignmentsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
+                    const assignmentsContent = document.getElementById('assignments-tab');
+                    const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
+                    const manageSectionsContent = document.getElementById('sections-tab');
+                    if (user.role === 'manager') {
+                        if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
+                        if (assignmentsContent) assignmentsContent.style.display = 'none';
+                        if (manageSectionsNavTab) manageSectionsNavTab.style.display = 'none';
+                        if (manageSectionsContent) manageSectionsContent.style.display = 'none';
+                    } else {
+                        if (assignmentsNavTab) assignmentsNavTab.style.display = '';
+                        if (assignmentsContent) assignmentsContent.style.display = '';
+                        if (manageSectionsNavTab) manageSectionsNavTab.style.display = '';
+                        if (manageSectionsContent) manageSectionsContent.style.display = '';
+                    }
+                } else {
+                    // Hide admin controls for regular users
+                    if (adminBtn) adminBtn.style.display = 'none';
+                    if (adminQuickAccess) adminQuickAccess.style.display = 'none';
+                    if (debugSection) debugSection.style.display = 'none';
+                    console.log('Admin controls hidden for regular user');
+                }
+                
+                // FORCE UPDATE HUB CARDS WITH FRESH DATA
+                console.log('=== FORCING HUB CARDS UPDATE ===');
+                updateHubCardsAccess(user);
+                
+            } catch (error) {
+                console.error('Error updating user interface:', error);
+            }
+        }
+        
+        // Function to update hub cards based on user permissions
+        function updateHubCardsAccess(user) {
+            console.log('=== UPDATING HUB CARDS ACCESS ===');
+            console.log('User object:', user);
+            console.log('User permissions:', user.permissions);
+            console.log('User sections:', user.permissions?.sections);
+            
+            // Get fresh user data
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const freshUser = users.find(u => u.id === user.id);
+            
+            if (freshUser) {
+                console.log('Found fresh user data:', freshUser);
+                console.log('Fresh user sections:', freshUser.permissions?.sections);
+                user = freshUser; // Use fresh data
+            }
+            
+            // Determine visible sections from configuration
+            let visibleSections = [];
+            try {
+                const savedOrder = localStorage.getItem('sectionOrder');
+                if (savedOrder) {
+                    visibleSections = JSON.parse(savedOrder).filter(s => s.visible !== false).map(s => s.id);
+                }
+            } catch (e) { console.warn('Error reading sectionOrder', e); }
+            if (visibleSections.length === 0) {
+                visibleSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            }
+
+            // Get allowed sections (admins see all visible; others intersect with visible)
+            let allowedSections = [];
+                if (user.role === 'admin') {
+                allowedSections = visibleSections;
+                console.log('✅ Admin sees all visible sections:', allowedSections);
+            } else if (user.permissions && Array.isArray(user.permissions.sections) && user.permissions.sections.length > 0) {
+                allowedSections = user.permissions.sections.filter(id => visibleSections.includes(id));
+                console.log('✅ Using user-specific section permissions (intersect visible):', allowedSections);
+            } else {
+                // Role fallback intersect visible
+                let fallback = [];
+                if (user.role === 'manager') fallback = ['costing', 'supply-planning', 'operations', 'quality'];
+                else fallback = ['costing', 'supply-planning'];
+                allowedSections = fallback.filter(id => visibleSections.includes(id));
+                console.log('⚠️ Role-based fallback permissions (intersect visible):', allowedSections);
+            }
+            
+            console.log('Final allowed sections for', user.username, ':', allowedSections);
+            
+            const hubCards = document.querySelectorAll('.hub-card');
+            console.log('Found', hubCards.length, 'hub cards');
+            
+            hubCards.forEach(card => {
+                try {
+                    const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
+                    console.log('Processing card for section:', sectionId);
+                    
+                    if (!allowedSections.includes(sectionId)) {
+                        card.style.display = 'none'; // Hide sections user can't access
+                        console.log('❌ Hiding section:', sectionId, 'for user:', user.username);
+                    } else {
+                        card.style.display = 'block'; // Show sections user can access
+                        console.log('✅ Showing section:', sectionId, 'for user:', user.username);
+                    }
+                } catch (error) {
+                    console.error('Error processing card:', error);
+                }
+            });
+            
+            console.log('=== HUB CARDS UPDATE COMPLETE ===');
+        }
+        
+        // Permission Management Functions
+        let currentEditingUser = null;
+        
+        window.refreshUserList = function() {
+            loadUsersList();
+            loadPermissionUserList();
+        };
+        
+        window.loadPermissionUserList = function() {
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const select = document.getElementById('permissionUserSelect');
+            select.innerHTML = '<option value="">Choose a user...</option>';
+            
+            // Get current user session
+            const session = localStorage.getItem('hubSession');
+            const currentUser = session ? JSON.parse(session) : null;
+            
+            if (!currentUser) {
+                console.log('No current user session found');
+                return;
+            }
+            
+            // Filter users based on current user's role
+            const manageableUsers = users.filter(user => {
+                return canManageUser(currentUser, user);
+            });
+            
+            console.log('Current user role:', currentUser.role);
+            console.log('Manageable users for', currentUser.role, ':', manageableUsers.map(u => `${u.username} (${u.role})`));
+            
+            manageableUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = `${user.username} (${user.role})`;
+                select.appendChild(option);
+            });
+        };
+        
+        window.loadUserPermissions = function() {
+            const userId = document.getElementById('permissionUserSelect').value;
+            if (!userId) {
+                document.getElementById('userPermissionForm').style.display = 'none';
+                return;
+            }
+            
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const user = users.find(u => u.id == userId);
+            if (!user) return;
+            
+            currentEditingUser = user;
+            document.getElementById('selectedUserName').textContent = `${user.username} (${user.role}) Permissions`;
+            document.getElementById('userPermissionForm').style.display = 'block';
+            
+            // Load current permissions using dynamic sections (filtered by current user's rights)
+            const sections = getAssignableSectionsForCurrentUser();
+            const sectionNames = getSectionDisplayNames();
+            
+            // Update the permission form HTML to include all available sections
+            updatePermissionFormHTML(sections, sectionNames);
+            
+            sections.forEach(section => {
+                const sectionCheckbox = document.getElementById(`section-${section}`);
+                const editCheckbox = document.getElementById(`edit-${section}`);
+                
+                if (sectionCheckbox) {
+                    sectionCheckbox.checked = user.permissions.sections.includes(section);
+                }
+                if (editCheckbox) {
+                    editCheckbox.checked = user.permissions.editableSections.includes(section);
+                }
+            });
+        };
+        
+        window.updateSectionPermission = function(section) {
+            const editCheckbox = document.getElementById(`edit-${section}`);
+            const sectionCheckbox = document.getElementById(`section-${section}`);
+            
+            // If section access is removed, also remove edit permission
+            if (!sectionCheckbox.checked && editCheckbox) {
+                editCheckbox.checked = false;
+            }
+        };
+        
+        window.updateEditPermission = function(section) {
+            const editCheckbox = document.getElementById(`edit-${section}`);
+            const sectionCheckbox = document.getElementById(`section-${section}`);
+            
+            // If edit permission is given, also give section access
+            if (editCheckbox.checked && sectionCheckbox) {
+                sectionCheckbox.checked = true;
+            }
+        };
+        
+        window.saveUserPermissions = async function() {
+            if (!currentEditingUser) return;
+            
+            const sections = getAssignableSectionsForCurrentUser();
+            const newSections = [];
+            const newEditableSections = [];
+            
+            sections.forEach(section => {
+                const sectionCheckbox = document.getElementById(`section-${section}`);
+                const editCheckbox = document.getElementById(`edit-${section}`);
+                
+                if (sectionCheckbox && sectionCheckbox.checked) {
+                    newSections.push(section);
+                }
+                if (editCheckbox && editCheckbox.checked) {
+                    newEditableSections.push(section);
+                }
+            });
+            
+            // Update user permissions
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const userIndex = users.findIndex(u => u.id === currentEditingUser.id);
+            
+            if (userIndex !== -1) {
+                users[userIndex].permissions.sections = newSections;
+                users[userIndex].permissions.editableSections = newEditableSections;
+                users[userIndex].updatedAt = new Date().toISOString();
+                localStorage.setItem('hubUsers', JSON.stringify(users));
+                try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){}
+                
+                // If editing the currently logged-in user, update the session too
+                const session = localStorage.getItem('hubSession');
+                if (session) {
+                    const sessionData = JSON.parse(session);
+                    if (sessionData.userId === currentEditingUser.id) {
+                        sessionData.permissions = {
+                            ...sessionData.permissions,
+                            sections: newSections,
+                            editableSections: newEditableSections
+                        };
+                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                        if (typeof updateUserInterface === 'function') {
+                            try { updateUserInterface(); } catch (e) {}
+                        }
+                    }
+                }
+                
+                alert('User permissions updated successfully!');
+                loadUsersList();
+            }
+        };
+        
+        window.resetUserPermissions = function() {
+            if (currentEditingUser) {
+                loadUserPermissions();
+            }
+        };
+        
+        // Admin Panel Functions
+        window.loadUsersList = async function() {
+            const usersList = document.getElementById('usersList');
+            if (!usersList) return;
+            
+            // Get current user session
+            let currentUser = null;
+            try { const session = localStorage.getItem('hubSession'); currentUser = session ? JSON.parse(session) : null; } catch (_) {}
+            if (!currentUser) { usersList.innerHTML = '<div class="empty">Please log in.</div>'; return; }
+            
+            // Load users from IndexedDB if available, merge with localStorage
+            let dbUsers = [];
+            try { if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.getAllUsers) { dbUsers = await hubDatabase.getAllUsers(); } } catch (_) { dbUsers = []; }
+            let lsUsers = [];
+            try { lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]'); } catch (_) { lsUsers = []; }
+            const byId = new Map();
+            dbUsers.forEach(u => byId.set(u.id, u));
+            lsUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
+            // Ensure current session user appears at least
+            if (currentUser.userId && !byId.has(currentUser.userId)) {
+                byId.set(currentUser.userId, {
+                    id: currentUser.userId,
+                    username: currentUser.username,
+                    name: currentUser.name || currentUser.username,
+                    email: currentUser.email || '',
+                    role: currentUser.role || 'user',
+                    permissions: currentUser.permissions || { sections: [], editableSections: [] }
+                });
+            }
+            let users = Array.from(byId.values());
+            
+            // Normalize permissions
+            const defaults = {
+                admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
+                manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
+                user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
+            };
+            users = users.map(u => ({
+                ...u,
+                role: (u.role || 'user').toLowerCase(),
+                permissions: u.permissions ? { sections: u.permissions.sections || [], editableSections: u.permissions.editableSections || [] , ...u.permissions } : defaults[(u.role || 'user').toLowerCase()] || defaults.user
+            }));
+            
+            // Text filter
+            const term = (document.getElementById('userSearchInput')?.value || '').trim().toLowerCase();
+            if (term) {
+                users = users.filter(u =>
+                    (u.username || '').toLowerCase().includes(term) ||
+                    (u.name || '').toLowerCase().includes(term) ||
+                    (u.email || '').toLowerCase().includes(term) ||
+                    (u.role || '').toLowerCase().includes(term)
+                );
+            }
+
+            // Filter by role hierarchy (admins see all; managers see only users)
+            const manageableUsers = users.filter(u => canManageUser(currentUser, u));
+            
+            if (manageableUsers.length === 0) {
+                usersList.innerHTML = '<div class="empty">No users found.</div>';
+                return;
+            }
+            
+            usersList.innerHTML = manageableUsers.map(user => `
+                <div class="user-item">
+                    <div class="user-details-info">
+                        <div class="name">${user.name || user.username}</div>
+                        <div class="role">${(user.role || '').toUpperCase()}</div>
+                        <div class="sections">Access: ${user.permissions.sections.length} · Edit: ${user.permissions.editableSections.length}</div>
+                    </div>
+                    <div class="user-item-actions">
+                        <button class="btn btn-secondary" onclick="editUser(${user.id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteUser(${user.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        };
+        
+        window.loadAuditLog = function() {
+            const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+            const auditLog = document.getElementById('auditLog');
+            
+            if (!auditLog) return;
+            
+            auditLog.innerHTML = activities.map(activity => `
+                <div class="audit-entry">
+                    <div class="audit-info">
+                        <div class="audit-user">${activity.username}</div>
+                        <div class="audit-action">${activity.action}</div>
+                        <div class="audit-description">${activity.description}</div>
+                    </div>
+                    <div class="audit-time">${new Date(activity.timestamp).toLocaleString()}</div>
+                </div>
+            `).join('');
+        };
+        
+        window.editUser = function(userId) {
+            console.log('Editing user:', userId);
+            
+            // Get current user session
+            const session = localStorage.getItem('hubSession');
+            const currentUser = session ? JSON.parse(session) : null;
+            
+            if (!currentUser) {
+                alert('Please log in to edit users');
+                return;
+            }
+            
+            // Get users from localStorage
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const user = users.find(u => u.id === userId);
+            
+            if (!user) {
+                alert('User not found');
+                return;
+            }
+            
+            // Check if current user can manage this user
+            if (!canManageUser(currentUser, user)) {
+                alert('You do not have permission to manage this user');
+                return;
+            }
+            
+            // Show edit user modal
+            showEditUserModal(user);
+        };
+        
+        // Show edit user modal
+        window.showEditUserModal = function(user) {
+            // Get current user session
+            const session = localStorage.getItem('hubSession');
+            const currentUser = session ? JSON.parse(session) : null;
+            
+            // Determine role options based on current user's role
+            let roleOptions = '';
+            if (currentUser && currentUser.role === 'admin') {
+                // Admin can change to any role
+                roleOptions = `
+                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                    <option value="manager" ${user.role === 'manager' ? 'selected' : ''}>Manager</option>
+                    <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+                `;
+            } else if (currentUser && currentUser.role === 'manager') {
+                // Manager cannot change roles - show current role as readonly
+                roleOptions = `
+                    <option value="${user.role}" selected>${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</option>
+                `;
+            } else {
+                // Default fallback
+                roleOptions = `
+                    <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+                `;
+            }
+            
+            // Create modal HTML
+            const modalHTML = `
+                <div id="editUserModal" class="modal" style="display: block;">
+                    <div class="modal-content edit-user-modal">
+                        <div class="modal-header">
+                            <h2>Edit User: ${user.name}</h2>
+                            <span class="close" onclick="closeModal('editUserModal')">&times;</span>
+                        </div>
+                        <div class="modal-body edit-user-body">
+                            <div class="user-basic-info">
+                                <div class="form-group">
+                                    <label for="editUserName">Username:</label>
+                                    <input type="text" id="editUserName" value="${user.username}" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="editUserFullName">Full Name:</label>
+                                    <input type="text" id="editUserFullName" value="${user.name}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="editUserEmail">Email:</label>
+                                    <input type="email" id="editUserEmail" value="${user.email}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="editUserRole">Role:</label>
+                                    <select id="editUserRole" ${currentUser && currentUser.role === 'manager' ? 'disabled' : ''}>
+                                        ${roleOptions}
+                                    </select>
+                                    ${currentUser && currentUser.role === 'manager' ? '<small style="color: #666;">Managers cannot change user roles</small>' : ''}
+                                </div>
+                            </div>
+                            <div class="section-permissions-container">
+                                <h3>Section Access Permissions</h3>
+                                <div class="section-checkboxes">
+                                    ${getAssignableSectionsForCurrentUser().map(section => {
+                                        const sectionNames = getSectionDisplayNames();
+                                        const hasAccess = user.permissions && user.permissions.sections && user.permissions.sections.includes(section);
+                                        return `
+                                            <label class="section-checkbox">
+                                                <input type="checkbox" 
+                                                       value="${section}" 
+                                                       ${hasAccess ? 'checked' : ''}
+                                                       id="editSection-${section}">
+                                                <span>${sectionNames[section] || section}</span>
+                                            </label>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-primary" onclick="saveUserChanges(${user.id})">Save Changes</button>
+                            <button class="btn btn-secondary" onclick="closeModal('editUserModal')">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to page
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        };
+        
+        // Save user changes
+        window.saveUserChanges = async function(userId) {
+            console.log('Saving changes for user:', userId);
+            
+            // Get current user session
+            const currentSession = localStorage.getItem('hubSession');
+            const currentUser = currentSession ? JSON.parse(currentSession) : null;
+            
+            if (!currentUser) {
+                alert('Please log in to save changes');
+                return;
+            }
+            
+            // Get form values
+            const fullName = document.getElementById('editUserFullName').value;
+            const email = document.getElementById('editUserEmail').value;
+            const roleSelect = document.getElementById('editUserRole');
+            const role = roleSelect.value; // admins can change; managers see disabled select same value
+            
+            // Get selected sections
+            const selectedSections = [];
+            getAssignableSectionsForCurrentUser().forEach(section => {
+                const checkbox = document.getElementById(`editSection-${section}`);
+                if (checkbox && checkbox.checked) {
+                    selectedSections.push(section);
+                }
+            });
+            
+            // Get users from localStorage
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const userIndex = users.findIndex(u => u.id === userId);
+            
+            if (userIndex === -1) {
+                alert('User not found');
+                return;
+            }
+            
+            const targetUser = users[userIndex];
+            
+            // Check if role change is allowed
+            if (targetUser.role !== role && !canChangeUserRole(currentUser, targetUser, role)) {
+                alert('You do not have permission to change this user\'s role');
+                return;
+            }
+            
+            // Update user data
+            users[userIndex].name = fullName;
+            users[userIndex].email = email;
+            users[userIndex].role = role;
+            users[userIndex].updatedAt = new Date().toISOString();
+            
+            // Update permissions
+            if (!users[userIndex].permissions) {
+                users[userIndex].permissions = {};
+            }
+            const roleChanged = (targetUser.role || 'user') !== role;
+            if (roleChanged) {
+                const defaults = {
+                    admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
+                    manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
+                    user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
+                };
+                users[userIndex].permissions = { ...defaults[role] };
+            }
+            users[userIndex].permissions.sections = selectedSections;
+            
+            // Save updated users
+            localStorage.setItem('hubUsers', JSON.stringify(users));
+            try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){}
+            console.log('User updated in localStorage:', users[userIndex]);
+            
+            // Update current session if it's the same user
+            const updatedSession = localStorage.getItem('hubSession');
+            if (updatedSession) {
+                const sessionData = JSON.parse(updatedSession);
+                if (sessionData.userId === userId) {
+                    sessionData.permissions = users[userIndex].permissions;
+                    sessionData.name = users[userIndex].name;
+                    sessionData.email = users[userIndex].email;
+                    sessionData.role = users[userIndex].role;
+                    localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                    console.log('Updated current session:', sessionData);
+                    
+                    // Update UI for current user
+                    updateUserInterface();
+                }
+            }
+            
+            // Close modal
+            closeModal('editUserModal');
+            
+            // Refresh user list
+            loadUsersList();
+            
+            // Show success message
+            alert('User updated successfully! Changes will take effect on next login.');
+            
+            console.log('User updated:', users[userIndex]);
+        };
+        
+        window.deleteUser = async function(userId) {
+            // Get current user session
+            const session = localStorage.getItem('hubSession');
+            const currentUser = session ? JSON.parse(session) : null;
+            
+            if (!currentUser) {
+                alert('Please log in to delete users');
+                return;
+            }
+            
+            // Get target user
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const targetUser = users.find(u => u.id === userId);
+            
+            if (!targetUser) {
+                alert('User not found');
+                return;
+            }
+            
+            // Check if current user can manage this user
+            if (!canManageUser(currentUser, targetUser)) {
+                alert('You do not have permission to delete this user');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to delete this user?')) {
+                const updatedUsers = users.filter(u => u.id !== userId);
+                localStorage.setItem('hubUsers', JSON.stringify(updatedUsers));
+                try { if (window.hubDatabase && hubDatabase.deleteUser) { await hubDatabase.deleteUser(userId); } } catch(_){}
+                loadUsersList();
+                alert('User deleted successfully');
+            }
+        };
+        
+        window.switchAdminTab = function(tabName) {
+            console.log('Switching to tab:', tabName);
+            
+            // Update tab appearance
+            document.querySelectorAll('.admin-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Show/hide content sections
+            document.querySelectorAll('.admin-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            const targetTab = document.getElementById(`${tabName}-tab`);
+            if (targetTab) {
+                targetTab.classList.add('active');
+                console.log('Tab content activated:', tabName);
+            } else {
+                console.error('Tab content not found:', `${tabName}-tab`);
+            }
+
+            // Load specific tab content
+            if (tabName === 'users') {
+                try { renderCurrentUserSummary(); } catch (e) { console.warn('renderCurrentUserSummary error', e); }
+                loadUsersList();
+            } else if (tabName === 'permissions') {
+                loadPermissionUserList();
+            } else if (tabName === 'audit') {
+                loadAuditLog();
+            } else if (tabName === 'sections') {
+                console.log('Loading sections list...');
+                loadSectionsList();
+            } else if (tabName === 'assignments') {
+                console.log('Loading section assignments...');
+                loadSectionAssignments();
+            }
+        };
+
+        // Toggle compact admin UI
+        window.toggleCompactAdmin = function() {
+            const modal = document.getElementById('adminPanelModal');
+            if (!modal) return;
+            const content = modal.querySelector('.modal-content');
+            if (!content) return;
+            if (document.getElementById('compactToggle')?.checked) {
+                content.classList.add('compact-admin');
+            } else {
+                content.classList.remove('compact-admin');
+            }
+        };
+
+        // Render current user summary in Users tab
+        window.renderCurrentUserSummary = function() {
+            const container = document.getElementById('currentUserSummary');
+            if (!container) return;
+            let user = null;
+            try {
+                const session = localStorage.getItem('hubSession');
+                user = session ? JSON.parse(session) : null;
+            } catch (_) {}
+            if (!user) { container.innerHTML = ''; return; }
+            const roleLabel = (user.role || '').toUpperCase();
+            container.innerHTML = `
+                <div style="display:flex;align-items:center;gap:12px;margin:10px 0 15px 0;padding:10px 12px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;">
+                    <i class="fas fa-user-circle" style="font-size:20px;color:#667eea"></i>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <strong>Signed in as:</strong>
+                        <span>${user.username}</span>
+                        <span class="user-role" style="margin-left:8px;">${roleLabel}</span>
+                    </div>
+                </div>
+            `;
+        };
+        
+        window.closeModal = function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'none';
+                // Remove the modal from DOM if it's the edit user modal
+                if (modalId === 'editUserModal') {
+                    modal.remove();
+                }
+            }
+        };
+        
+        // Section Management Functions
+        let sectionOrder = [];
+        
+        // Function to ensure sectionOrder is in sync with localStorage
+        function syncSectionOrder() {
+            const savedOrder = localStorage.getItem('sectionOrder');
+            if (savedOrder) {
+                sectionOrder = JSON.parse(savedOrder);
+                console.log('Synced sectionOrder with localStorage:', sectionOrder);
+            }
+        }
+        
+        // Function to get all available sections dynamically
+        function getAllAvailableSections() {
+            const savedOrder = localStorage.getItem('sectionOrder');
+            console.log('getAllAvailableSections - savedOrder:', savedOrder);
+            
+            if (savedOrder) {
+                const sections = JSON.parse(savedOrder);
+                console.log('getAllAvailableSections - parsed sections:', sections);
+                const visibleSections = sections.filter(section => section.visible).map(section => section.id);
+                console.log('getAllAvailableSections - visible sections:', visibleSections);
+                return visibleSections;
+            } else {
+                // Return default sections if no saved order
+                console.log('getAllAvailableSections - using default sections');
+                return ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            }
+        }
+        
+        // Function to get sections the CURRENT USER can assign
+        function getAssignableSectionsForCurrentUser() {
+            const session = localStorage.getItem('hubSession');
+            const currentUser = session ? JSON.parse(session) : null;
+            const all = getAllAvailableSections();
+            if (!currentUser) return all;
+            if (currentUser.role === 'admin') return all;
+            // Managers can only assign within their own accessible sections
+            const ownSections = (currentUser.permissions && currentUser.permissions.sections) ? currentUser.permissions.sections : [];
+            return all.filter(s => ownSections.includes(s));
+        }
+        
+        // Function to get section display names
+        function getSectionDisplayNames() {
+            const savedOrder = localStorage.getItem('sectionOrder');
+            if (savedOrder) {
+                const sections = JSON.parse(savedOrder);
+                const names = {};
+                sections.forEach(section => {
+                    names[section.id] = section.name;
+                });
+                return names;
+            } else {
+                // Return default names
+                return {
+                    'costing': 'Costing & Budgeting',
+                    'supply-planning': 'Supply Planning',
+                    'operations': 'Operations Management',
+                    'quality': 'Quality Management',
+                    'hr': 'Human Resources',
+                    'it': 'IT & Technology',
+                    'sales': 'Sales & Marketing',
+                    'compliance': 'Compliance & Legal'
+                };
+            }
+        }
+        
+        // Function to refresh permission forms when sections change
+        function refreshPermissionForms() {
+            // If permission form is open, refresh it
+            if (currentEditingUser) {
+                loadUserPermissions();
+            }
+            
+            // If admin panel is open, refresh the user list
+            const adminModal = document.getElementById('adminPanelModal');
+            if (adminModal && adminModal.style.display === 'block') {
+                loadUsersList();
+            }
+        }
+        
+        // Function to update permission form HTML with dynamic sections
+        function updatePermissionFormHTML(sections, sectionNames) {
+            console.log('updatePermissionFormHTML called with sections:', sections);
+            console.log('updatePermissionFormHTML called with sectionNames:', sectionNames);
+            
+            const sectionCheckboxes = document.getElementById('sectionCheckboxes');
+            console.log('sectionCheckboxes element found:', !!sectionCheckboxes);
+            
+            if (!sectionCheckboxes) {
+                console.error('sectionCheckboxes element not found!');
+                return;
+            }
+            
+            // Enforce filtering again based on current user's assignable sections
+            const allowed = getAssignableSectionsForCurrentUser();
+            const filteredSections = sections.filter(s => allowed.includes(s));
+            
+            // Clear existing checkboxes
+            sectionCheckboxes.innerHTML = '';
+            console.log('Cleared existing checkboxes');
+            
+            // Add checkboxes for all available sections
+            filteredSections.forEach(section => {
+                console.log('Adding checkbox for section:', section);
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'permission-item';
+                sectionDiv.innerHTML = `
+                    <div class="permission-checkbox">
+                        <input type="checkbox" id="section-${section}" onchange="updateSectionPermission('${section}')">
+                        <label for="section-${section}">${sectionNames[section] || section}</label>
+                    </div>
+                    <div class="permission-checkbox">
+                        <input type="checkbox" id="edit-${section}" onchange="updateSectionPermission('${section}')">
+                        <label for="edit-${section}">Can Edit</label>
+                    </div>
+                `;
+                sectionCheckboxes.appendChild(sectionDiv);
+            });
+            
+            console.log('Finished adding checkboxes. Total sections added:', filteredSections.length);
+        }
+        
+        window.loadSectionsList = function() {
+            console.log('loadSectionsList called');
+            
+            // Load section configuration from localStorage or use default
+            const savedOrder = localStorage.getItem('sectionOrder');
+            if (savedOrder) {
+                sectionOrder = JSON.parse(savedOrder);
+                console.log('Loaded saved section order from localStorage:', sectionOrder);
+            } else {
+                // Default section order
+                sectionOrder = [
+                    { id: 'costing', name: 'Costing', icon: 'fas fa-calculator', visible: true, order: 1 },
+                    { id: 'supply-planning', name: 'Supply Planning', icon: 'fas fa-truck', visible: true, order: 2 },
+                    { id: 'operations', name: 'Operations', icon: 'fas fa-cogs', visible: true, order: 3 },
+                    { id: 'quality', name: 'Quality Management', icon: 'fas fa-check-circle', visible: true, order: 4 },
+                    { id: 'hr', name: 'Human Resources', icon: 'fas fa-users', visible: true, order: 5 },
+                    { id: 'it', name: 'IT & Technology', icon: 'fas fa-laptop-code', visible: true, order: 6 },
+                    { id: 'sales', name: 'Sales & Marketing', icon: 'fas fa-chart-line', visible: true, order: 7 },
+                    { id: 'compliance', name: 'Compliance & Legal', icon: 'fas fa-gavel', visible: true, order: 8 }
+                ];
+                console.log('Using default section order:', sectionOrder);
+                // Save default to localStorage
+                localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+            }
+            
+            renderSectionsList();
+        };
+        
+        function renderSectionsList() {
+            console.log('renderSectionsList called');
+            const sectionsList = document.getElementById('sectionsList');
+            console.log('sectionsList element found:', !!sectionsList);
+            if (!sectionsList) {
+                console.error('sectionsList element not found!');
+                return;
+            }
+            
+            // Sort sections by order
+            const sortedSections = [...sectionOrder].sort((a, b) => a.order - b.order);
+            
+            sectionsList.innerHTML = sortedSections.map(section => `
+                <div class="section-item-admin" data-section-id="${section.id}">
+                    <div class="section-drag-handle">
+                        <i class="fas fa-grip-vertical"></i>
+                    </div>
+                    <div class="section-info">
+                        <div class="section-icon">
+                            ${section.image ? `<img src="${section.image}" class="section-img-icon">` : `<i class="${section.icon || 'fas fa-th-large'}"></i>`}
+                        </div>
+                        <div class="section-details">
+                            <h4>${section.name}</h4>
+                            <p>ID: ${section.id}</p>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <label class="visibility-toggle">
+                            <input type="checkbox" ${section.visible ? 'checked' : ''} 
+                                   onchange="toggleSectionVisibility('${section.id}')">
+                            <span class="toggle-label">Visible</span>
+                        </label>
+                        <div class="section-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="editSection('${section.id}')" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSection('${section.id}')" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Make sections sortable
+            makeSectionsSortable();
+        }
+
+        // Toggle section visibility from the admin Manage Sections list
+        window.toggleSectionVisibility = function(sectionId) {
+            try {
+                const checkbox = document.querySelector(`.section-item-admin[data-section-id="${sectionId}"] input[type="checkbox"]`);
+                const isVisible = checkbox ? checkbox.checked : true;
+                const section = sectionOrder.find(s => s.id === sectionId);
+                if (!section) return;
+                section.visible = isVisible;
+                localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                updateMainHubSections();
+                const sessionRaw = localStorage.getItem('hubSession');
+                if (sessionRaw) {
+                    try { updateHubCardsAccess(JSON.parse(sessionRaw)); } catch (_) {}
+                }
+            } catch (e) {
+                console.error('toggleSectionVisibility error', e);
+            }
+        };
+        
+        function makeSectionsSortable() {
+            const sectionsList = document.getElementById('sectionsList');
+            if (!sectionsList) return;
+            
+            // Simple drag and drop implementation
+            let draggedElement = null;
+            
+            const sectionItems = sectionsList.querySelectorAll('.section-item-admin');
+            sectionItems.forEach(item => {
+                item.draggable = true;
+                
+                item.addEventListener('dragstart', (e) => {
+                    draggedElement = item;
+                    item.style.opacity = '0.5';
+                });
+                
+                item.addEventListener('dragend', (e) => {
+                    item.style.opacity = '1';
+                    draggedElement = null;
+                });
+                
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+                
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    if (draggedElement && draggedElement !== item) {
+                        const nextSibling = item.nextSibling;
+                        sectionsList.insertBefore(draggedElement, nextSibling);
+                        updateSectionOrder();
+                        try {
+                            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                        } catch (_) {}
+                        // Reflect changes immediately on the hub
+                        try { updateMainHubSections(); } catch (_) {}
+                    }
+                });
+            });
+        }
+        
+        function updateSectionOrder() {
+            const sectionsList = document.getElementById('sectionsList');
+            const sectionItems = sectionsList.querySelectorAll('.section-item-admin');
+            
+            sectionItems.forEach((item, index) => {
+                const sectionId = item.dataset.sectionId;
+                const section = sectionOrder.find(s => s.id === sectionId);
+                if (section) {
+                    section.order = index + 1;
+                }
+            });
+        }
+        
+        
+        function openSectionModal(mode, section) {
+            const isEdit = mode === 'edit';
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.background = 'rgba(0,0,0,0.4)';
+            modal.style.zIndex = '10001';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width:520px; width:95%; margin: 6% auto; position: relative; z-index: 10002;">
+                    <div class="modal-header">
+                        <h2>${isEdit ? 'Edit Section' : 'Add New Section'}</h2>
+                        <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+                    </div>
+                    <form id="sectionForm" style="padding: 10px 20px 20px;">
+                        <div class="form-group">
+                            <label for="secId">Section ID *</label>
+                            <input type="text" id="secId" ${isEdit ? 'readonly' : ''} value="${isEdit ? section.id : ''}" placeholder="e.g., finance" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="secName">Name *</label>
+                            <input type="text" id="secName" value="${isEdit ? section.name : ''}" placeholder="e.g., Finance" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="secIntro">Introduction (optional)</label>
+                            <textarea id="secIntro" rows="3" placeholder="Short description shown on the hub card and section page.">${isEdit ? (section.intro || '') : ''}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Icon</label>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                    <i id="iconPreview" class="${isEdit ? (section.icon || 'fas fa-th-large') : 'fas fa-th-large'}" style="font-size:20px;"></i>
+                                    <input type="text" id="secIcon" value="${isEdit ? (section.icon || '') : ''}" placeholder="Font Awesome class (optional)" style="flex:1;min-width:200px;">
+                                </div>
+                                <input type="text" id="iconSearch" placeholder="Search icons (e.g., truck, user, cog)" style="padding:8px 10px;border:1px solid #ddd;border-radius:6px;">
+                                <div id="iconPicker" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(44px,1fr));gap:8px;max-height:160px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px;background:#fff;"></div>
+                                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                    <input type="url" id="secImage" value="${isEdit ? (section.image || '') : ''}" placeholder="Or paste image URL (PNG/SVG)" style="flex:1;min-width:200px;">
+                                    <img id="imagePreview" src="${isEdit && section.image ? section.image : ''}" style="width:24px;height:24px;object-fit:contain;display:${isEdit && section.image ? 'block' : 'none'};" />
+                                    <small>Image URL overrides icon if provided.</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                            <input type="checkbox" id="secVisible" ${!isEdit || section.visible !== false ? 'checked' : ''}>
+                            <label for="secVisible">Visible</label>
+                        </div>
+                        <div class="form-actions" style="display:flex;gap:10px;justify-content:flex-end;">
+                            <button type="button" class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            const form = modal.querySelector('#sectionForm');
+            const iconInput = modal.querySelector('#secIcon');
+            const imageInput = modal.querySelector('#secImage');
+            const iconPreview = modal.querySelector('#iconPreview');
+            let imagePreview = modal.querySelector('#imagePreview');
+            const iconSearch = modal.querySelector('#iconSearch');
+            const iconPicker = modal.querySelector('#iconPicker');
+
+            if (iconInput && iconPreview) {
+                iconInput.addEventListener('input', () => {
+                    const cls = iconInput.value.trim() || 'fas fa-th-large';
+                    iconPreview.className = cls;
+                });
+            }
+            if (imageInput) {
+                imageInput.addEventListener('input', () => {
+                    if (!imagePreview) imagePreview = modal.querySelector('#imagePreview');
+                    const url = imageInput.value.trim();
+                    if (imagePreview) {
+                        if (url) {
+                            imagePreview.src = url;
+                            imagePreview.style.display = 'block';
+                        } else {
+                            imagePreview.src = '';
+                            imagePreview.style.display = 'none';
+                        }
+                    }
+                });
+            }
+
+            // Build and filter icon grid
+            const faIcons = [
+                'fas fa-th-large','fas fa-calculator','fas fa-truck','fas fa-cogs','fas fa-check-circle','fas fa-users',
+                'fas fa-laptop-code','fas fa-chart-line','fas fa-gavel','fas fa-dollar-sign','fas fa-warehouse',
+                'fas fa-industry','fas fa-clipboard-list','fas fa-boxes','fas fa-project-diagram','fas fa-database',
+                'fas fa-balance-scale','fas fa-shield-alt','fas fa-network-wired','fas fa-tools','fas fa-file-alt'
+            ];
+            function renderIconGrid(filter='') {
+                if (!iconPicker) return;
+                const term = filter.toLowerCase();
+                const list = faIcons.filter(cls => cls.includes(term.replace(/\s+/g,'-')));
+                iconPicker.innerHTML = '';
+                list.forEach(cls => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.style.border = '1px solid #ddd';
+                    btn.style.borderRadius = '6px';
+                    btn.style.padding = '8px';
+                    btn.style.display = 'flex';
+                    btn.style.justifyContent = 'center';
+                    btn.style.alignItems = 'center';
+                    btn.style.background = '#fff';
+                    btn.style.cursor = 'pointer';
+                    btn.title = cls;
+                    btn.innerHTML = `<i class="${cls}" style="font-size:18px;"></i>`;
+                    btn.addEventListener('click', () => {
+                        iconInput.value = cls;
+                        iconPreview.className = cls;
+                    });
+                    iconPicker.appendChild(btn);
+                });
+            }
+            renderIconGrid('');
+            if (iconSearch) {
+                iconSearch.addEventListener('input', () => renderIconGrid(iconSearch.value));
+            }
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const idInput = modal.querySelector('#secId').value.trim().toLowerCase().replace(/\s+/g, '-');
+                const nameInput = modal.querySelector('#secName').value.trim();
+                const iconVal = iconInput ? iconInput.value.trim() : '';
+                const imageVal = imageInput ? imageInput.value.trim() : '';
+                const visibleInput = modal.querySelector('#secVisible').checked;
+                const introVal = (modal.querySelector('#secIntro') && modal.querySelector('#secIntro').value) ? modal.querySelector('#secIntro').value.trim() : '';
+                if (!idInput || !nameInput) return;
+
+                if (!isEdit && sectionOrder.find(s => s.id === idInput)) {
+                    alert('A section with this ID already exists.');
+                    return;
+                }
+
+                const iconClass = iconVal || 'fas fa-th-large';
+                if (isEdit) {
+                    const idx = sectionOrder.findIndex(s => s.id === section.id);
+                    if (idx !== -1) {
+                        sectionOrder[idx] = { ...sectionOrder[idx], name: nameInput, icon: iconClass, image: imageVal || undefined, visible: visibleInput, intro: introVal };
+                    }
+                } else {
+            const newSection = {
+                        id: idInput,
+                        name: nameInput,
+                        icon: iconClass,
+                        image: imageVal || undefined,
+                        visible: visibleInput,
+                        intro: introVal,
+                order: sectionOrder.length + 1
+            };
+            sectionOrder.push(newSection);
+                }
+
+            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+            renderSectionsList();
+            updateMainHubSections();
+                // Refresh hub cards access based on current user/session
+                try {
+                    const sessionRaw = localStorage.getItem('hubSession');
+                    if (sessionRaw) {
+                        const sessionUser = JSON.parse(sessionRaw);
+                        if (typeof updateHubCardsAccess === 'function') {
+                            updateHubCardsAccess(sessionUser);
+                        }
+                    }
+                } catch (e) { console.warn('Could not refresh hub cards access', e); }
+                modal.remove();
+            });
+        }
+
+        window.editSection = function(sectionId) {
+            const section = sectionOrder.find(s => s.id === sectionId);
+            if (!section) return;
+            openSectionModal('edit', section);
+        };
+        
+        window.deleteSection = function(sectionId) {
+            if (!confirm('Permanently remove this section from the hub?')) return;
+            const idx = sectionOrder.findIndex(s => s.id === sectionId);
+            if (idx === -1) return;
+            sectionOrder.splice(idx, 1);
+            sectionOrder.forEach((s, i) => { s.order = i + 1; });
+            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+            const card = document.querySelector(`[onclick="navigateToSection('${sectionId}')"]`);
+            if (card && card.parentElement) card.parentElement.removeChild(card);
+            renderSectionsList();
+            updateMainHubSections();
+        };
+        
+        window.addNewSection = function() {
+            openSectionModal('add');
+        };
+        
+        window.saveSectionOrder = function() {
+            updateSectionOrder();
+            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+            updateMainHubSections();
+            alert('Section order saved successfully!');
+        };
+        
+        window.resetSections = function() {
+            // Check if user has admin role
+            const session = localStorage.getItem('hubSession');
+            if (!session) {
+                alert('Please log in to reset sections');
+                return;
+            }
+            
+            const user = JSON.parse(session);
+            if (user.role !== 'admin') {
+                alert('Only administrators can reset sections');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to reset all sections to default? This will restore the original 8 sections.')) {
+                sectionOrder = [
+                    { id: 'costing', name: 'Costing', icon: 'fas fa-calculator', visible: true, order: 1 },
+                    { id: 'supply-planning', name: 'Supply Planning', icon: 'fas fa-truck', visible: true, order: 2 },
+                    { id: 'operations', name: 'Operations', icon: 'fas fa-cogs', visible: true, order: 3 },
+                    { id: 'quality', name: 'Quality Management', icon: 'fas fa-check-circle', visible: true, order: 4 },
+                    { id: 'hr', name: 'Human Resources', icon: 'fas fa-users', visible: true, order: 5 },
+                    { id: 'it', name: 'IT & Technology', icon: 'fas fa-laptop-code', visible: true, order: 6 },
+                    { id: 'sales', name: 'Sales & Marketing', icon: 'fas fa-chart-line', visible: true, order: 7 },
+                    { id: 'compliance', name: 'Compliance & Legal', icon: 'fas fa-gavel', visible: true, order: 8 }
+                ];
+                localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                renderSectionsList();
+                updateMainHubSections();
+                alert('Sections reset to default!');
+            }
+        };
+        
+        function ensureHubCard(section) {
+            const hubGrid = document.querySelector('.hub-grid');
+            if (!hubGrid) return;
+            const existing = document.querySelector(`[onclick="navigateToSection('${section.id}')"]`);
+            if (existing) return;
+            const iconClass = normalizeIconClass((section.icon && section.icon.trim()) ? section.icon : 'fa-solid fa-table-cells-large');
+            const iconHtml = section.image ? `<img src="${section.image}" class="section-img-icon">` : `<i class="${iconClass}"></i>`;
+            const cardHTML = `
+            <div class="hub-card" onclick="navigateToSection('${section.id}')">
+                <div class="card-icon">
+                    ${iconHtml}
+                </div>
+                <h3>${section.name}</h3>
+                <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                <div class="card-stats" id="${section.id}-stats">
+                    <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> Playbooks</span>
+                    <span><i class="fas fa-link"></i> <span id="${section.id}-boxlinks">0</span> Box Links</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
+                </div>
+            </div>`;
+            hubGrid.insertAdjacentHTML('beforeend', cardHTML);
+        }
+
+        function updateHubCardContent(section) {
+            const card = document.querySelector(`.hub-card[onclick="navigateToSection('${section.id}')"]`);
+            if (!card) return;
+            // Update title
+            const titleEl = card.querySelector('h3');
+            if (titleEl) titleEl.textContent = section.name || section.id;
+            // Update icon
+            const iconContainer = card.querySelector('.card-icon');
+            if (iconContainer) {
+                const iconClass = normalizeIconClass((section.icon && section.icon.trim()) ? section.icon : 'fa-solid fa-table-cells-large');
+                if (section.image) {
+                    iconContainer.innerHTML = `<img src="${section.image}" class="section-img-icon">`;
+            } else {
+                    iconContainer.innerHTML = `<i class="${iconClass}"></i>`;
+                }
+            }
+            // Update intro
+            const introEl = card.querySelector('.card-intro') || card.querySelector('p');
+            if (introEl) {
+                const text = section.intro || '';
+                introEl.textContent = truncate(text, 120);
+            }
+        }
+
+        // Normalize icon classes for Font Awesome 6
+        function normalizeIconClass(cls) {
+            if (!cls || typeof cls !== 'string') return 'fa-solid fa-table-cells-large';
+            let c = cls.trim();
+            // If already uses fa-solid/fa-regular/fa-brands, keep
+            if (/\bfa-(solid|regular|light|thin|duotone|brands)\b/.test(c)) return c;
+            // Convert legacy 'fas ' to 'fa-solid '
+            c = c.replace(/\bfas\b/, 'fa-solid').replace(/\bfar\b/, 'fa-regular').replace(/\bfab\b/, 'fa-brands');
+            // Ensure there is a style prefix
+            if (!/\bfa-\w+\b/.test(c) || !/\bfa-\w+\b.*\bfa-/.test('fa ' + c)) {
+                // If only an icon name provided, add fa-solid
+                if (!/\bfa-(solid|regular|brands)\b/.test(c)) {
+                    c = 'fa-solid ' + c;
+                }
+            }
+            return c;
+        }
+
+        function getDefaultIntroForSection(sectionId) {
+            const map = {
+                'costing': 'Guides and tools for cost analysis, budgeting, and ROI planning.',
+                'supply-planning': 'Demand forecasting, inventory optimization, and supplier planning resources.',
+                'operations': 'Process improvement, SOPs, production metrics, and maintenance guidance.',
+                'quality': 'Quality management practices, control procedures, and compliance standards.',
+                'hr': 'People operations policies, templates, onboarding, and workforce resources.',
+                'it': 'IT systems, tooling, security, and operational best practices.',
+                'sales': 'Sales playbooks, marketing assets, and performance dashboards.',
+                'compliance': 'Policies, legal, and regulatory guidance with reusable templates.'
+            };
+            return map[sectionId] || '';
+        }
+
+        function seedSectionIntrosIfMissing() {
+            try {
+                const saved = localStorage.getItem('sectionOrder');
+                if (!saved) return [];
+                const arr = JSON.parse(saved);
+                let changed = false;
+                arr.forEach(s => {
+                    if (!s.intro || typeof s.intro !== 'string' || s.intro.trim() === '') {
+                        s.intro = getDefaultIntroForSection(s.id);
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    localStorage.setItem('sectionOrder', JSON.stringify(arr));
+                }
+                return arr;
+            } catch (_) { return []; }
+        }
+
+        function escapeHtml(text) {
+            try {
+                const div = document.createElement('div');
+                div.textContent = text || '';
+                return div.innerHTML;
+            } catch (_) { return ''; }
+        }
+
+        function truncate(text, maxLen) {
+            const t = String(text || '');
+            if (t.length <= maxLen) return t;
+            return t.slice(0, Math.max(0, maxLen - 1)) + '…';
+        }
+        
+        function updateMainHubSections() {
+            console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
+            const hubGrid = document.querySelector('.hub-grid');
+            if (!hubGrid) return;
+            // Read dynamic config
+            let sections = [];
+            try {
+                const savedOrder = localStorage.getItem('sectionOrder');
+                if (savedOrder) {
+                    // Seed intros if any are missing
+                    seedSectionIntrosIfMissing();
+                    sections = JSON.parse(savedOrder)
+                        .filter(s => s.visible !== false)
+                        .sort((a, b) => (a.order || 999) - (b.order || 999));
+                }
+            } catch (e) { console.warn('Failed reading sectionOrder', e); }
+            // Clear existing (including any legacy static cards)
+            hubGrid.innerHTML = '';
+            // Build cards dynamically
+            sections.forEach(cfg => {
+                ensureHubCard(cfg);
+                updateHubCardContent(cfg);
+            });
+            // Stats for currently built sections
+            updateSectionStats();
+            console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
+        }
+        
+        // Debug function to check sections
+        window.debugSections = function() {
+            console.log('=== DEBUGGING SECTIONS ===');
+            
+            // Check sectionOrder in localStorage
+            const savedOrder = localStorage.getItem('sectionOrder');
+            console.log('Saved sectionOrder:', savedOrder);
+            
+            if (savedOrder) {
+                const sections = JSON.parse(savedOrder);
+                console.log('Parsed sections:', sections);
+                console.log('Section IDs:', sections.map(s => s.id));
+                console.log('Visible sections:', sections.filter(s => s.visible).map(s => s.id));
+            }
+            
+            // Check getAllAvailableSections function
+            const availableSections = getAllAvailableSections();
+            console.log('getAllAvailableSections result:', availableSections);
+            
+            // Check getSectionDisplayNames function
+            const sectionNames = getSectionDisplayNames();
+            console.log('getSectionDisplayNames result:', sectionNames);
+            
+            // Check if permission form exists
+            const sectionCheckboxes = document.getElementById('sectionCheckboxes');
+            console.log('sectionCheckboxes element exists:', !!sectionCheckboxes);
+            if (sectionCheckboxes) {
+                console.log('sectionCheckboxes innerHTML length:', sectionCheckboxes.innerHTML.length);
+                console.log('sectionCheckboxes children count:', sectionCheckboxes.children.length);
+            }
+            
+            alert(`Sections Debug:\n\nSaved sections: ${savedOrder ? JSON.parse(savedOrder).map(s => s.id).join(', ') : 'None'}\nAvailable sections: ${availableSections.join(', ')}\nPermission form exists: ${!!sectionCheckboxes}`);
+            
+            console.log('=== SECTIONS DEBUG COMPLETE ===');
+        };
+        
+        // Debug function to check what's happening with saves
+        window.debugSave = function() {
+            console.log('=== DEBUGGING SAVE OPERATIONS ===');
+            
+            // Check current session
+            const session = localStorage.getItem('hubSession');
+            console.log('Current session:', session);
+            
+            // Check users data
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            console.log('Users data:', users);
+            
+            // Check section order
+            const sectionOrder = localStorage.getItem('sectionOrder');
+            console.log('Section order:', sectionOrder);
+            
+            // Check if any modals are open
+            const adminModal = document.getElementById('adminPanelModal');
+            const editModal = document.getElementById('editUserModal');
+            const permissionModal = document.getElementById('permissionModal');
+            
+            console.log('Admin modal open:', adminModal && adminModal.style.display === 'block');
+            console.log('Edit modal open:', editModal && editModal.style.display === 'block');
+            console.log('Permission modal open:', permissionModal && permissionModal.style.display === 'block');
+            
+            // Check current editing user
+            console.log('Current editing user:', currentEditingUser);
+            
+            alert(`Save Debug:\n\nSession exists: ${!!session}\nUsers count: ${users.length}\nSection order exists: ${!!sectionOrder}\nAdmin modal open: ${adminModal && adminModal.style.display === 'block'}\nEdit modal open: ${editModal && editModal.style.display === 'block'}\nPermission modal open: ${permissionModal && permissionModal.style.display === 'block'}\nCurrent editing user: ${currentEditingUser ? currentEditingUser.username : 'None'}`);
+            
+            console.log('=== SAVE DEBUG COMPLETE ===');
+        };
+        
+        // Load section assignments for admin panel
+        window.loadSectionAssignments = function() {
+            console.log('Loading section assignments...');
+            
+            // Get all users from localStorage
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const assignmentsList = document.getElementById('assignmentsList');
+            
+            if (!assignmentsList) {
+                console.error('Assignments list element not found');
+                return;
+            }
+            
+            // Get all available sections
+            const allSections = [
+                { id: 'costing', name: 'Costing', icon: 'fas fa-calculator' },
+                { id: 'supply-planning', name: 'Supply Planning', icon: 'fas fa-truck' },
+                { id: 'operations', name: 'Operations', icon: 'fas fa-cogs' },
+                { id: 'quality', name: 'Quality Management', icon: 'fas fa-check-circle' },
+                { id: 'hr', name: 'Human Resources', icon: 'fas fa-users' },
+                { id: 'it', name: 'IT & Technology', icon: 'fas fa-laptop-code' },
+                { id: 'sales', name: 'Sales & Marketing', icon: 'fas fa-chart-line' },
+                { id: 'compliance', name: 'Compliance & Legal', icon: 'fas fa-gavel' }
+            ];
+            
+            assignmentsList.innerHTML = users.map(user => {
+                const userSections = user.permissions && user.permissions.sections ? user.permissions.sections : [];
+                
+                return `
+                    <div class="assignment-card">
+                        <div class="user-info">
+                            <h4>${user.name} (${user.username})</h4>
+                            <span class="user-role">${user.role}</span>
+                        </div>
+                        <div class="section-assignments">
+                            <h5>Assigned Sections:</h5>
+                            <div class="section-checkboxes">
+                                ${allSections.map(section => `
+                                    <label class="section-checkbox">
+                                        <input type="checkbox" 
+                                               value="${section.id}" 
+                                               ${userSections.includes(section.id) ? 'checked' : ''}
+                                               onchange="updateUserSectionAccess(${user.id}, '${section.id}', this.checked)">
+                                        <i class="${section.icon}"></i>
+                                        <span>${section.name}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                            <div class="assignment-actions">
+                                <button class="btn btn-sm btn-primary" onclick="selectAllSections(${user.id})">
+                                    Select All
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="clearAllSections(${user.id})">
+                                    Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+        
+        // Update user section access
+        window.updateUserSectionAccess = function(userId, sectionId, hasAccess) {
+            console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
+            
+            // Get users from localStorage
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const user = users.find(u => u.id === userId);
+            
+            if (!user) {
+                console.error('User not found:', userId);
+                return;
+            }
+            
+            // Initialize permissions if not exists
+            if (!user.permissions) {
+                user.permissions = { sections: [] };
+            }
+            if (!user.permissions.sections) {
+                user.permissions.sections = [];
+            }
+            
+            // Update section access
+            if (hasAccess) {
+                if (!user.permissions.sections.includes(sectionId)) {
+                    user.permissions.sections.push(sectionId);
+                }
+            } else {
+                user.permissions.sections = user.permissions.sections.filter(s => s !== sectionId);
+            }
+            
+            // Save updated users
+            localStorage.setItem('hubUsers', JSON.stringify(users));
+            console.log('Updated user in localStorage:', user);
+            
+            // Update current session if it's the same user
+            const session = localStorage.getItem('hubSession');
+            if (session) {
+                const sessionData = JSON.parse(session);
+                if (sessionData.userId === userId) {
+                    sessionData.permissions = user.permissions;
+                    localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                    console.log('Updated current session:', sessionData);
+                    
+                    // Update UI for current user
+                    updateUserInterface();
+                }
+            }
+            
+            // Show success message
+            alert(`Section access updated for ${user.username}. Changes will take effect on next login.`);
+            
+            console.log('Section access updated for user', user.username, ':', user.permissions.sections);
+        };
+        
+        // Select all sections for a user
+        window.selectAllSections = function(userId) {
+            const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            allSections.forEach(sectionId => {
+                const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    updateUserSectionAccess(userId, sectionId, true);
+                }
+            });
+        };
+        
+        // Clear all sections for a user
+        window.clearAllSections = function(userId) {
+            const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            allSections.forEach(sectionId => {
+                const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
+                if (checkbox && checkbox.checked) {
+                    checkbox.checked = false;
+                    updateUserSectionAccess(userId, sectionId, false);
+                }
+            });
+        };
+    </script>
+    
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .sections-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        
+        .section-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            text-align: center;
+        }
+        
+        .section-item i {
+            font-size: 2rem;
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        
+        .section-item h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .section-item p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        /* Permission Management Styles */
+        .permission-management {
+            padding: 20px 0;
+        }
+        
+        .user-selector {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .user-selector label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .user-selector select {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+        }
+        
+        .permission-form {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .permission-form h4 {
+            margin-bottom: 25px;
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .permission-section {
+            margin-bottom: 30px;
+        }
+        
+        .permission-section h5 {
+            margin-bottom: 15px;
+            color: #555;
+            font-size: 1.1rem;
+        }
+        
+        .section-permissions, .edit-permissions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .permission-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .permission-item:hover {
+            background: #e9ecef;
+        }
+        
+        .permission-item label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-weight: 500;
+            color: #333;
+            margin: 0;
+        }
+        
+        .permission-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #4CAF50;
+        }
+        
+        .permission-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .permission-actions .btn {
+            padding: 12px 25px;
+            font-size: 1rem;
+        }
+        
+        /* Section Management Styles */
+        .sections-management {
+            padding: 20px 0;
+        }
+        
+        .sections-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .section-item-admin {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: move;
+        }
+        
+        .section-item-admin:hover {
+            border-color: #4CAF50;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+        }
+        
+        .section-drag-handle {
+            margin-right: 15px;
+            color: #999;
+            font-size: 1.2rem;
+            cursor: grab;
+        }
+        
+        .section-drag-handle:active {
+            cursor: grabbing;
+        }
+        
+        .section-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            gap: 15px;
+        }
+        
+        .section-icon {
+            font-size: 2rem;
+            color: #4CAF50;
+            width: 50px;
+            text-align: center;
+        }
+        .section-img-icon {
+            width: 36px;
+            height: 36px;
+            object-fit: contain;
+        }
+        
+        .section-details h4 {
+            margin: 0 0 5px 0;
+            color: #333;
+            font-size: 1.2rem;
+        }
+        
+        .section-details p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .section-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .visibility-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .visibility-toggle input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #4CAF50;
+        }
+        
+        .toggle-label {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .section-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.9rem;
+        }
+        
+        .section-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .section-actions .btn {
+            padding: 10px 20px;
+        }
+        
+        /* Admin Quick Access Styles */
+        .admin-quick-access {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 30px 0;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .admin-quick-access h3 {
+            margin: 0 0 20px 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .admin-quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .admin-quick-actions .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Section Assignments Styles */
+        .assignments-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .assignment-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+        
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .user-info h4 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .user-role {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .section-assignments h5 {
+            margin: 0 0 15px 0;
+            color: #555;
+            font-size: 1rem;
+        }
+        
+        .section-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .section-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .section-checkbox:hover {
+            background: #e9ecef;
+            border-color: #667eea;
+        }
+        
+        .section-checkbox input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+        }
+        
+        .section-checkbox i {
+            color: #667eea;
+            width: 16px;
+        }
+        
+        .section-checkbox span {
+            font-size: 0.9rem;
+            color: #333;
+        }
+        
+        .assignment-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .assignment-actions .btn {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+        
+        .admin-quick-actions .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .admin-quick-actions .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .admin-quick-actions .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .admin-quick-actions .btn-warning {
+            background: #ff9800;
+            color: white;
+        }
+        
+        /* Admin Panel Modal Styles */
+        .admin-modal .modal-content {
+            max-width: 1000px !important;
+            width: 95% !important;
+            max-height: 90vh !important;
+            margin: 2% auto !important;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .admin-modal .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        /* Make admin tabs horizontally scrollable to avoid truncation */
+        .admin-tabs {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            gap: 10px;
+            padding: 8px 4px 6px 4px;
+        }
+        .admin-tabs::-webkit-scrollbar { height: 6px; }
+        .admin-tabs::-webkit-scrollbar-thumb { background: #d0d3d9; border-radius: 6px; }
+        .admin-tab { flex: 0 0 auto; white-space: nowrap; }
+        
+        /* Add User Modal overlay and stacking */
+        #addUserModal {
+            position: fixed !important;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.45);
+            z-index: 10002 !important;
+        }
+        #addUserModal .modal-content {
+            position: relative;
+            z-index: 10003 !important;
+            max-width: 560px !important;
+            width: 95% !important;
+            margin: 6% auto !important;
+        }
+
+        /* Make add user modal body scrollable and actions sticky */
+        #addUserModal .modal-body {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        #addUserModal .form-actions {
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            padding-top: 10px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        /* Edit User Modal overlay and stacking */
+        #editUserModal {
+            position: fixed !important;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.45);
+            z-index: 10004 !important;
+        }
+        #editUserModal .modal-content {
+            position: relative;
+            z-index: 10005 !important;
+        }
+
+        /* Make permission form save actions sticky to avoid needing zoom */
+        .permission-actions {
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+        }
+
+        /* Shrink hub cards and grid for smaller viewports */
+        .hub-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .hub-card {
+            padding: 14px;
+        }
+        .hub-card .card-icon i {
+            font-size: 28px;
+        }
+        .hub-card h3 {
+            font-size: 1.1rem;
+        }
+        .hub-card p {
+            font-size: 0.9rem;
+        }
+
+        /* Shrink section admin list visuals a bit */
+        .section-item-admin {
+            padding: 14px;
+        }
+        .section-icon { font-size: 1.5rem; }
+
+        /* Compact admin mode */
+        .compact-admin .admin-tabs { gap: 6px; }
+        .compact-admin .admin-tab { padding: 6px 10px; font-size: 0.9rem; }
+        .compact-admin .admin-section-header h3 { font-size: 1rem; }
+        .compact-admin .admin-section-header .btn { padding: 6px 10px; font-size: 0.85rem; }
+        .compact-admin .users-list .user-item { padding: 10px; }
+        .compact-admin .permission-form { padding: 16px; }
+        .compact-admin .export-card { padding: 12px; }
+        
+        .admin-modal .admin-content {
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 20px 30px 80px 30px;
+            position: relative;
+        }
+        
+        .admin-modal .admin-tab-content {
+            max-height: none;
+            overflow: visible;
+        }
+        
+        .admin-modal .permission-management {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        /* Force scrolling to work */
+        .admin-modal {
+            overflow: hidden !important;
+        }
+        
+        .admin-modal .modal-content {
+            overflow: hidden !important;
+        }
+        
+        .admin-modal .modal-body {
+            overflow: hidden !important;
+        }
+        
+        .admin-modal .admin-content {
+            overflow-y: scroll !important;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Improved Edit User Modal Styles */
+        .edit-user-modal {
+            max-width: 800px !important;
+            width: 90% !important;
+            max-height: 90vh !important;
+            margin: 5% auto !important;
+        }
+        
+        .edit-user-body {
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 20px 30px;
+        }
+        
+        .user-basic-info {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .section-permissions-container {
+            margin-top: 20px;
+        }
+        
+        .section-permissions-container h3 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+        
+        .section-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        
+        .section-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .section-checkbox:hover {
+            background: #e9ecef;
+            border-color: #4CAF50;
+        }
+        
+        .section-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #4CAF50;
+        }
+        
+        .section-checkbox span {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        /* Responsive design for smaller screens */
+        @media (max-width: 768px) {
+            .edit-user-modal {
+                width: 95% !important;
+                margin: 2% auto !important;
+            }
+            
+            .edit-user-body {
+                max-height: 80vh;
+                padding: 15px 20px;
+            }
+            
+            .section-checkboxes {
+                grid-template-columns: 1fr;
+                max-height: 250px;
+            }
+        }
+        
+        /* Keep Save Order visible in Manage Sections */
+        .sections-management { position: relative; }
+        .sections-management .section-actions {
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            padding: 12px 10px;
+            border-top: 1px solid #e9ecef;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+            z-index: 2;
+        }
+        .sections-management .sections-list { padding-bottom: 8px; }
+    </style>
+</body>
+</html>

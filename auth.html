@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information Hub - Login</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo-container">
+                    <img src="logo.svg" alt="Company Logo" class="site-logo">
+                    <h1>Information Hub</h1>
+                </div>
+                <p id="authSubtitle">Please sign in to access your resources</p>
+            </div>
+
+            <div class="tab-switch" style="display:flex;gap:10px;justify-content:center;margin-bottom:12px;">
+                <button id="tabLogin" class="btn btn-secondary" type="button">Sign In</button>
+                <button id="tabSignup" class="btn btn-primary" type="button">Sign Up</button>
+            </div>
+
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Email or Username</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary auth-btn">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+            </form>
+
+            <form id="signupForm" class="auth-form" style="display:none;">
+                <div class="form-group">
+                    <label for="signupName">Full Name</label>
+                    <input type="text" id="signupName" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupEmail">Email</label>
+                    <input type="email" id="signupEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword">Password</label>
+                    <input type="password" id="signupPassword" minlength="6" required>
+                </div>
+                <button type="submit" class="btn btn-primary auth-btn">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p>Demo Accounts:</p>
+                <div class="demo-accounts">
+                    <div class="demo-account" onclick="fillDemoAccount('admin')">
+                        <strong>Admin:</strong> admin / admin123
+                    </div>
+                    <div class="demo-account" onclick="fillDemoAccount('manager')">
+                        <strong>Manager:</strong> manager / manager123
+                    </div>
+                    <div class="demo-account" onclick="fillDemoAccount('user')">
+                        <strong>User:</strong> user / user123
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth-script.js"></script>
+</body>
+</html>
