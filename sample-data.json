@@ -1,5 +1,2866 @@
-﻿{
-  "users": [],
-  "informationHub": {},
-  "hubActivities": []
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "name": "System Administrator",
+      "email": "admin@company.com",
+      "permissions": {
+        "canManageUsers": true,
+        "canEditAllSections": true,
+        "canDeleteResources": true,
+        "canViewAuditLog": true,
+        "canManageRoles": true,
+        "sections": [
+          "costing",
+          "supply-planning",
+          "operations",
+          "quality",
+          "hr",
+          "it",
+          "sales",
+          "compliance"
+        ]
+      },
+      "createdAt": "2025-09-13T08:01:15.170Z"
+    },
+    {
+      "id": 2,
+      "username": "manager",
+      "password": "manager123",
+      "role": "manager",
+      "name": "Department Manager",
+      "email": "manager@company.com",
+      "permissions": {
+        "canManageUsers": false,
+        "canEditAllSections": false,
+        "canDeleteResources": true,
+        "canViewAuditLog": false,
+        "canManageRoles": false,
+        "sections": [
+          "costing",
+          "supply-planning",
+          "operations",
+          "quality"
+        ]
+      },
+      "createdAt": "2025-09-13T08:01:15.170Z"
+    },
+    {
+      "id": 3,
+      "username": "user",
+      "password": "user123",
+      "role": "user",
+      "name": "Regular User",
+      "email": "user@company.com",
+      "permissions": {
+        "canManageUsers": false,
+        "canEditAllSections": false,
+        "canDeleteResources": false,
+        "canViewAuditLog": false,
+        "canManageRoles": false,
+        "sections": [
+          "costing",
+          "supply-planning"
+        ]
+      },
+      "createdAt": "2025-09-13T08:01:15.170Z"
+    },
+    {
+      "id": 4,
+      "username": "michael.zhang2@converse.com",
+      "password": "123456",
+      "role": "manager",
+      "name": "Michael Zhang",
+      "email": "michael.zhang2@converse.com",
+      "permissions": {
+        "canManageUsers": false,
+        "canEditAllSections": false,
+        "canDeleteResources": false,
+        "canViewAuditLog": false,
+        "canManageRoles": false,
+        "canAssignSections": false,
+        "canManagePermissions": false,
+        "sections": [
+          "costing",
+          "supply-planning",
+          "operations",
+          "hr",
+          "it"
+        ],
+        "editableSections": []
+      },
+      "createdAt": "2025-09-18T06:28:58.324Z",
+      "updatedAt": "2025-09-18T14:15:27.982Z"
+    },
+    {
+      "id": 5,
+      "username": "michael.zhang2@nike.com",
+      "password": "123456",
+      "role": "manager",
+      "name": "Mike Zhang",
+      "email": "michael.zhang2@nike.com",
+      "permissions": {
+        "canManageUsers": false,
+        "canEditAllSections": false,
+        "canDeleteResources": false,
+        "canViewAuditLog": false,
+        "canManageRoles": false,
+        "canAssignSections": false,
+        "canManagePermissions": false,
+        "sections": [
+          "costing",
+          "supply-planning",
+          "operations",
+          "hr",
+          "it",
+          "chemical_lab",
+          "admin",
+          "ie_mm",
+          "mse_fe",
+          "analysis"
+        ],
+        "editableSections": []
+      },
+      "createdAt": "2025-09-18T09:03:02.319Z",
+      "updatedAt": "2025-09-18T14:15:36.515Z"
+    },
+    {
+      "id": 1758198965355,
+      "username": "Jack",
+      "password": "123456",
+      "name": "Jack Zhang",
+      "email": "jack.zhang@converse.com",
+      "role": "user",
+      "permissions": {
+        "canManageUsers": false,
+        "canEditAllSections": false,
+        "canDeleteResources": false,
+        "canViewAuditLog": false,
+        "canManageRoles": false,
+        "sections": [
+          "costing",
+          "supply-planning"
+        ]
+      },
+      "createdAt": "2025-09-18T12:36:05.356Z"
+    }
+  ],
+  "sections": [
+    {
+      "id": "compliance",
+      "sectionId": "compliance",
+      "name": "Compliance & Legal",
+      "icon": "fas fa-gavel",
+      "color": "#F44336",
+      "data": {
+        "name": "Compliance & Legal",
+        "icon": "fas fa-gavel",
+        "color": "#F44336",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      }
+    },
+    {
+      "id": "costing",
+      "sectionId": "costing",
+      "name": "Costing",
+      "icon": "fas fa-calculator",
+      "color": "#4CAF50",
+      "data": {
+        "name": "Costing",
+        "icon": "fas fa-calculator",
+        "color": "#4CAF50",
+        "playbooks": [
+          {
+            "title": "Cost Analysis Framework",
+            "description": "Step-by-step guide for conducting comprehensive cost analysis",
+            "url": "https://example.com/cost-analysis",
+            "tags": [
+              "analysis",
+              "framework",
+              "financial"
+            ],
+            "id": "17577496442593i4vnnwb9",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.259Z"
+          },
+          {
+            "title": "Budget Planning Process",
+            "description": "Detailed process for annual budget planning and allocation",
+            "url": "https://example.com/budget-planning",
+            "tags": [
+              "budget",
+              "planning",
+              "annual"
+            ],
+            "id": "17577496442598pv1llgi2",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.259Z"
+          },
+          {
+            "title": "ROI Calculation Methods",
+            "description": "Various methods for calculating return on investment",
+            "url": "https://example.com/roi-methods",
+            "tags": [
+              "roi",
+              "calculation",
+              "investment"
+            ],
+            "id": "1757749644259eqwm3mzhp",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.259Z"
+          }
+        ],
+        "boxLinks": [
+          {
+            "title": "Financial Reports Repository",
+            "description": "Central repository for all financial reports and statements",
+            "url": "https://box.com/financial-reports",
+            "tags": [
+              "reports",
+              "financial",
+              "repository"
+            ],
+            "id": "1757749644260hivee9sfu",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Cost Templates Library",
+            "description": "Collection of cost calculation and analysis templates",
+            "url": "https://box.com/cost-templates",
+            "tags": [
+              "templates",
+              "cost",
+              "calculations"
+            ],
+            "id": "1757749644260rzrx24op8",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "dashboards": [
+          {
+            "title": "Cost Analysis Dashboard",
+            "description": "Real-time cost analysis and budget tracking dashboard",
+            "url": "https://dashboard.example.com/cost-analysis",
+            "tags": [
+              "cost",
+              "analysis",
+              "budget"
+            ],
+            "id": "17577496442603bq756jf6",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Financial Performance Metrics",
+            "description": "Key financial performance indicators and metrics",
+            "url": "https://dashboard.example.com/financial-metrics",
+            "tags": [
+              "financial",
+              "metrics",
+              "performance"
+            ],
+            "id": "1757749644260ietrc4l5x",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hr",
+      "sectionId": "hr",
+      "name": "Human Resources",
+      "icon": "fas fa-users",
+      "color": "#E91E63",
+      "data": {
+        "name": "Human Resources",
+        "icon": "fas fa-users",
+        "color": "#E91E63",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      }
+    },
+    {
+      "id": "it",
+      "sectionId": "it",
+      "name": "IT & Technology",
+      "icon": "fas fa-laptop-code",
+      "color": "#607D8B",
+      "data": {
+        "name": "IT & Technology",
+        "icon": "fas fa-laptop-code",
+        "color": "#607D8B",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      }
+    },
+    {
+      "id": "operations",
+      "sectionId": "operations",
+      "name": "Operations",
+      "icon": "fas fa-cogs",
+      "color": "#FF9800",
+      "data": {
+        "name": "Operations",
+        "icon": "fas fa-cogs",
+        "color": "#FF9800",
+        "playbooks": [
+          {
+            "title": "Process Improvement Methodology",
+            "description": "Lean Six Sigma approach to process optimization",
+            "url": "https://example.com/process-improvement",
+            "tags": [
+              "lean",
+              "six-sigma",
+              "optimization"
+            ],
+            "id": "1757749644260ck3aa2doz",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Quality Control Procedures",
+            "description": "Standard operating procedures for quality control",
+            "url": "https://example.com/quality-control",
+            "tags": [
+              "quality",
+              "control",
+              "procedures"
+            ],
+            "id": "1757749644260by0kewgzk",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Equipment Maintenance Schedule",
+            "description": "Preventive maintenance planning and scheduling",
+            "url": "https://example.com/maintenance-schedule",
+            "tags": [
+              "maintenance",
+              "equipment",
+              "preventive"
+            ],
+            "id": "1757749644260qrynzqaw7",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "boxLinks": [
+          {
+            "title": "SOP Documentation",
+            "description": "Standard Operating Procedures documentation library",
+            "url": "https://box.com/sop-docs",
+            "tags": [
+              "sop",
+              "procedures",
+              "documentation"
+            ],
+            "id": "17577496442602jo7ztfpt",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Equipment Manuals",
+            "description": "Equipment operation and maintenance manuals",
+            "url": "https://box.com/equipment-manuals",
+            "tags": [
+              "equipment",
+              "manuals",
+              "maintenance"
+            ],
+            "id": "1757749644260p0x4bn5hv",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "dashboards": [
+          {
+            "title": "Production Metrics Dashboard",
+            "description": "Key production metrics and performance indicators",
+            "url": "https://dashboard.example.com/production-metrics",
+            "tags": [
+              "production",
+              "metrics",
+              "performance"
+            ],
+            "id": "17577496442606fpjenvbl",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Equipment Status Monitor",
+            "description": "Real-time equipment status and health monitoring",
+            "url": "https://dashboard.example.com/equipment-status",
+            "tags": [
+              "equipment",
+              "status",
+              "monitoring"
+            ],
+            "id": "1757749644260p392y1n4o",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "quality",
+      "sectionId": "quality",
+      "name": "Quality Management",
+      "icon": "fas fa-check-circle",
+      "color": "#9C27B0",
+      "data": {
+        "name": "Quality Management",
+        "icon": "fas fa-check-circle",
+        "color": "#9C27B0",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      }
+    },
+    {
+      "id": "sales",
+      "sectionId": "sales",
+      "name": "Sales & Marketing",
+      "icon": "fas fa-chart-line",
+      "color": "#795548",
+      "data": {
+        "name": "Sales & Marketing",
+        "icon": "fas fa-chart-line",
+        "color": "#795548",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      }
+    },
+    {
+      "id": "supply-planning",
+      "sectionId": "supply-planning",
+      "name": "Supply Planning",
+      "icon": "fas fa-truck",
+      "color": "#2196F3",
+      "data": {
+        "name": "Supply Planning",
+        "icon": "fas fa-truck",
+        "color": "#2196F3",
+        "playbooks": [
+          {
+            "title": "Demand Forecasting Guide",
+            "description": "Methods and tools for accurate demand forecasting",
+            "url": "https://example.com/demand-forecasting",
+            "tags": [
+              "forecasting",
+              "demand",
+              "planning"
+            ],
+            "id": "1757749644260q105vpilm",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Inventory Optimization",
+            "description": "Best practices for inventory level optimization",
+            "url": "https://example.com/inventory-optimization",
+            "tags": [
+              "inventory",
+              "optimization",
+              "supply"
+            ],
+            "id": "1757749644260exnmrs144",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Supplier Management Process",
+            "description": "Complete supplier selection and management workflow",
+            "url": "https://example.com/supplier-management",
+            "tags": [
+              "supplier",
+              "management",
+              "procurement"
+            ],
+            "id": "1757749644260myyd9r8pb",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "boxLinks": [
+          {
+            "title": "Supplier Database",
+            "description": "Comprehensive database of suppliers and vendor information",
+            "url": "https://box.com/supplier-database",
+            "tags": [
+              "suppliers",
+              "database",
+              "vendors"
+            ],
+            "id": "1757749644260r5tkwzf01",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Inventory Reports Archive",
+            "description": "Historical inventory reports and analysis",
+            "url": "https://box.com/inventory-reports",
+            "tags": [
+              "inventory",
+              "reports",
+              "archive"
+            ],
+            "id": "1757749644260j4d7zgyda",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "dashboards": [
+          {
+            "title": "Supply Chain Visibility",
+            "description": "End-to-end supply chain monitoring and visibility",
+            "url": "https://dashboard.example.com/supply-chain",
+            "tags": [
+              "supply-chain",
+              "visibility",
+              "monitoring"
+            ],
+            "id": "1757749644260bb7vv0anv",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Inventory Levels Dashboard",
+            "description": "Real-time inventory levels and stock monitoring",
+            "url": "https://dashboard.example.com/inventory-levels",
+            "tags": [
+              "inventory",
+              "levels",
+              "monitoring"
+            ],
+            "id": "17577496442606uek5ner0",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "title": "Cost Analysis Framework",
+      "description": "Step-by-step guide for conducting comprehensive cost analysis",
+      "url": "https://example.com/cost-analysis",
+      "tags": [
+        "analysis",
+        "framework",
+        "financial"
+      ],
+      "id": "17577496442593i4vnnwb9",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.259Z",
+      "sectionId": "costing",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Budget Planning Process",
+      "description": "Detailed process for annual budget planning and allocation",
+      "url": "https://example.com/budget-planning",
+      "tags": [
+        "budget",
+        "planning",
+        "annual"
+      ],
+      "id": "17577496442598pv1llgi2",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.259Z",
+      "sectionId": "costing",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "ROI Calculation Methods",
+      "description": "Various methods for calculating return on investment",
+      "url": "https://example.com/roi-methods",
+      "tags": [
+        "roi",
+        "calculation",
+        "investment"
+      ],
+      "id": "1757749644259eqwm3mzhp",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.259Z",
+      "sectionId": "costing",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "SOP Documentation",
+      "description": "Standard Operating Procedures documentation library",
+      "url": "https://box.com/sop-docs",
+      "tags": [
+        "sop",
+        "procedures",
+        "documentation"
+      ],
+      "id": "17577496442602jo7ztfpt",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "boxLinks",
+      "userId": 1
+    },
+    {
+      "title": "Cost Analysis Dashboard",
+      "description": "Real-time cost analysis and budget tracking dashboard",
+      "url": "https://dashboard.example.com/cost-analysis",
+      "tags": [
+        "cost",
+        "analysis",
+        "budget"
+      ],
+      "id": "17577496442603bq756jf6",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "costing",
+      "type": "dashboards",
+      "userId": 1
+    },
+    {
+      "title": "Production Metrics Dashboard",
+      "description": "Key production metrics and performance indicators",
+      "url": "https://dashboard.example.com/production-metrics",
+      "tags": [
+        "production",
+        "metrics",
+        "performance"
+      ],
+      "id": "17577496442606fpjenvbl",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "dashboards",
+      "userId": 1
+    },
+    {
+      "title": "Inventory Levels Dashboard",
+      "description": "Real-time inventory levels and stock monitoring",
+      "url": "https://dashboard.example.com/inventory-levels",
+      "tags": [
+        "inventory",
+        "levels",
+        "monitoring"
+      ],
+      "id": "17577496442606uek5ner0",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "dashboards",
+      "userId": 1
+    },
+    {
+      "title": "Supply Chain Visibility",
+      "description": "End-to-end supply chain monitoring and visibility",
+      "url": "https://dashboard.example.com/supply-chain",
+      "tags": [
+        "supply-chain",
+        "visibility",
+        "monitoring"
+      ],
+      "id": "1757749644260bb7vv0anv",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "dashboards",
+      "userId": 1
+    },
+    {
+      "title": "Quality Control Procedures",
+      "description": "Standard operating procedures for quality control",
+      "url": "https://example.com/quality-control",
+      "tags": [
+        "quality",
+        "control",
+        "procedures"
+      ],
+      "id": "1757749644260by0kewgzk",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Process Improvement Methodology",
+      "description": "Lean Six Sigma approach to process optimization",
+      "url": "https://example.com/process-improvement",
+      "tags": [
+        "lean",
+        "six-sigma",
+        "optimization"
+      ],
+      "id": "1757749644260ck3aa2doz",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Inventory Optimization",
+      "description": "Best practices for inventory level optimization",
+      "url": "https://example.com/inventory-optimization",
+      "tags": [
+        "inventory",
+        "optimization",
+        "supply"
+      ],
+      "id": "1757749644260exnmrs144",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Financial Reports Repository",
+      "description": "Central repository for all financial reports and statements",
+      "url": "https://box.com/financial-reports",
+      "tags": [
+        "reports",
+        "financial",
+        "repository"
+      ],
+      "id": "1757749644260hivee9sfu",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "costing",
+      "type": "boxLinks",
+      "userId": 1
+    },
+    {
+      "title": "Financial Performance Metrics",
+      "description": "Key financial performance indicators and metrics",
+      "url": "https://dashboard.example.com/financial-metrics",
+      "tags": [
+        "financial",
+        "metrics",
+        "performance"
+      ],
+      "id": "1757749644260ietrc4l5x",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "costing",
+      "type": "dashboards",
+      "userId": 1
+    },
+    {
+      "title": "Inventory Reports Archive",
+      "description": "Historical inventory reports and analysis",
+      "url": "https://box.com/inventory-reports",
+      "tags": [
+        "inventory",
+        "reports",
+        "archive"
+      ],
+      "id": "1757749644260j4d7zgyda",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "boxLinks",
+      "userId": 1
+    },
+    {
+      "title": "Supplier Management Process",
+      "description": "Complete supplier selection and management workflow",
+      "url": "https://example.com/supplier-management",
+      "tags": [
+        "supplier",
+        "management",
+        "procurement"
+      ],
+      "id": "1757749644260myyd9r8pb",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Equipment Manuals",
+      "description": "Equipment operation and maintenance manuals",
+      "url": "https://box.com/equipment-manuals",
+      "tags": [
+        "equipment",
+        "manuals",
+        "maintenance"
+      ],
+      "id": "1757749644260p0x4bn5hv",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "boxLinks",
+      "userId": 1
+    },
+    {
+      "title": "Equipment Status Monitor",
+      "description": "Real-time equipment status and health monitoring",
+      "url": "https://dashboard.example.com/equipment-status",
+      "tags": [
+        "equipment",
+        "status",
+        "monitoring"
+      ],
+      "id": "1757749644260p392y1n4o",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "dashboards",
+      "userId": 1
+    },
+    {
+      "title": "Demand Forecasting Guide",
+      "description": "Methods and tools for accurate demand forecasting",
+      "url": "https://example.com/demand-forecasting",
+      "tags": [
+        "forecasting",
+        "demand",
+        "planning"
+      ],
+      "id": "1757749644260q105vpilm",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Equipment Maintenance Schedule",
+      "description": "Preventive maintenance planning and scheduling",
+      "url": "https://example.com/maintenance-schedule",
+      "tags": [
+        "maintenance",
+        "equipment",
+        "preventive"
+      ],
+      "id": "1757749644260qrynzqaw7",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "operations",
+      "type": "playbooks",
+      "userId": 1
+    },
+    {
+      "title": "Supplier Database",
+      "description": "Comprehensive database of suppliers and vendor information",
+      "url": "https://box.com/supplier-database",
+      "tags": [
+        "suppliers",
+        "database",
+        "vendors"
+      ],
+      "id": "1757749644260r5tkwzf01",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "supply-planning",
+      "type": "boxLinks",
+      "userId": 1
+    },
+    {
+      "title": "Cost Templates Library",
+      "description": "Collection of cost calculation and analysis templates",
+      "url": "https://box.com/cost-templates",
+      "tags": [
+        "templates",
+        "cost",
+        "calculations"
+      ],
+      "id": "1757749644260rzrx24op8",
+      "category": "process",
+      "createdAt": "2025-09-13T07:47:24.260Z",
+      "sectionId": "costing",
+      "type": "boxLinks",
+      "userId": 1
+    },
+    {
+      "id": "1757763586204",
+      "title": "1",
+      "description": "1",
+      "url": "https://confluence.nike.com/index.action#recently-worked",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-13T11:39:46.204Z",
+      "sectionId": "costing",
+      "type": "playbook"
+    },
+    {
+      "id": "1757763656620",
+      "title": "1",
+      "description": "1",
+      "url": "https://confluence.nike.com/index.action#recently-worked",
+      "category": "process",
+      "tags": [
+        "1"
+      ],
+      "createdAt": "2025-09-13T11:40:56.620Z",
+      "sectionId": "costing",
+      "type": "playbook"
+    },
+    {
+      "id": "1758165942337",
+      "title": "111111111111",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T03:25:42.337Z",
+      "sectionId": "costing",
+      "type": "playbooks",
+      "userId": 0
+    },
+    {
+      "id": "1758166050622",
+      "title": "2",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/#/site/CONVERSEDATAPARKPROD/views/FY25GlobalDemandDashboard/GLOBALOVERVIEW?:iid=1",
+      "category": "process",
+      "tags": [
+        "1111111111111"
+      ],
+      "createdAt": "2025-09-18T03:27:30.622Z",
+      "sectionId": "costing",
+      "type": "playbooks",
+      "userId": 0
+    },
+    {
+      "id": "1758166073645",
+      "title": "1",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T03:27:53.645Z",
+      "sectionId": "costing",
+      "type": "boxLinks",
+      "userId": 0
+    },
+    {
+      "id": "1758166091893",
+      "title": "555",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T03:28:11.893Z",
+      "sectionId": "costing",
+      "type": "dashboards",
+      "userId": 0
+    },
+    {
+      "id": "1758166133541",
+      "title": "1",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T03:28:53.541Z",
+      "sectionId": "supply-planning",
+      "type": "playbooks",
+      "userId": 0
+    },
+    {
+      "id": "1758166407972",
+      "title": "33333",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/#/site/CONVERSEDATAPARKPROD/views/FY25GlobalDemandDashboard/GLOBALOVERVIEW?:iid=1",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T03:33:27.972Z",
+      "sectionId": "costing",
+      "type": "playbooks",
+      "userId": 0
+    },
+    {
+      "id": "1758166768005",
+      "title": "7777777777777",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T03:39:28.005Z",
+      "sectionId": "costing",
+      "type": "dashboards",
+      "userId": 0
+    },
+    {
+      "id": "1758181521117",
+      "title": "1",
+      "description": "1",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+      "category": "process",
+      "tags": [],
+      "createdAt": "2025-09-18T07:45:21.118Z",
+      "sectionId": "hr",
+      "type": "playbooks",
+      "userId": 0
+    }
+  ],
+  "activities": [
+    {
+      "id": "1758202421273",
+      "username": "admin",
+      "action": "CLOSE_SECTION",
+      "description": "Closed section chemical_lab after 2s",
+      "timestamp": "2025-09-18T13:33:41.273Z"
+    },
+    {
+      "id": "1758201742486",
+      "username": "admin",
+      "action": "CLOSE_SECTION",
+      "description": "Closed section admin after 2s",
+      "timestamp": "2025-09-18T13:22:22.486Z"
+    },
+    {
+      "id": "1758186208685",
+      "username": "michael.zhang2@nike.com",
+      "action": "CLOSE_SECTION",
+      "description": "Closed section operations after 6s",
+      "timestamp": "2025-09-18T09:03:28.685Z"
+    },
+    {
+      "id": "1758186201061",
+      "username": "michael.zhang2@nike.com",
+      "action": "CLOSE_SECTION",
+      "description": "Closed section operations after 4s",
+      "timestamp": "2025-09-18T09:03:21.061Z"
+    },
+    {
+      "id": "1757750512416",
+      "userId": 1,
+      "username": "admin",
+      "action": "LOGIN",
+      "description": "User admin logged in",
+      "timestamp": "2025-09-13T08:01:52.416Z",
+      "ip": "127.0.0.1"
+    }
+  ],
+  "views": [],
+  "exportDate": "2025-09-18T15:07:24.371Z",
+  "totalRecords": {
+    "users": 6,
+    "sections": 8,
+    "resources": 31,
+    "activities": 5,
+    "views": 0
+  },
+  "localStorage": {
+    "sectionOrder": [
+      {
+        "id": "costing",
+        "name": "Costing",
+        "icon": "fas fa-calculator",
+        "visible": true,
+        "order": 1,
+        "intro": "Guides and tools for cost analysis, budgeting, and ROI planning."
+      },
+      {
+        "id": "supply-planning",
+        "name": "Supply Planning",
+        "icon": "fas fa-truck",
+        "visible": true,
+        "order": 2,
+        "intro": "Demand forecasting, inventory optimization, and supplier planning resources."
+      },
+      {
+        "id": "operations",
+        "name": "Partner Product Creation",
+        "icon": "fas fa-shoe-prints",
+        "visible": true,
+        "order": 3,
+        "intro": "Process improvement, SOPs, production metrics, and maintenance guidance."
+      },
+      {
+        "id": "quality",
+        "name": "Quality Management",
+        "icon": "fas fa-check-circle",
+        "visible": false,
+        "order": 13,
+        "intro": "Quality management practices, control procedures, and compliance standards."
+      },
+      {
+        "id": "hr",
+        "name": "Human Resources",
+        "icon": "fas fa-users",
+        "visible": true,
+        "order": 12,
+        "intro": "People operations policies, templates, onboarding, and workforce resources."
+      },
+      {
+        "id": "it",
+        "name": "IT & Technology",
+        "icon": "fas fa-laptop-code",
+        "visible": true,
+        "order": 9,
+        "intro": "IT systems, tooling, security, and operational best practices."
+      },
+      {
+        "id": "compliance",
+        "name": "Compliance & Legal",
+        "icon": "fas fa-gavel",
+        "visible": false,
+        "order": 10,
+        "intro": "Policies, legal, and regulatory guidance with reusable templates."
+      },
+      {
+        "id": "chemical_lab",
+        "name": "Chemical Engineering & Lab",
+        "icon": "fas fa-file-alt",
+        "visible": true,
+        "order": 4,
+        "intro": ""
+      },
+      {
+        "id": "admin",
+        "name": "Administration",
+        "icon": "fas fa-warehouse",
+        "visible": true,
+        "order": 11,
+        "intro": ""
+      },
+      {
+        "id": "ie_mm",
+        "name": "Industrial Engineering & Manufacturing Modernization",
+        "icon": "fas fa-industry",
+        "visible": true,
+        "intro": "",
+        "order": 7
+      },
+      {
+        "id": "mse_fe",
+        "name": "Manufacturing Systems Engineering",
+        "icon": "fas fa-solid fa-wand-magic-sparkles",
+        "visible": true,
+        "intro": "",
+        "order": 8
+      },
+      {
+        "id": "analysis",
+        "name": "Partner Performance & Strategy",
+        "icon": "fas fa-chart-line",
+        "visible": true,
+        "intro": "",
+        "order": 5
+      },
+      {
+        "id": "material",
+        "name": "Material Sourcing & Manufacturing",
+        "icon": "fas fa-boxes-stacked",
+        "visible": true,
+        "intro": "",
+        "order": 6
+      }
+    ],
+    "hubUsers": [
+      {
+        "id": 1,
+        "username": "admin",
+        "password": "admin123",
+        "role": "admin",
+        "name": "System Administrator",
+        "email": "admin@company.com",
+        "permissions": {
+          "canManageUsers": true,
+          "canEditAllSections": true,
+          "canDeleteResources": true,
+          "canViewAuditLog": true,
+          "canManageRoles": true,
+          "sections": [
+            "costing",
+            "supply-planning",
+            "operations",
+            "quality",
+            "hr",
+            "it",
+            "sales",
+            "compliance"
+          ]
+        },
+        "createdAt": "2025-09-13T08:01:15.170Z"
+      },
+      {
+        "id": 2,
+        "username": "manager",
+        "password": "manager123",
+        "role": "manager",
+        "name": "Department Manager",
+        "email": "manager@company.com",
+        "permissions": {
+          "canManageUsers": false,
+          "canEditAllSections": false,
+          "canDeleteResources": true,
+          "canViewAuditLog": false,
+          "canManageRoles": false,
+          "sections": [
+            "costing",
+            "supply-planning",
+            "quality",
+            "it",
+            "test"
+          ],
+          "editableSections": [
+            "costing"
+          ]
+        },
+        "createdAt": "2025-09-13T08:01:15.170Z"
+      },
+      {
+        "id": 3,
+        "username": "user",
+        "password": "user123",
+        "role": "user",
+        "name": "Regular User",
+        "email": "user@company.com",
+        "permissions": {
+          "canManageUsers": false,
+          "canEditAllSections": false,
+          "canDeleteResources": false,
+          "canViewAuditLog": false,
+          "canManageRoles": false,
+          "sections": [
+            "costing",
+            "supply-planning",
+            "test"
+          ],
+          "editableSections": []
+        },
+        "createdAt": "2025-09-13T08:01:15.170Z"
+      },
+      {
+        "id": 4,
+        "username": "michael.zhang2@converse.com",
+        "password": "123456",
+        "role": "manager",
+        "name": "Michael Zhang",
+        "email": "michael.zhang2@converse.com",
+        "permissions": {
+          "canManageUsers": false,
+          "canEditAllSections": false,
+          "canDeleteResources": false,
+          "canViewAuditLog": false,
+          "canManageRoles": false,
+          "canAssignSections": false,
+          "canManagePermissions": false,
+          "sections": [
+            "costing",
+            "supply-planning",
+            "operations",
+            "hr",
+            "it"
+          ],
+          "editableSections": []
+        },
+        "createdAt": "2025-09-18T06:28:58.324Z",
+        "updatedAt": "2025-09-18T14:15:27.982Z"
+      },
+      {
+        "id": 5,
+        "username": "michael.zhang2@nike.com",
+        "password": "123456",
+        "role": "manager",
+        "name": "Mike Zhang",
+        "email": "michael.zhang2@nike.com",
+        "permissions": {
+          "canManageUsers": false,
+          "canEditAllSections": false,
+          "canDeleteResources": false,
+          "canViewAuditLog": false,
+          "canManageRoles": false,
+          "canAssignSections": false,
+          "canManagePermissions": false,
+          "sections": [
+            "costing",
+            "supply-planning",
+            "operations",
+            "hr",
+            "it",
+            "chemical_lab",
+            "admin",
+            "ie_mm",
+            "mse_fe",
+            "analysis"
+          ],
+          "editableSections": []
+        },
+        "createdAt": "2025-09-18T09:03:02.319Z",
+        "updatedAt": "2025-09-18T14:15:36.515Z"
+      },
+      {
+        "id": 1758198965355,
+        "username": "Jack",
+        "password": "123456",
+        "name": "Jack Zhang",
+        "email": "jack.zhang@converse.com",
+        "role": "user",
+        "permissions": {
+          "canManageUsers": false,
+          "canEditAllSections": false,
+          "canDeleteResources": false,
+          "canViewAuditLog": false,
+          "canManageRoles": false,
+          "sections": [
+            "costing",
+            "supply-planning"
+          ]
+        },
+        "createdAt": "2025-09-18T12:36:05.356Z"
+      }
+    ],
+    "informationHub": {
+      "costing": {
+        "name": "Costing",
+        "icon": "fas fa-calculator",
+        "color": "#4CAF50",
+        "playbooks": [
+          {
+            "title": "Cost Analysis Framework",
+            "description": "Step-by-step guide for conducting comprehensive cost analysis",
+            "url": "https://example.com/cost-analysis",
+            "tags": [
+              "analysis",
+              "framework",
+              "financial"
+            ],
+            "id": "17577496442593i4vnnwb9",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.259Z"
+          },
+          {
+            "title": "Budget Planning Process",
+            "description": "Detailed process for annual budget planning and allocation",
+            "url": "https://example.com/budget-planning",
+            "tags": [
+              "budget",
+              "planning",
+              "annual"
+            ],
+            "id": "17577496442598pv1llgi2",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.259Z"
+          },
+          {
+            "title": "ROI Calculation Methods",
+            "description": "Various methods for calculating return on investment",
+            "url": "https://example.com/roi-methods",
+            "tags": [
+              "roi",
+              "calculation",
+              "investment"
+            ],
+            "id": "1757749644259eqwm3mzhp",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.259Z"
+          },
+          {
+            "id": "1758165423847",
+            "title": "1",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:17:03.847Z"
+          },
+          {
+            "id": "1758165684644",
+            "title": "1",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:21:24.644Z"
+          },
+          {
+            "id": "1758165942337",
+            "title": "111111111111",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:25:42.337Z"
+          },
+          {
+            "id": "1758166050622",
+            "title": "2",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/#/site/CONVERSEDATAPARKPROD/views/FY25GlobalDemandDashboard/GLOBALOVERVIEW?:iid=1",
+            "category": "process",
+            "tags": [
+              "1111111111111"
+            ],
+            "createdAt": "2025-09-18T03:27:30.622Z"
+          },
+          {
+            "id": "1758166407972",
+            "title": "33333",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/#/site/CONVERSEDATAPARKPROD/views/FY25GlobalDemandDashboard/GLOBALOVERVIEW?:iid=1",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:33:27.972Z"
+          }
+        ],
+        "boxLinks": [
+          {
+            "title": "Financial Reports Repository",
+            "description": "Central repository for all financial reports and statements",
+            "url": "https://box.com/financial-reports",
+            "tags": [
+              "reports",
+              "financial",
+              "repository"
+            ],
+            "id": "1757749644260hivee9sfu",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Cost Templates Library",
+            "description": "Collection of cost calculation and analysis templates",
+            "url": "https://box.com/cost-templates",
+            "tags": [
+              "templates",
+              "cost",
+              "calculations"
+            ],
+            "id": "1757749644260rzrx24op8",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "id": "1758166073645",
+            "title": "1",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:27:53.645Z"
+          }
+        ],
+        "dashboards": [
+          {
+            "title": "Cost Analysis Dashboard",
+            "description": "Real-time cost analysis and budget tracking dashboard",
+            "url": "https://dashboard.example.com/cost-analysis",
+            "tags": [
+              "cost",
+              "analysis",
+              "budget"
+            ],
+            "id": "17577496442603bq756jf6",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Financial Performance Metrics",
+            "description": "Key financial performance indicators and metrics",
+            "url": "https://dashboard.example.com/financial-metrics",
+            "tags": [
+              "financial",
+              "metrics",
+              "performance"
+            ],
+            "id": "1757749644260ietrc4l5x",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "id": "1758166091893",
+            "title": "555",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:28:11.893Z"
+          },
+          {
+            "id": "1758166768005",
+            "title": "7777777777777",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:39:28.005Z"
+          }
+        ],
+        "playbook": [
+          {
+            "id": "1757763795287",
+            "title": "1",
+            "description": "1",
+            "url": "https://confluence.nike.com/index.action#recently-worked",
+            "category": "process",
+            "tags": [
+              "1"
+            ],
+            "createdAt": "2025-09-13T11:43:15.287Z"
+          },
+          {
+            "id": "1757763858216",
+            "title": "1",
+            "description": "1",
+            "url": "https://confluence.nike.com/index.action#recently-worked",
+            "category": "process",
+            "tags": [
+              "1"
+            ],
+            "createdAt": "2025-09-13T11:44:18.216Z"
+          },
+          {
+            "id": "1757768078079",
+            "title": "1",
+            "description": "1",
+            "url": "https://confluence.nike.com/index.action#recently-worked",
+            "category": "process",
+            "tags": [
+              "1"
+            ],
+            "createdAt": "2025-09-13T12:54:38.080Z"
+          },
+          {
+            "id": "1757920280138",
+            "title": "1",
+            "description": "1",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+            "category": "process",
+            "tags": [
+              "1"
+            ],
+            "createdAt": "2025-09-15T07:11:20.138Z"
+          }
+        ]
+      },
+      "supply-planning": {
+        "name": "Supply Planning",
+        "icon": "fas fa-truck",
+        "color": "#2196F3",
+        "playbooks": [
+          {
+            "title": "Demand Forecasting Guide",
+            "description": "Methods and tools for accurate demand forecasting",
+            "url": "https://example.com/demand-forecasting",
+            "tags": [
+              "forecasting",
+              "demand",
+              "planning"
+            ],
+            "id": "1757749644260q105vpilm",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Inventory Optimization",
+            "description": "Best practices for inventory level optimization",
+            "url": "https://example.com/inventory-optimization",
+            "tags": [
+              "inventory",
+              "optimization",
+              "supply"
+            ],
+            "id": "1757749644260exnmrs144",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Supplier Management Process",
+            "description": "Complete supplier selection and management workflow",
+            "url": "https://example.com/supplier-management",
+            "tags": [
+              "supplier",
+              "management",
+              "procurement"
+            ],
+            "id": "1757749644260myyd9r8pb",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "id": "1758166133541",
+            "title": "1",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/views/GlobalSiteKPIDashboard/DigitalKPIs-Primary",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T03:28:53.541Z"
+          }
+        ],
+        "boxLinks": [
+          {
+            "title": "Supplier Database",
+            "description": "Comprehensive database of suppliers and vendor information",
+            "url": "https://box.com/supplier-database",
+            "tags": [
+              "suppliers",
+              "database",
+              "vendors"
+            ],
+            "id": "1757749644260r5tkwzf01",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Inventory Reports Archive",
+            "description": "Historical inventory reports and analysis",
+            "url": "https://box.com/inventory-reports",
+            "tags": [
+              "inventory",
+              "reports",
+              "archive"
+            ],
+            "id": "1757749644260j4d7zgyda",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "dashboards": [
+          {
+            "title": "Inventory Levels Dashboard",
+            "description": "Real-time inventory levels and stock monitoring",
+            "url": "https://dashboard.example.com/inventory-levels",
+            "tags": [
+              "inventory",
+              "levels",
+              "monitoring"
+            ],
+            "id": "17577496442606uek5ner0",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "playbook": [
+          {
+            "id": "1757920313676",
+            "title": "1",
+            "description": "",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-15T07:11:53.676Z"
+          }
+        ]
+      },
+      "operations": {
+        "name": "Operations",
+        "icon": "fas fa-cogs",
+        "color": "#FF9800",
+        "playbooks": [
+          {
+            "title": "Process Improvement Methodology",
+            "description": "Lean Six Sigma approach to process optimization",
+            "url": "https://example.com/process-improvement",
+            "tags": [
+              "lean",
+              "six-sigma",
+              "optimization"
+            ],
+            "id": "1757749644260ck3aa2doz",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Quality Control Procedures",
+            "description": "Standard operating procedures for quality control",
+            "url": "https://example.com/quality-control",
+            "tags": [
+              "quality",
+              "control",
+              "procedures"
+            ],
+            "id": "1757749644260by0kewgzk",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Equipment Maintenance Schedule",
+            "description": "Preventive maintenance planning and scheduling",
+            "url": "https://example.com/maintenance-schedule",
+            "tags": [
+              "maintenance",
+              "equipment",
+              "preventive"
+            ],
+            "id": "1757749644260qrynzqaw7",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "boxLinks": [
+          {
+            "title": "SOP Documentation",
+            "description": "Standard Operating Procedures documentation library",
+            "url": "https://box.com/sop-docs",
+            "tags": [
+              "sop",
+              "procedures",
+              "documentation"
+            ],
+            "id": "17577496442602jo7ztfpt",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Equipment Manuals",
+            "description": "Equipment operation and maintenance manuals",
+            "url": "https://box.com/equipment-manuals",
+            "tags": [
+              "equipment",
+              "manuals",
+              "maintenance"
+            ],
+            "id": "1757749644260p0x4bn5hv",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ],
+        "dashboards": [
+          {
+            "title": "Production Metrics Dashboard",
+            "description": "Key production metrics and performance indicators",
+            "url": "https://dashboard.example.com/production-metrics",
+            "tags": [
+              "production",
+              "metrics",
+              "performance"
+            ],
+            "id": "17577496442606fpjenvbl",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          },
+          {
+            "title": "Equipment Status Monitor",
+            "description": "Real-time equipment status and health monitoring",
+            "url": "https://dashboard.example.com/equipment-status",
+            "tags": [
+              "equipment",
+              "status",
+              "monitoring"
+            ],
+            "id": "1757749644260p392y1n4o",
+            "category": "process",
+            "createdAt": "2025-09-13T07:47:24.260Z"
+          }
+        ]
+      },
+      "quality": {
+        "name": "Quality Management",
+        "icon": "fas fa-check-circle",
+        "color": "#9C27B0",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      },
+      "hr": {
+        "name": "Human Resources",
+        "icon": "fas fa-users",
+        "color": "#E91E63",
+        "playbooks": [
+          {
+            "id": "1758181521117",
+            "title": "1",
+            "description": "1",
+            "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+            "category": "process",
+            "tags": [],
+            "createdAt": "2025-09-18T07:45:21.118Z"
+          }
+        ],
+        "boxLinks": [],
+        "dashboards": []
+      },
+      "it": {
+        "name": "IT & Technology",
+        "icon": "fas fa-laptop-code",
+        "color": "#607D8B",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      },
+      "sales": {
+        "name": "Sales & Marketing",
+        "icon": "fas fa-chart-line",
+        "color": "#795548",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      },
+      "compliance": {
+        "name": "Compliance & Legal",
+        "icon": "fas fa-gavel",
+        "color": "#F44336",
+        "playbooks": [],
+        "boxLinks": [],
+        "dashboards": []
+      }
+    },
+    "hubActivities": [
+      {
+        "id": "1758205310431",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T14:21:50.431Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758205292525",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T14:21:32.525Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758205286706",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T14:21:26.706Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758204970329",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T14:16:10.329Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758204956263",
+        "userId": 5,
+        "username": "michael.zhang2@nike.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@nike.com logged in",
+        "timestamp": "2025-09-18T14:15:56.263Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758203309137",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T13:48:29.137Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758203293393",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T13:48:13.393Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758203248622",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T13:47:28.622Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758203224305",
+        "userId": 4,
+        "username": "michael.zhang2@converse.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@converse.com logged in",
+        "timestamp": "2025-09-18T13:47:04.305Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758202833792",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T13:40:33.792Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758202608598",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T13:36:48.598Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758202598157",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T13:36:38.157Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758202590322",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T13:36:30.322Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758187179309",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T09:19:39.309Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758187025660",
+        "userId": 4,
+        "username": "michael.zhang2@converse.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@converse.com logged in",
+        "timestamp": "2025-09-18T09:17:05.660Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758187012338",
+        "userId": 5,
+        "username": "michael.zhang2@nike.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@nike.com logged in",
+        "timestamp": "2025-09-18T09:16:52.338Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758186999807",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T09:16:39.807Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758186892720",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T09:14:52.720Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758186182319",
+        "userId": 5,
+        "username": "michael.zhang2@nike.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@nike.com logged in",
+        "timestamp": "2025-09-18T09:03:02.319Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758186143875",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T09:02:23.875Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758185344311",
+        "userId": 4,
+        "username": "michael.zhang2@converse.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@converse.com logged in",
+        "timestamp": "2025-09-18T08:49:04.311Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758185332414",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T08:48:52.414Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758185327552",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T08:48:47.552Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758183083109",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T08:11:23.109Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758183071786",
+        "userId": 4,
+        "username": "michael.zhang2@converse.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@converse.com logged in",
+        "timestamp": "2025-09-18T08:11:11.786Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758181500459",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T07:45:00.459Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758180971458",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T07:36:11.458Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758180953713",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T07:35:53.713Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758179072962",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T07:04:32.962Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758177578262",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T06:39:38.262Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758177556002",
+        "userId": 4,
+        "username": "michael.zhang2@converse.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@converse.com logged in",
+        "timestamp": "2025-09-18T06:39:16.002Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758177207213",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T06:33:27.213Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758176950335",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T06:29:10.335Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758176938325",
+        "userId": 4,
+        "username": "michael.zhang2@converse.com",
+        "action": "LOGIN",
+        "description": "User michael.zhang2@converse.com logged in",
+        "timestamp": "2025-09-18T06:28:58.325Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758176311109",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T06:18:31.109Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758176293075",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T06:18:13.075Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758176288230",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T06:18:08.230Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758175847659",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T06:10:47.659Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758175838387",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T06:10:38.387Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758175822470",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T06:10:22.470Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758175768474",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T06:09:28.474Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758175752058",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T06:09:12.058Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758173709466",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T05:35:09.466Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758173705523",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T05:35:05.523Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758173699729",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T05:34:59.729Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758173694872",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T05:34:54.872Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758172757508",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T05:19:17.508Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758172590374",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T05:16:30.374Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758168024026",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T04:00:24.026Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758168013137",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T04:00:13.137Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167954960",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T03:59:14.960Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167686477",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:54:46.477Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167594657",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T03:53:14.657Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167527232",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:52:07.232Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167491531",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T03:51:31.531Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167477051",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:51:17.051Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758167445628",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T03:50:45.628Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166783221",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:39:43.221Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166774508",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T03:39:34.508Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166724550",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:38:44.550Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166623132",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T03:37:03.132Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166391850",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:33:11.850Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166363338",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T03:32:43.338Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166158019",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:29:18.019Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758166143129",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T03:29:03.129Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758165412658",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-18T03:16:52.658Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758165405879",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T03:16:45.879Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758165373552",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T03:16:13.553Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758165348118",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-18T03:15:48.118Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1758165343142",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-18T03:15:43.142Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757920259493",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-15T07:10:59.493Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757916686103",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-15T06:11:26.103Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757916502905",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-15T06:08:22.905Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757896112468",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-15T00:28:32.468Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757896046535",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-15T00:27:26.535Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757896039351",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-15T00:27:19.351Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757895933893",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-15T00:25:33.893Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757895928132",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-15T00:25:28.132Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757843261177",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T09:47:41.177Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841405809",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-14T09:16:45.809Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841399575",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-14T09:16:39.575Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841323618",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T09:15:23.618Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841313330",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-14T09:15:13.330Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841305723",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T09:15:05.723Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841124086",
+        "userId": 2,
+        "username": "manager",
+        "action": "LOGIN",
+        "description": "User manager logged in",
+        "timestamp": "2025-09-14T09:12:04.086Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757841118865",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T09:11:58.865Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757838620547",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T08:30:20.547Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757837906157",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T08:18:26.157Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757837852128",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T08:17:32.128Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757822279197",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:57:59.197Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821882536",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:51:22.536Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821535204",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:45:35.204Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821278783",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:41:18.783Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821265637",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:41:05.637Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821224144",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:40:24.144Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821199035",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:39:59.035Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757821131932",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:38:51.932Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757820883072",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:34:43.072Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757820838180",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:33:58.180Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757820514443",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:28:34.443Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757820301778",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:25:01.778Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757820138089",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:22:18.089Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819954510",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:19:14.510Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819903825",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:18:23.825Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819843858",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:17:23.858Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819592110",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:13:12.110Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819367161",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:09:27.161Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819285422",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:08:05.422Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757819140107",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:05:40.107Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757818836662",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:00:36.662Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757818818393",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T03:00:18.393Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757818484045",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T02:54:44.045Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757818469966",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T02:54:29.966Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757818384394",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-14T02:53:04.394Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757817889916",
+        "userId": 3,
+        "username": "user",
+        "action": "LOGIN",
+        "description": "User user logged in",
+        "timestamp": "2025-09-14T02:44:49.916Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757817868929",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-14T02:44:28.929Z",
+        "ip": "127.0.0.1"
+      },
+      {
+        "id": "1757750512416",
+        "userId": 1,
+        "username": "admin",
+        "action": "LOGIN",
+        "description": "User admin logged in",
+        "timestamp": "2025-09-13T08:01:52.416Z",
+        "ip": "127.0.0.1"
+      }
+    ]
+  }
 }

@@ -1,0 +1,39 @@
+{
+  "name": "information-hub",
+  "version": "1.0.0",
+  "description": "A comprehensive information management system with role-based access control and Excel export functionality",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "serve": "python -m http.server 8000",
+    "build": "echo 'No build process needed - static files ready for deployment'",
+    "deploy": "echo 'Ready for deployment to any static hosting service'"
+  },
+  "keywords": [
+    "information-management",
+    "role-based-access",
+    "excel-export",
+    "database",
+    "web-application"
+  ],
+  "author": "Your Company",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/information-hub.git"
+  },
+  "homepage": "https://yourusername.github.io/information-hub",
+  "files": [
+    "*.html",
+    "*.css",
+    "*.js",
+    "*.svg",
+    "*.md"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}
+

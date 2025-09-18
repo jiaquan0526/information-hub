@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information Hub - Deployment Guide</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .btn {
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Information Hub - Deployment Guide</h1>
+        
+        <div class="success">
+            <strong>✅ Ready to Deploy!</strong> Your Information Hub is complete with database, Excel export, and your custom logo.
+        </div>
+
+        <h2>📁 Files to Upload</h2>
+        <p>Upload all these files to your web server:</p>
+        <div class="code">
+auth.html<br>
+index.html<br>
+styles.css<br>
+auth-script.js<br>
+hub-script.js<br>
+section-script.js<br>
+database.js<br>
+excel-export.js<br>
+logo.svg<br>
+README.md
+        </div>
+
+        <h2>🌐 Deployment Options</h2>
+
+        <div class="step">
+            <h3>Option 1: GitHub Pages (Free & Easy)</h3>
+            <ol>
+                <li>Create a GitHub account at <a href="https://github.com" target="_blank">github.com</a></li>
+                <li>Create a new repository named "information-hub"</li>
+                <li>Upload all files to the repository</li>
+                <li>Go to Settings → Pages</li>
+                <li>Select "Deploy from a branch" → "main"</li>
+                <li>Your site will be available at: <code>https://yourusername.github.io/information-hub</code></li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>Option 2: Netlify (Free & Professional)</h3>
+            <ol>
+                <li>Go to <a href="https://netlify.com" target="_blank">netlify.com</a></li>
+                <li>Sign up for a free account</li>
+                <li>Drag and drop your project folder</li>
+                <li>Get instant deployment with custom domain option</li>
+                <li>Your site will be available at: <code>https://random-name.netlify.app</code></li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>Option 3: Vercel (Free & Fast)</h3>
+            <ol>
+                <li>Go to <a href="https://vercel.com" target="_blank">vercel.com</a></li>
+                <li>Sign up with GitHub</li>
+                <li>Import your repository</li>
+                <li>Deploy automatically</li>
+                <li>Your site will be available at: <code>https://your-project.vercel.app</code></li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>Option 4: Traditional Web Hosting</h3>
+            <ol>
+                <li>Upload all files via FTP/SFTP to your web server</li>
+                <li>Ensure all files are in the root directory</li>
+                <li>Set <code>index.html</code> as the default page</li>
+                <li>Test the application</li>
+            </ol>
+        </div>
+
+        <h2>🔧 Configuration</h2>
+        
+        <div class="warning">
+            <strong>Important:</strong> The application uses IndexedDB for data storage, which works in all modern browsers. No server-side configuration is needed.
+        </div>
+
+        <h3>Custom Domain (Optional)</h3>
+        <p>If you want a custom domain like <code>yourcompany.com</code>:</p>
+        <ol>
+            <li>Purchase a domain from a registrar (GoDaddy, Namecheap, etc.)</li>
+            <li>Point your domain to your hosting provider</li>
+            <li>Configure DNS settings as instructed by your host</li>
+        </ol>
+
+        <h2>📊 Features Included</h2>
+        <ul>
+            <li>✅ User Authentication & Role Management</li>
+            <li>✅ 8 Functional Sections (Costing, Supply Planning, etc.)</li>
+            <li>✅ Database Storage (IndexedDB)</li>
+            <li>✅ Excel Export Functionality</li>
+            <li>✅ Admin Panel with User Management</li>
+            <li>✅ Audit Logging</li>
+            <li>✅ Responsive Design</li>
+            <li>✅ Custom Logo Integration</li>
+        </ul>
+
+        <h2>👥 Default User Accounts</h2>
+        <div class="code">
+Admin: admin / admin123<br>
+Manager: manager / manager123<br>
+User: user / user123
+        </div>
+
+        <h2>🛡️ Security Notes</h2>
+        <div class="warning">
+            <strong>For Production Use:</strong>
+            <ul>
+                <li>Change default passwords</li>
+                <li>Implement server-side authentication</li>
+                <li>Use HTTPS for secure connections</li>
+                <li>Regular data backups</li>
+                <li>Consider implementing user registration</li>
+            </ul>
+        </div>
+
+        <h2>📞 Support</h2>
+        <p>If you need help with deployment or customization, the application is well-documented and modular. All source code is available for modification.</p>
+
+        <div class="success">
+            <strong>🎉 Congratulations!</strong> Your Information Hub is ready for production use with professional features and your custom branding.
+        </div>
+    </div>
+</body>
+</html>
+

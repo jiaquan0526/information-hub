@@ -898,14 +898,35 @@ class InformationHub {
     // JSON Backup/Restore (raw)
     window.backupJson = async () => {
         try {
-            if (!window.hubDatabase || !hubDatabase.exportRawState) throw new Error('Database not ready');
-            const raw = await hubDatabase.exportRawState();
+            let raw;
+            try {
+                if (window.hubDatabase && hubDatabase.exportRawState) {
+                    raw = await hubDatabase.exportRawState();
+                }
+            } catch (_) {}
+
+            if (!raw) {
+                // Fallback to localStorage-only backup
+                let local = {};
+                try {
+                    local = {
+                        sectionOrder: JSON.parse(localStorage.getItem('sectionOrder') || 'null'),
+                        hubUsers: JSON.parse(localStorage.getItem('hubUsers') || 'null'),
+                        informationHub: JSON.parse(localStorage.getItem('informationHub') || 'null'),
+                        hubActivities: JSON.parse(localStorage.getItem('hubActivities') || 'null')
+                    };
+                } catch (_) {}
+                raw = { users: [], sections: [], resources: [], activities: [], views: [], exportDate: new Date().toISOString(), localStorage: local };
+            }
+
             const blob = new Blob([JSON.stringify(raw, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.download = `Information_Hub_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
             link.click();
+            document.body.removeChild(link);
             URL.revokeObjectURL(url);
             this.showMessage('Backup downloaded', 'success');
         } catch (error) {

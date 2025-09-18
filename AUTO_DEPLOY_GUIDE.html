@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Auto Deploy Guide - Information Hub</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 5px solid #28a745;
+            position: relative;
+        }
+        .step-number {
+            background: #28a745;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            position: absolute;
+            left: -15px;
+            top: 20px;
+        }
+        .step-content {
+            margin-left: 20px;
+        }
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .highlight {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .btn {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+            transition: background 0.3s;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .file-list {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .warning {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Information Hub - Auto Deploy Guide</h1>
+        
+        <div class="success">
+            <strong>✅ Ready to Deploy!</strong> Your Information Hub is complete with Converse-inspired logo and all features. Follow these simple steps to get it live online.
+        </div>
+
+        <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>Create GitHub Account (if needed)</h3>
+                <p>If you don't have a GitHub account:</p>
+                <a href="https://github.com/signup" target="_blank" class="btn">Create GitHub Account</a>
+                <p>If you already have an account, proceed to step 2.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Create New Repository</h3>
+                <p>1. Go to <a href="https://github.com" target="_blank">github.com</a> and sign in</p>
+                <p>2. Click the <strong>"+"</strong> icon in the top right corner</p>
+                <p>3. Select <strong>"New repository"</strong></p>
+                <p>4. Fill in the details:</p>
+                <div class="code">
+Repository name: information-hub<br>
+Description: Professional Information Management System<br>
+Visibility: Public (required for free GitHub Pages)<br>
+Initialize: Don't check "Add a README file"
+                </div>
+                <p>5. Click <strong>"Create repository"</strong></p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Upload Your Files</h3>
+                <p>1. On your new repository page, click <strong>"uploading an existing file"</strong></p>
+                <p>2. Navigate to: <code>C:\Users\MZH238\playbook-hub\github-upload</code></p>
+                <p>3. Select ALL files in that folder:</p>
+                <div class="file-list">
+                    <strong>Files to upload:</strong><br>
+                    • auth.html<br>
+                    • index.html<br>
+                    • styles.css<br>
+                    • logo.svg (Converse-inspired logo)<br>
+                    • auth-script.js<br>
+                    • hub-script.js<br>
+                    • section-script.js<br>
+                    • database.js<br>
+                    • excel-export.js<br>
+                    • README.md<br>
+                    • GITHUB_DEPLOYMENT.md
+                </div>
+                <p>4. Add commit message: <code>Initial deployment of Information Hub</code></p>
+                <p>5. Click <strong>"Commit changes"</strong></p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Enable GitHub Pages</h3>
+                <p>1. In your repository, click the <strong>"Settings"</strong> tab</p>
+                <p>2. Scroll down to the <strong>"Pages"</strong> section</p>
+                <p>3. Under <strong>"Source"</strong>, select <strong>"Deploy from a branch"</strong></p>
+                <p>4. Select <strong>"main"</strong> branch</p>
+                <p>5. Click <strong>"Save"</strong></p>
+                <div class="highlight">
+                    <strong>⏱️ Deployment Time:</strong> GitHub Pages usually takes 5-10 minutes to deploy your site.
+                </div>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+                <h3>Access Your Live Website</h3>
+                <p>Your Information Hub will be live at:</p>
+                <div class="code">
+https://YOUR_USERNAME.github.io/information-hub
+                </div>
+                <p>Replace <code>YOUR_USERNAME</code> with your actual GitHub username.</p>
+                <div class="success">
+                    <strong>🎉 Congratulations!</strong> Your Information Hub is now live online with:<br>
+                    ✅ Converse-inspired logo<br>
+                    ✅ Complete database system<br>
+                    ✅ Excel export functionality<br>
+                    ✅ Role-based access control<br>
+                    ✅ Professional design
+                </div>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <h3>🔑 Default Login Credentials</h3>
+            <div class="code">
+Admin: admin / admin123 (full access)<br>
+Manager: manager / manager123 (limited access)<br>
+User: user / user123 (read-only access)
+            </div>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ Important Notes</h3>
+            <ul>
+                <li>Make sure your repository is <strong>Public</strong> for free GitHub Pages</li>
+                <li>Wait 5-10 minutes after uploading for the site to be live</li>
+                <li>Check the Pages section in Settings for deployment status</li>
+                <li>Clear your browser cache if the site doesn't load immediately</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="https://github.com" target="_blank" class="btn btn-success">Start Deployment Now</a>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information Hub - Test</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <div style="text-align: center;">
+            <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+            <h2>Loading Information Hub...</h2>
+            <p>Please wait while we verify your access.</p>
+        </div>
+    </div>
+    
+    <div id="mainContent" style="display: none;">
+        <div class="container">
+            <header class="header">
+                <div class="header-content">
+                    <div class="header-title">
+                        <div class="logo-container">
+                            <img src="logo.svg" alt="Company Logo" class="site-logo">
+                            <h1>Information Hub - TEST</h1>
+                        </div>
+                        <p>Central dashboard for accessing all functional areas and resources</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="user-info">
+                            <span id="userName">Loading...</span>
+                            <span id="userRole">Loading...</span>
+                        </div>
+                        <button class="btn btn-secondary" onclick="logout()">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </div>
+                </div>
+            </header>
+            
+            <main class="main-content">
+                <div class="welcome-section">
+                    <h2>Welcome to the Information Hub</h2>
+                    <p>This is a test page to verify login is working.</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Simple test script
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Test page loaded');
+            
+            try {
+                const session = localStorage.getItem('hubSession');
+                console.log('Session found:', session);
+                
+                if (!session) {
+                    console.log('No session, redirecting to auth');
+                    window.location.href = 'auth.html';
+                    return;
+                }
+                
+                const user = JSON.parse(session);
+                console.log('User data:', user);
+                
+                // Hide loading screen
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                
+                // Update user info
+                document.getElementById('userName').textContent = user.username;
+                document.getElementById('userRole').textContent = user.role;
+                
+                console.log('Test page loaded successfully');
+                
+            } catch (error) {
+                console.error('Error in test page:', error);
+                // Hide loading screen even on error
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+            }
+        });
+        
+        function logout() {
+            localStorage.removeItem('hubSession');
+            window.location.href = 'auth.html';
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
