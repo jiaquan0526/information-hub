@@ -462,7 +462,7 @@
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
         // Check authentication before loading the hub
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             try {
             const session = localStorage.getItem('hubSession');
             if (!session) {
@@ -484,6 +484,27 @@
                     console.log('Main content shown');
                 }
                 
+                // One-time sample data import for GitHub version (if no users exist)
+                try {
+                    const existingUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                    if (existingUsers.length === 0) {
+                        const resp = await fetch('sample-data.json', { cache: 'no-store' });
+                        if (resp.ok) {
+                            const sample = await resp.json();
+                            if (Array.isArray(sample.users)) {
+                                localStorage.setItem('hubUsers', JSON.stringify(sample.users));
+                                try { if (window.hubDatabase && hubDatabase.saveUser) { for (const u of sample.users) { try { await hubDatabase.saveUser(u); } catch(_){} } } } catch(_){}
+                            }
+                            if (sample.informationHub) {
+                                localStorage.setItem('informationHub', JSON.stringify(sample.informationHub));
+                            }
+                            if (Array.isArray(sample.hubActivities)) {
+                                localStorage.setItem('hubActivities', JSON.stringify(sample.hubActivities));
+                            }
+                        }
+                    }
+                } catch (e) { console.warn('sample-data import skipped', e); }
+
                 // Rebuild hub cards dynamically from configuration
                 try { updateMainHubSections(); } catch (e) { console.warn('updateMainHubSections error', e); }
                 
