@@ -3631,10 +3631,11 @@ Permissions:
         
         // Background image support for sections (random, persistent per section)
         let BACKGROUND_IMAGES = [];
-        async function ensureBackgroundImagesLoaded() {
+        async function ensureBackgroundImagesLoaded(force) {
             try {
-                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
-                const resp = await fetch('background-pic/manifest.json', { cache: 'no-store' });
+                // Always attempt to re-read manifest to reflect folder updates. Bypass cache.
+                const bust = Date.now();
+                const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
                 if (resp.ok) {
                     const data = await resp.json();
                     if (Array.isArray(data) && data.length > 0) {
@@ -3643,14 +3644,16 @@ Permissions:
                     }
                 }
             } catch (_) {}
-            // Fallback to a baked-in list if manifest is missing
-            BACKGROUND_IMAGES = [
-                'background-pic/132169_L.png','background-pic/132170_L.png','background-pic/132173_K.png','background-pic/135253_L.png',
-                'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
-                'background-pic/162062_L.png','background-pic/164057_K.png','background-pic/166799_K.png','background-pic/168817_L.png',
-                'background-pic/171327_Y.png','background-pic/537081_L.png','background-pic/537082_K.png','background-pic/560846_L.png',
-                'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
-            ];
+            // Fallback to a baked-in list if manifest is missing or empty
+            if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) {
+                BACKGROUND_IMAGES = [
+                    'background-pic/132169_L.png','background-pic/132170_L.png','background-pic/132173_K.png','background-pic/135253_L.png',
+                    'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                    'background-pic/162062_L.png','background-pic/164057_K.png','background-pic/166799_K.png','background-pic/168817_L.png',
+                    'background-pic/171327_Y.png','background-pic/537081_L.png','background-pic/537082_K.png','background-pic/560846_L.png',
+                    'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
+                ];
+            }
         }
 
         function getBackgroundImageForSection(sectionId) {
@@ -3658,6 +3661,11 @@ Permissions:
                 const key = 'sectionBackgrounds';
                 const raw = localStorage.getItem(key);
                 let map = raw ? JSON.parse(raw) : {};
+                const current = map[sectionId];
+                // If current mapping points to a file no longer present, remap
+                if (current && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.indexOf(current) === -1) {
+                    delete map[sectionId];
+                }
                 if (map[sectionId]) return map[sectionId];
                 // Choose an unused image first
                 const used = new Set(Object.values(map));
@@ -3714,11 +3722,13 @@ Permissions:
             }
         };
         
-        function updateMainHubSections() {
+        async function updateMainHubSections() {
             console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) return;
             hubGrid.innerHTML = '';
+            // Always re-read manifest to reflect background-pic folder changes
+            try { await ensureBackgroundImagesLoaded(true); } catch (_) {}
             const sectionOrderRaw = localStorage.getItem('sectionOrder');
             let sectionOrder = [];
             try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
@@ -3770,7 +3780,7 @@ Permissions:
                 </div>
             </div>`;
                 hubGrid.insertAdjacentHTML('beforeend', cardHTML);
-                // Apply background image to this card
+                // Apply background image to this card (remaps if old path missing)
                 try { applyCardBackground(section); } catch (_) {}
             }
             // Stats for currently built sections

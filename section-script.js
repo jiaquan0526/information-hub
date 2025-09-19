@@ -80,7 +80,7 @@ class SectionManager {
         try {
             return await Promise.race([
                 promise.catch(() => fallback),
-                new Promise((resolve) => setTimeout(() => resolve(fallback), timeoutMs))
+                new Promise((resolve) => setTimeout(() => resolve(fallback), Math.min(timeoutMs, 800)))
             ]);
         } catch (_) {
             return fallback;
@@ -373,19 +373,36 @@ class SectionManager {
             addBtn.style.display = this.canEditResource() ? 'inline-flex' : 'none';
         }
 
-        const resources = await this.getResources(type);
-        const filteredResources = this.getFilteredResources(resources);
-
-        if (filteredResources.length === 0) {
+        // Render locally first for instant feedback
+        const localResources = await this.getResourcesLocalOnly(type);
+        const localFiltered = this.getFilteredResources(localResources);
+        if (localFiltered.length === 0) {
             grid.style.display = 'none';
             emptyState.style.display = 'block';
-            return;
+        } else {
+            grid.style.display = 'grid';
+            emptyState.style.display = 'none';
+            grid.innerHTML = localFiltered.map(resource => this.createResourceCard(resource, type)).join('');
         }
 
-        grid.style.display = 'grid';
-        emptyState.style.display = 'none';
-
-        grid.innerHTML = filteredResources.map(resource => this.createResourceCard(resource, type)).join('');
+        // Then merge with DB in background and update if changed
+        setTimeout(async () => {
+            try {
+                const resources = await this.getResources(type);
+                const filteredResources = this.getFilteredResources(resources);
+                const html = filteredResources.map(resource => this.createResourceCard(resource, type)).join('');
+                if (grid.innerHTML !== html) {
+                    if (filteredResources.length === 0) {
+                        grid.style.display = 'none';
+                        emptyState.style.display = 'block';
+                    } else {
+                        grid.style.display = 'grid';
+                        emptyState.style.display = 'none';
+                        grid.innerHTML = html;
+                    }
+                }
+            } catch (_) {}
+        }, 0);
     }
 
     async getResources(type) {

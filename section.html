@@ -24,25 +24,20 @@
                     <h1 id="sectionName">Section Name</h1>
                 </div>
                 
-                <button class="back-btn" onclick="goBackToHub()">
-                    <i class="fas fa-arrow-left"></i> Back to Hub
-                </button>
+                <div style="display:flex; gap:8px;">
+                    <button class="back-btn" onclick="goBackToHub()">
+                        <i class="fas fa-arrow-left"></i> Back to Hub
+                    </button>
+                    <button class="back-btn" id="customizeBtn" style="display:none;" onclick="customizeSection()" title="Customize tabs and categories">
+                        <i class="fas fa-sliders-h"></i> Customize
+                    </button>
+                </div>
             </div>
 
             <div id="sectionIntro" class="section-intro" style="margin:-4px 0 16px 0;color:#556;">
             </div>
 
-            <div class="nav-tabs">
-                <div class="nav-tab active" onclick="switchTab('playbooks')">
-                    <i class="fas fa-book"></i> Playbooks
-                </div>
-                <div class="nav-tab" onclick="switchTab('box-links')">
-                    <i class="fas fa-link"></i> Box Links
-                </div>
-                <div class="nav-tab" onclick="switchTab('dashboards')">
-                    <i class="fas fa-chart-bar"></i> Dashboards
-                </div>
-            </div>
+            <div class="nav-tabs" id="navTabs"></div>
 
             <div class="search-filter-container">
                 <div class="search-container">
@@ -50,37 +45,11 @@
                     <i class="fas fa-search search-icon"></i>
                 </div>
                 <div class="filter-container">
-                    <select id="categoryFilter" class="filter-select">
-                        <option value="">All Categories</option>
-                        <option value="process">Process</option>
-                        <option value="procedure">Procedure</option>
-                        <option value="guide">Guide</option>
-                        <option value="template">Template</option>
-                        <option value="checklist">Checklist</option>
-                    </select>
+                    <select id="categoryFilter" class="filter-select"></select>
                 </div>
             </div>
 
-            <div class="content-section active" id="playbooks-section">
-                <button class="add-resource-btn" onclick="addResource('playbooks')" style="display: none;">
-                    <i class="fas fa-plus"></i> Add Playbook
-                </button>
-                <div class="resource-grid" id="playbooks-grid"></div>
-            </div>
-
-            <div class="content-section" id="box-links-section">
-                <button class="add-resource-btn" onclick="addResource('box-links')" style="display: none;">
-                    <i class="fas fa-plus"></i> Add Box Link
-                </button>
-                <div class="resource-grid" id="box-links-grid"></div>
-            </div>
-
-            <div class="content-section" id="dashboards-section">
-                <button class="add-resource-btn" onclick="addResource('dashboards')" style="display: none;">
-                    <i class="fas fa-plus"></i> Add Dashboard
-                </button>
-                <div class="resource-grid" id="dashboards-grid"></div>
-            </div>
+            <div id="dynamic-sections"></div>
 
             <div class="empty-state" id="emptyState" style="display: none;">
                 <i class="fas fa-folder-open"></i>
@@ -90,9 +59,7 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="database.js"></script>
-    <script src="excel-export.js"></script>
     <script src="auth-script.js"></script>
     <script src="section-script.js"></script>
     
