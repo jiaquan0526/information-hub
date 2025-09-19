@@ -501,6 +501,24 @@
             } catch (_) {}
         });
         
+        // Real-time section → hub sync
+        try {
+            if (typeof BroadcastChannel !== 'undefined') {
+                const bc = new BroadcastChannel('hub-sync');
+                bc.onmessage = (event) => {
+                    try {
+                        const msg = event && event.data ? event.data : {};
+                        if (msg && msg.source === 'section') {
+                            console.log('Hub received sync message:', msg);
+                            updateSectionStats();
+                            if (msg.type === 'SECTION_CUSTOMIZE') updateMainHubSections();
+                            try { rotateInfoBar(); } catch(_) {}
+                        }
+                    } catch (_) {}
+                };
+            }
+        } catch (_) {}
+        
         // Helper: normalize resource type to buckets we display on cards
         function normalizeResourceType(rawType) {
             try {
@@ -3783,7 +3801,7 @@ Permissions:
                 } catch (_) {}
 
                 const cardHTML = `
-            <div class="hub-card" id="card-${section.id}" onclick="navigateToSection('${section.id}')">
+            <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
                 <div class="card-header">
                     <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                     <div class="card-title">
@@ -3798,11 +3816,12 @@ Permissions:
                 </div>
             </div>`;
                 hubGrid.insertAdjacentHTML('beforeend', cardHTML);
-                // Apply background image to this card (remaps if old path missing)
-                try { applyCardBackground(section); } catch (_) {}
+                // Background will be scheduled lazily
             }
             // Stats for currently built sections
             updateSectionStats();
+            // Initialize lazy loading for backgrounds
+            initBackgroundLazyLoad(visibleSections);
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
         }
         
@@ -4045,6 +4064,53 @@ Permissions:
                     resolve(null);
                 }
             });
+        }
+
+        // Background lazy loader with small concurrency
+        let _bgActiveLoads = 0;
+        const _bgQueue = [];
+        function _processBgQueue() {
+            while (_bgActiveLoads < 2 && _bgQueue.length > 0) {
+                const next = _bgQueue.shift();
+                _bgActiveLoads++;
+                applyCardBackground(next.section).finally(() => {
+                    _bgActiveLoads = Math.max(0, _bgActiveLoads - 1);
+                    _processBgQueue();
+                });
+            }
+        }
+        function scheduleCardBackground(section) {
+            _bgQueue.push({ section });
+            _processBgQueue();
+        }
+        function initBackgroundLazyLoad(sections) {
+            try {
+                if (!('IntersectionObserver' in window)) {
+                    // Fallback: schedule all
+                    (sections || []).forEach(s => scheduleCardBackground(s));
+                    return;
+                }
+                const io = new IntersectionObserver((entries, obs) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            try {
+                                const card = entry.target;
+                                const sid = card.getAttribute('data-section-id');
+                                const sec = (sections || []).find(s => s.id === sid);
+                                if (sec) scheduleCardBackground(sec);
+                            } catch (_) {}
+                            obs.unobserve(entry.target);
+                        }
+                    });
+                }, { rootMargin: '200px 0px' });
+                (sections || []).forEach(s => {
+                    const card = document.getElementById(`card-${s.id}`);
+                    if (card) io.observe(card);
+                });
+            } catch (_) {
+                // Fallback schedule all
+                (sections || []).forEach(s => scheduleCardBackground(s));
+            }
         }
     </script>
     

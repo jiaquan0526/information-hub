@@ -5,6 +5,7 @@ class SectionManager {
         this.currentSection = this.getCurrentSectionFromURL();
         this.currentTab = 'playbooks';
         this.sectionConfig = this.loadSectionConfig();
+        this._bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('hub-sync') : null;
         this.init();
     }
 
@@ -714,7 +715,7 @@ class SectionManager {
             }
             localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
             // Signal hub to refresh
-            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType });
 
             // Compatibility hubData
             const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
@@ -730,8 +731,7 @@ class SectionManager {
                 hubData[this.currentSection].custom[resourceType].push(resource);
             }
             localStorage.setItem('informationHub', JSON.stringify(hubData));
-            // Signal hub to refresh
-            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType });
 
             if (window.hubDatabase && hubDatabase.saveResource &&
                 (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
@@ -928,7 +928,7 @@ class SectionManager {
                 updateInArray(sectionData.custom[resourceType]);
             }
             localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType });
 
             const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
             if (!hubData[this.currentSection]) {
@@ -953,7 +953,7 @@ class SectionManager {
                 updateHubArray(hubData[this.currentSection].custom[resourceType]);
             }
             localStorage.setItem('informationHub', JSON.stringify(hubData));
-            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType });
 
             if (window.hubDatabase && hubDatabase.saveResource &&
                 (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
@@ -1011,7 +1011,7 @@ class SectionManager {
                 sectionData.custom[resourceType] = removeFromArray(sectionData.custom[resourceType] || []);
             }
             localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType });
 
             const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
             if (!hubData[this.currentSection]) {
@@ -1024,7 +1024,7 @@ class SectionManager {
                 hubData[this.currentSection].custom[resourceType] = removeFromArray(hubData[this.currentSection].custom[resourceType] || []);
             }
             localStorage.setItem('informationHub', JSON.stringify(hubData));
-            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType });
 
             if (window.hubDatabase && hubDatabase.deleteResource &&
                 (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
@@ -1089,7 +1089,7 @@ class SectionManager {
 
     goBackToHub() {
         // Signal hub to refresh stats immediately on return
-        try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+        this._notifyHub({ type: 'NAV_BACK' });
         window.location.href = 'index.html';
     }
 
@@ -1115,6 +1115,7 @@ class SectionManager {
             const key = `section_config_${this.currentSection}`;
             localStorage.setItem(key, JSON.stringify(cfg));
             this.sectionConfig = cfg;
+            this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
         } catch (_) {}
     }
 
@@ -1211,6 +1212,22 @@ class SectionManager {
                 this.showMessage('Invalid JSON for types', 'error');
             }
         });
+    }
+
+    _notifyHub(message) {
+        try {
+            if (this._bc) {
+                this._bc.postMessage({
+                    source: 'section',
+                    sectionId: this.currentSection,
+                    timestamp: Date.now(),
+                    ...message
+                });
+            }
+        } catch (_) {}
+        // Fallback flag so hub can pick it up even without BroadcastChannel
+        try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+        try { localStorage.setItem('hubLastChange', String(Date.now())); } catch(_) {}
     }
 }
 
