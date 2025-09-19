@@ -3695,25 +3695,40 @@ Permissions:
                 try {
                     const local = JSON.parse(localStorage.getItem('bgLocalManifest') || 'null');
                     if (local && Array.isArray(local.files) && local.files.length > 0) {
-                        BACKGROUND_IMAGES = local.files.slice();
+                        let files = local.files.slice();
+                        files = await filterExistingBackgroundImages(files);
+                        if (files.length > 0) {
+                            BACKGROUND_IMAGES = files;
+                            try { localStorage.setItem('bgLocalManifest', JSON.stringify({ files, ts: Date.now() })); } catch(_) {}
+                            return;
+                        }
+                    }
+                } catch (_) {}
+                // Online refresh path 1: GitHub API listing
+                try {
+                    let ghFiles = await getFilesFromGitHub();
+                    ghFiles = await filterExistingBackgroundImages(ghFiles);
+                    if (Array.isArray(ghFiles) && ghFiles.length > 0) {
+                        BACKGROUND_IMAGES = ghFiles;
+                        try { localStorage.setItem('bgLocalManifest', JSON.stringify({ files: ghFiles.slice(), ts: Date.now() })); } catch(_) {}
                         return;
                     }
                 } catch (_) {}
-                // Always attempt to re-read manifest to reflect folder updates. Bypass cache.
-                const bust = Date.now();
-                const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`);
-                        // If no local manifest saved yet, seed it so it persists until next reshuffle
-                        try {
-                            const seeded = { files: BACKGROUND_IMAGES.slice(), ts: Date.now() };
-                            localStorage.setItem('bgLocalManifest', JSON.stringify(seeded));
-                        } catch(_) {}
-                        return;
+                // Online refresh path 2: file manifest.json in repo
+                try {
+                    const bust = Date.now();
+                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            let files = data.map(p => `background-pic/${p}`);
+                            files = await filterExistingBackgroundImages(files);
+                            BACKGROUND_IMAGES = files;
+                            try { localStorage.setItem('bgLocalManifest', JSON.stringify({ files: files.slice(), ts: Date.now() })); } catch(_) {}
+                            return;
+                        }
                     }
-                }
+                } catch (_) {}
             } catch (_) {}
             // Fallback to a baked-in list (only files present in repo) if manifest is missing or empty
             if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) {
@@ -3731,6 +3746,73 @@ Permissions:
             try {
                 return String(BACKGROUND_IMAGES.join('|')).length + ':' + BACKGROUND_IMAGES.length;
             } catch (_) { return 'v0'; }
+        }
+        // Try to infer GitHub repo info from Pages URL; can be overridden with window.GH_OWNER/GH_REPO/GH_BRANCH
+        function getGithubRepoInfo() {
+            try {
+                const owner = (window.GH_OWNER || '').trim();
+                const repo = (window.GH_REPO || '').trim();
+                const branch = (window.GH_BRANCH || '').trim();
+                if (owner && repo) {
+                    return { owner, repo, branches: branch ? [branch] : ['gh-pages','main','master'] };
+                }
+                const host = String(location.hostname || '').toLowerCase();
+                if (!/\.github\.io$/.test(host)) return null;
+                const inferredOwner = host.split('.github.io')[0];
+                const firstPath = String(location.pathname || '/').split('/').filter(Boolean)[0] || '';
+                // If it's a project page, firstPath is repo; for user/org page, repo is owner.github.io
+                const inferredRepo = firstPath || `${inferredOwner}.github.io`;
+                return { owner: inferredOwner, repo: inferredRepo, branches: ['gh-pages','main','master'] };
+            } catch (_) { return null; }
+        }
+        async function getFilesFromGitHub() {
+            try {
+                const info = getGithubRepoInfo();
+                if (!info) return [];
+                const { owner, repo, branches } = info;
+                const headers = { 'Accept': 'application/vnd.github+json' };
+                for (const br of branches) {
+                    try {
+                        const url = `https://api.github.com/repos/${owner}/${repo}/contents/background-pic?ref=${encodeURIComponent(br)}`;
+                        const resp = await fetch(url, { headers, cache: 'no-store' });
+                        if (!resp.ok) continue;
+                        const data = await resp.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            const files = data
+                                .filter(x => x && x.type === 'file' && /\.(png|jpe?g|gif|webp|svg)$/i.test(x.name || ''))
+                                .map(x => `background-pic/${x.name}`);
+                            if (files.length > 0) return files;
+                        }
+                    } catch (_) { /* try next branch */ }
+                }
+                return [];
+            } catch (_) { return []; }
+        }
+        // Validate that manifest images actually exist by attempting to load them
+        async function filterExistingBackgroundImages(files) {
+            try {
+                const input = Array.isArray(files) ? files.slice() : [];
+                const results = [];
+                const queue = input.slice();
+                const concurrency = 4;
+                const workers = new Array(concurrency).fill(0).map(async () => {
+                    while (queue.length > 0) {
+                        const src = queue.shift();
+                        if (!src) continue;
+                        try {
+                            await new Promise((resolve, reject) => {
+                                const img = new Image();
+                                img.onload = () => resolve();
+                                img.onerror = reject;
+                                img.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
+                            });
+                            results.push(src);
+                        } catch (_) { /* skip missing */ }
+                    }
+                });
+                await Promise.all(workers);
+                return results;
+            } catch (_) { return Array.isArray(files) ? files : []; }
         }
         function getOptimizedMapping() {
             try {
@@ -3831,6 +3913,15 @@ Permissions:
             if (!Array.isArray(files) || files.length === 0) {
                 try { files = Array.isArray(BACKGROUND_IMAGES) ? BACKGROUND_IMAGES.slice() : []; } catch(_) { files = []; }
             }
+            try { files = await filterExistingBackgroundImages(files); } catch(_) {}
+            // Online refresh via GitHub API
+            try {
+                let ghFiles = await getFilesFromGitHub();
+                ghFiles = await filterExistingBackgroundImages(ghFiles);
+                if (Array.isArray(ghFiles) && ghFiles.length > 0) {
+                    files = ghFiles;
+                }
+            } catch(_) {}
             // Save as local manifest override
             try {
                 const manifest = { files: files.slice(), ts: Date.now() };
