@@ -3691,6 +3691,14 @@ Permissions:
         let BACKGROUND_IMAGES = [];
         async function ensureBackgroundImagesLoaded() {
             try {
+                // Prefer locally regenerated manifest if present (persists until next reshuffle)
+                try {
+                    const local = JSON.parse(localStorage.getItem('bgLocalManifest') || 'null');
+                    if (local && Array.isArray(local.files) && local.files.length > 0) {
+                        BACKGROUND_IMAGES = local.files.slice();
+                        return;
+                    }
+                } catch (_) {}
                 // Always attempt to re-read manifest to reflect folder updates. Bypass cache.
                 const bust = Date.now();
                 const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
@@ -3698,19 +3706,89 @@ Permissions:
                     const data = await resp.json();
                     if (Array.isArray(data) && data.length > 0) {
                         BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`);
+                        // If no local manifest saved yet, seed it so it persists until next reshuffle
+                        try {
+                            const seeded = { files: BACKGROUND_IMAGES.slice(), ts: Date.now() };
+                            localStorage.setItem('bgLocalManifest', JSON.stringify(seeded));
+                        } catch(_) {}
                         return;
                     }
                 }
             } catch (_) {}
-            // Fallback to a baked-in list if manifest is missing or empty
+            // Fallback to a baked-in list (only files present in repo) if manifest is missing or empty
             if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) {
                 BACKGROUND_IMAGES = [
-                    'background-pic/132169_L.png','background-pic/132170_L.png','background-pic/132173_K.png','background-pic/135253_L.png',
                     'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
-                    'background-pic/162062_L.png','background-pic/164057_K.png','background-pic/166799_K.png','background-pic/168817_L.png',
-                    'background-pic/171327_Y.png','background-pic/537081_L.png','background-pic/537082_K.png','background-pic/560846_L.png',
+                    'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
+                    'background-pic/537082_K.png','background-pic/560846_L.png',
                     'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
                 ];
+            }
+        }
+
+        // Optimize background images client-side and cache results
+        function computeManifestVersion() {
+            try {
+                return String(BACKGROUND_IMAGES.join('|')).length + ':' + BACKGROUND_IMAGES.length;
+            } catch (_) { return 'v0'; }
+        }
+        function getOptimizedMapping() {
+            try {
+                const v = computeManifestVersion();
+                const raw = localStorage.getItem('bgOptimizedMap') || '{}';
+                const ver = localStorage.getItem('bgOptimizedVersion') || '';
+                let map = {};
+                try { map = JSON.parse(raw); } catch(_) { map = {}; }
+                if (ver !== v) {
+                    localStorage.removeItem('bgOptimizedMap');
+                    localStorage.setItem('bgOptimizedVersion', v);
+                    return {};
+                }
+                return map;
+            } catch (_) { return {}; }
+        }
+        function setOptimizedMapping(map) {
+            try {
+                localStorage.setItem('bgOptimizedMap', JSON.stringify(map));
+                if (!localStorage.getItem('bgOptimizedVersion')) {
+                    localStorage.setItem('bgOptimizedVersion', computeManifestVersion());
+                }
+            } catch (_) {}
+        }
+        async function getOptimizedImageUrl(src, targetWidth = 1200, targetHeight = 720, quality = 0.82) {
+            try {
+                const map = getOptimizedMapping();
+                if (map[src]) return map[src];
+                // Keep GIFs animated by skipping optimization
+                if (/\.gif(\?|$)/i.test(src)) {
+                    map[src] = src;
+                    setOptimizedMapping(map);
+                    return src;
+                }
+                const img = await new Promise((resolve, reject) => {
+                    const i = new Image();
+                    i.crossOrigin = 'anonymous';
+                    i.onload = () => resolve(i);
+                    i.onerror = reject;
+                    i.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
+                });
+                const naturalW = Math.max(1, Number(img.naturalWidth || 1));
+                const naturalH = Math.max(1, Number(img.naturalHeight || 1));
+                const ratio = Math.min(targetWidth / naturalW, targetHeight / naturalH, 1);
+                const outW = Math.max(1, Math.floor(naturalW * ratio));
+                const outH = Math.max(1, Math.floor(naturalH * ratio));
+                const canvas = document.createElement('canvas');
+                canvas.width = outW;
+                canvas.height = outH;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, outW, outH);
+                // Prefer JPEG for smaller size; transparency isn't needed under gradient
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                map[src] = dataUrl || src;
+                setOptimizedMapping(map);
+                return map[src];
+            } catch (_) {
+                return src;
             }
         }
 
@@ -3749,13 +3827,72 @@ Permissions:
             try {
                 const card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionCfg.id}')"]`);
                 if (!card) return;
-                const img = await resolveValidBackground(sectionCfg.id);
+                // Prefer per-section provided image if available
+                let img = null;
+                try {
+                    const explicit = sectionCfg.bgImage || sectionCfg.background || sectionCfg.image;
+                    if (explicit && String(explicit).trim().length > 0) {
+                        img = String(explicit).trim();
+                    }
+                } catch (_) {}
+                if (!img) {
+                    // Use precomputed optimized image (thumbnail) if available
+                    const raw = resolveValidBackground(sectionCfg.id);
+                    const chosen = await raw;
+                    if (chosen) {
+                        try {
+                            // Try smaller target for card backgrounds
+                            img = await getOptimizedImageUrl(chosen, 640, 360, 0.82);
+                        } catch(_) {
+                            img = chosen;
+                        }
+                    }
+                }
                 if (!img) return;
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';
                 card.style.backgroundPosition = 'center';
+                card.style.backgroundRepeat = 'no-repeat';
                 // Mark card as ready for contrast styles
                 try { card.classList.add('bg-ready'); } catch (_) {}
+            } catch (_) {}
+        }
+
+        // Regenerate local manifest and precompute thumbnails, then reshuffle backgrounds
+        async function regenerateBackgroundManifestAndThumbnails() {
+            // Attempt to read fresh manifest.json, fall back to current BACKGROUND_IMAGES
+            let files = [];
+            try {
+                const bust = Date.now();
+                const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        files = data.map(p => `background-pic/${p}`);
+                    }
+                }
+            } catch (_) {}
+            if (!Array.isArray(files) || files.length === 0) {
+                try { files = Array.isArray(BACKGROUND_IMAGES) ? BACKGROUND_IMAGES.slice() : []; } catch(_) { files = []; }
+            }
+            // Save as local manifest override
+            try {
+                const manifest = { files: files.slice(), ts: Date.now() };
+                localStorage.setItem('bgLocalManifest', JSON.stringify(manifest));
+            } catch (_) {}
+            // Warm optimized thumbnails with small concurrency
+            try {
+                const queue = files.slice();
+                const concurrency = 3;
+                const workers = new Array(concurrency).fill(0).map(async () => {
+                    while (queue.length > 0) {
+                        const src = queue.shift();
+                        try { await getOptimizedImageUrl(src, 640, 360, 0.82); } catch (_) {}
+                    }
+                });
+                await Promise.all(workers);
+                // Update optimized version marker so cache persists correctly
+                try { localStorage.setItem('bgOptimizedVersion', computeManifestVersion()); } catch(_) {}
             } catch (_) {}
         }
 
@@ -3770,9 +3907,15 @@ Permissions:
                 }
             } catch (_) {}
             try {
+                // Regenerate the local manifest and thumbnails and then reshuffle mappings
+                await regenerateBackgroundManifestAndThumbnails();
                 localStorage.removeItem('sectionBackgrounds');
+                // Force-enable backgrounds for this and subsequent loads until cleared
+                try { localStorage.setItem('forceBackgrounds', '1'); } catch(_) {}
                 await ensureBackgroundImagesLoaded();
                 updateMainHubSections();
+                // In case the initial lazy init ran before force flag, try again
+                try { initBackgroundLazyLoad(JSON.parse(localStorage.getItem('sectionOrder')||'[]').filter(s=>s.visible!==false)); } catch(_) {}
                 alert('Backgrounds reshuffled');
             } catch (e) {
                 console.warn('Reshuffle failed', e);
@@ -3797,6 +3940,36 @@ Permissions:
             const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
             const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
             const truncate = (t, n) => { const s = String(t||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
+
+            // Pre-assign a pool of images large enough for all sections, allowing duplicates when needed
+            try {
+                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
+                    const needed = visibleSections.length;
+                    const pool = [];
+                    // Shuffle a copy to vary selections a bit
+                    const imgs = BACKGROUND_IMAGES.slice();
+                    for (let i = imgs.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [imgs[i], imgs[j]] = [imgs[j], imgs[i]];
+                    }
+                    let idx = 0;
+                    const key = 'sectionBackgrounds';
+                    let currentMap = {};
+                    try { currentMap = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) { currentMap = {}; }
+                    for (let n = 0; n < needed; n++) {
+                        const img = imgs[idx % imgs.length];
+                        pool.push(img);
+                        idx++;
+                    }
+                    // Assign sequentially to each visible section if not already mapped
+                    visibleSections.forEach((s, i) => {
+                        if (!currentMap[s.id]) {
+                            currentMap[s.id] = pool[i];
+                        }
+                    });
+                    try { localStorage.setItem(key, JSON.stringify(currentMap)); } catch (_) {}
+                }
+            } catch (_) {}
 
             for (const section of visibleSections) {
                 // Resolve dynamic labels from per-section config if present
@@ -4063,7 +4236,14 @@ Permissions:
                     const candidate = getBackgroundImageForSection(sectionId);
                     if (!candidate) return resolve(null);
                     const testImg = new Image();
-                    testImg.onload = () => resolve(candidate);
+                    testImg.onload = async () => {
+                        try {
+                            const optimized = await getOptimizedImageUrl(candidate);
+                            resolve(optimized || candidate);
+                        } catch (_) {
+                            resolve(candidate);
+                        }
+                    };
                     testImg.onerror = () => {
                         try {
                             const key = 'sectionBackgrounds';
@@ -4074,7 +4254,7 @@ Permissions:
                                 localStorage.setItem(key, JSON.stringify(map));
                             }
                         } catch (_) {}
-                        if (attempts < Math.min(5, BACKGROUND_IMAGES.length)) {
+                        if (attempts < Math.min(BACKGROUND_IMAGES.length, 50)) {
                             resolveValidBackground(sectionId, attempts + 1).then(resolve);
                         } else {
                             resolve(null);

@@ -117,7 +117,7 @@ body {
     cursor: pointer;
     position: relative;
     overflow: hidden;
-    border: 2px solid transparent;
+    border: 0; /* avoid side halos by removing transparent border */
 }
 
 .hub-card::before {
@@ -126,7 +126,7 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 0; /* hide green top bar */
+    height: 0; /* hide top bar placeholder */
     background: transparent;
 }
 
@@ -156,6 +156,17 @@ body {
     margin-bottom: 25px;
     text-align: center;
     line-height: 1.6;
+}
+
+/* When a background image is applied, avoid white halo on rounded corners */
+.hub-card.bg-ready {
+    background-color: #0e0f10; /* dark base under transparent gradient to prevent white outlines */
+    border: 0; /* remove transparent border that can show page background at sides */
+    background-clip: border-box;
+}
+
+.hub-card.bg-ready:hover {
+    border: 0;
 }
 
 .card-stats {
