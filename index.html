@@ -365,6 +365,17 @@
                 window.location.href = 'auth.html';
                 return;
             }
+            const hideLoading = () => {
+                try {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (mainContent) mainContent.style.display = 'block';
+                } catch (_) {}
+            };
+            // Safety: ensure loading is hidden even if something delays
+            setTimeout(hideLoading, 600);
+            
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
             try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
             
@@ -456,6 +467,17 @@
             
             // Debug: Check again after DOM is loaded
             console.log('After DOM loaded - navigateToSection function exists:', typeof window.navigateToSection);
+        });
+        
+        // On bfcache restore or fast back/forward, ensure hub is visible and refresh counts quickly
+        window.addEventListener('pageshow', () => {
+            try {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'block';
+                if (typeof updateSectionStats === 'function') updateSectionStats();
+            } catch (_) {}
         });
         
         // Also update interface when page becomes visible (for when user comes back from login)
@@ -3732,9 +3754,8 @@ Permissions:
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';
                 card.style.backgroundPosition = 'center';
-                card.style.color = '#fff';
-                // Improve contrast on text/icons inside the card
-                try { card.querySelectorAll('h3, p, span, i').forEach(el => { el.style.color = '#fff'; }); } catch (_) {}
+                // Mark card as ready for contrast styles
+                try { card.classList.add('bg-ready'); } catch (_) {}
             } catch (_) {}
         }
 
@@ -4070,7 +4091,7 @@ Permissions:
         let _bgActiveLoads = 0;
         const _bgQueue = [];
         function _processBgQueue() {
-            while (_bgActiveLoads < 2 && _bgQueue.length > 0) {
+            while (_bgActiveLoads < 3 && _bgQueue.length > 0) {
                 const next = _bgQueue.shift();
                 _bgActiveLoads++;
                 applyCardBackground(next.section).finally(() => {
@@ -4083,8 +4104,23 @@ Permissions:
             _bgQueue.push({ section });
             _processBgQueue();
         }
+        function isLowDataConnection() {
+            try {
+                const force = localStorage.getItem('forceBackgrounds');
+                if (force === '1') return false;
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (!conn) return false;
+                if (conn.saveData) return true;
+                const down = Number(conn.downlink || 0);
+                return down > 0 && down < 1.5; // treat <1.5Mbps as low
+            } catch (_) { return false; }
+        }
         function initBackgroundLazyLoad(sections) {
             try {
+                if (isLowDataConnection()) {
+                    // Skip heavy backgrounds on slow connections; keep gradient only
+                    return;
+                }
                 if (!('IntersectionObserver' in window)) {
                     // Fallback: schedule all
                     (sections || []).forEach(s => scheduleCardBackground(s));
@@ -4102,7 +4138,7 @@ Permissions:
                             obs.unobserve(entry.target);
                         }
                     });
-                }, { rootMargin: '200px 0px' });
+                }, { rootMargin: '300px 0px' });
                 (sections || []).forEach(s => {
                     const card = document.getElementById(`card-${s.id}`);
                     if (card) io.observe(card);
@@ -4824,6 +4860,13 @@ Permissions:
         .quick-actions h3 { margin: 0 0 4px 0; font-size: 1rem; }
         .quick-actions .action-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
         .quick-actions .action-btn { padding: 4px 8px; font-size: 0.85rem; line-height: 1.1; }
+    </style>
+    <style>
+        /* Ensure text remains visible; switch to white only when background image arrives */
+        .hub-card.bg-ready h3,
+        .hub-card.bg-ready p,
+        .hub-card.bg-ready span,
+        .hub-card.bg-ready i { color: #fff !important; }
     </style>
 </body>
 </html>
