@@ -4,7 +4,31 @@ class SectionManager {
         this.currentUser = this.getCurrentUser();
         this.currentSection = this.getCurrentSectionFromURL();
         this.currentTab = 'playbooks';
+        this.sectionConfig = this.loadSectionConfig();
         this.init();
+    }
+
+    // Content activity logger for section page (writes to localStorage)
+    logContentActivity(action, resourceType, title) {
+        try {
+            const username = this.currentUser?.username || 'Unknown';
+            const type = (resourceType === 'boxLinks') ? 'boxlink'
+                       : (resourceType === 'playbooks') ? 'playbook'
+                       : (resourceType === 'dashboards') ? 'dashboard'
+                       : String(resourceType || 'resource');
+            const entry = {
+                username,
+                action: action || 'updated',
+                section: this.currentSection || 'general',
+                type,
+                title: title || '',
+                timestamp: new Date().toISOString()
+            };
+            const list = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+            list.unshift(entry);
+            if (list.length > 1000) list.length = 1000;
+            localStorage.setItem('hubActivities', JSON.stringify(list));
+        } catch (_) {}
     }
 
     getCurrentUser() {
@@ -24,6 +48,7 @@ class SectionManager {
         this.sectionSessionStartMs = Date.now();
         this.loadSectionData();
         this.bindEvents();
+        this.renderDynamicUI();
         // Show content early to avoid spinner stuck on minor errors
         const loadingEl = document.getElementById('loadingScreen');
         const contentEl = document.getElementById('mainContent');
@@ -37,6 +62,51 @@ class SectionManager {
         // usage logging for resource clicks
         this.bindResourceClickLogging();
         this.setupSectionSessionLogging();
+    }
+
+    // Avoid UI hangs if optional DB promises never resolve
+    async _safeDbCall(promise, timeoutMs = 1500) {
+        try {
+            await Promise.race([
+                promise,
+                new Promise((resolve) => setTimeout(resolve, timeoutMs))
+            ]);
+        } catch (_) {
+            // Ignore DB errors/timeouts silently; localStorage is already updated
+        }
+    }
+
+    async _safeDbFetch(promise, timeoutMs = 1500, fallback = []) {
+        try {
+            return await Promise.race([
+                promise.catch(() => fallback),
+                new Promise((resolve) => setTimeout(() => resolve(fallback), timeoutMs))
+            ]);
+        } catch (_) {
+            return fallback;
+        }
+    }
+
+    // Avoid UI hangs if optional DB promises never resolve
+    async _safeDbCall(promise, timeoutMs = 1500) {
+        try {
+            await Promise.race([
+                promise,
+                new Promise((resolve) => setTimeout(resolve, timeoutMs))
+            ]);
+        } catch (_) {
+            // Ignore DB errors/timeouts silently; localStorage is already updated
+        }
+    }
+    normalizeUrl(possibleUrl) {
+        try {
+            const raw = String(possibleUrl || '').trim();
+            if (!raw) return raw;
+            if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+                return 'https://' + raw;
+            }
+            return raw;
+        } catch (_) { return possibleUrl; }
     }
 
     checkAccess() {
@@ -105,6 +175,33 @@ class SectionManager {
             introEl.textContent = intro;
             introEl.style.display = intro ? 'block' : 'none';
         }
+
+        // Apply persistent background image per section
+        try {
+            const key = 'sectionBackgrounds';
+            const raw = localStorage.getItem(key);
+            const map = raw ? JSON.parse(raw) : {};
+            let img = map[this.currentSection];
+            if (!img) {
+                // Choose deterministically if hub mapping is missing
+                const list = [
+                    'background-pic/132169_L.png','background-pic/132170_L.png','background-pic/132173_K.png','background-pic/135253_L.png',
+                    'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                    'background-pic/162062_L.png','background-pic/164057_K.png','background-pic/166799_K.png','background-pic/168817_L.png',
+                    'background-pic/171327_Y.png','background-pic/537081_L.png','background-pic/537082_K.png','background-pic/560846_L.png',
+                    'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
+                ];
+                const idx = Math.abs(this._hash(this.currentSection)) % list.length;
+                img = list[idx];
+            }
+            const container = document.querySelector('.container');
+            if (container && img) {
+                container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.90), rgba(255,255,255,0.90)), url('${img}')`;
+                container.style.backgroundSize = 'cover';
+                container.style.backgroundPosition = 'center';
+                container.style.borderRadius = '12px';
+            }
+        } catch (_) {}
     }
 
     // Normalize FA icon class (simple copy from index page)
@@ -119,6 +216,10 @@ class SectionManager {
             }
         }
         return c;
+    }
+
+    _hash(str) {
+        let h = 0; for (let i = 0; i < str.length; i++) { h = (h << 5) - h + str.charCodeAt(i); h |= 0; } return h;
     }
 
     // Add session validation on page load
@@ -149,28 +250,34 @@ class SectionManager {
     bindEvents() {
         // Tab switching
         window.switchTab = (tabName) => this.switchTab(tabName);
-        
+        // Customize
+        window.customizeSection = () => this.openCustomizeModal();
         // Search and filter
         const searchInput = document.getElementById('searchInput');
         const categoryFilter = document.getElementById('categoryFilter');
-        
         if (searchInput) {
             searchInput.addEventListener('input', () => this.filterResources());
         }
-        
         if (categoryFilter) {
             categoryFilter.addEventListener('change', () => this.filterResources());
         }
-        
         // Add resource
         window.addResource = (type) => this.addResource(type);
-        
         // Edit and delete resources
         window.editResource = (type, id) => this.editResource(type, id);
         window.deleteResource = (type, id) => this.deleteResource(type, id);
-        
         // Back to hub
         window.goBackToHub = () => this.goBackToHub();
+        // Live update section config across tabs/windows
+        window.addEventListener('storage', (e) => {
+            try {
+                if (e && e.key === `section_config_${this.currentSection}`) {
+                    this.sectionConfig = this.loadSectionConfig();
+                    this.renderDynamicUI();
+                    this.renderCurrentTab();
+                }
+            } catch (_) {}
+        });
     }
 
     setupSectionSessionLogging() {
@@ -285,33 +392,70 @@ class SectionManager {
         const storageType = this.mapToStorageType(type);
         let dbResources = [];
         try {
-            if (window.hubDatabase && hubDatabase.getResourcesByType) {
-                dbResources = await hubDatabase.getResourcesByType(this.currentSection, storageType) || [];
+            if (window.hubDatabase && hubDatabase.getResourcesByType &&
+                (storageType === 'playbooks' || storageType === 'boxLinks' || storageType === 'dashboards')) {
+                dbResources = await this._safeDbFetch(
+                    hubDatabase.getResourcesByType(this.currentSection, storageType),
+                    1500,
+                    []
+                );
             }
         } catch (error) {
             console.warn('DB not ready, using localStorage fallback');
         }
 
-        // LocalStorage fallback/merge from both per-section and legacy informationHub
-        const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-        const lsSection = (sectionData[storageType] || []).map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
+        // LocalStorage: support defaults + custom types under section_<id>.custom[storageType]
+        const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
+        const custom = sectionData.custom || {};
+        const lsArray = (sectionData[storageType] || custom[storageType] || []);
+        const lsSection = lsArray.map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
 
         const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-        const hubSection = hubData[this.currentSection] || { playbooks: [], boxLinks: [], dashboards: [] };
-        const lsHub = (hubSection[storageType] || []).map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
+        const hubSection = hubData[this.currentSection] || { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
+        const lsHubArray = (hubSection[storageType] || (hubSection.custom || {})[storageType] || []);
+        const lsHub = lsHubArray.map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
 
         const lsResources = [...lsHub, ...lsSection];
 
-        // Merge by id, prefer DB version
+        // Merge by id, prefer the most recently updated/created item
         const byId = new Map();
-        lsResources.forEach(r => byId.set(r.id, r));
-        dbResources.forEach(r => byId.set(r.id, r));
+        const consider = (candidate) => {
+            if (!candidate || candidate.id === undefined || candidate.id === null) return;
+            const key = String(candidate.id);
+            const existing = byId.get(key);
+            if (!existing) {
+                byId.set(key, candidate);
+                return;
+            }
+            const tExisting = Date.parse(existing.updatedAt || existing.createdAt || 0) || 0;
+            const tCandidate = Date.parse(candidate.updatedAt || candidate.createdAt || 0) || 0;
+            byId.set(key, tCandidate >= tExisting ? candidate : existing);
+        };
+        lsResources.forEach(consider);
+        dbResources.forEach(consider);
+        return Array.from(byId.values());
+    }
+
+    // Local-only fast resource fetch (no DB calls)
+    async getResourcesLocalOnly(type) {
+        const storageType = this.mapToStorageType(type);
+        const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+        const lsSection = (sectionData[storageType] || []).map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
+        const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
+        const hubSection = hubData[this.currentSection] || { playbooks: [], boxLinks: [], dashboards: [] };
+        const lsHub = (hubSection[storageType] || []).map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
+        const byId = new Map();
+        [...lsHub, ...lsSection].forEach(r => {
+            if (r && r.id !== undefined && r.id !== null) byId.set(String(r.id), r);
+        });
         return Array.from(byId.values());
     }
 
     async getSectionData() {
         try {
-            const section = await hubDatabase.getSection(this.currentSection);
+            const section = window.hubDatabase && hubDatabase.getSection
+                ? await this._safeDbFetch(hubDatabase.getSection(this.currentSection), 1500, null)
+                : null;
             return section ? section.data : { playbooks: [], boxLinks: [], dashboards: [] };
         } catch (error) {
             console.error('Error loading section data:', error);
@@ -400,11 +544,14 @@ class SectionManager {
         const categoryFilter = document.getElementById('categoryFilter')?.value || '';
 
         return resources.filter(resource => {
-            const matchesSearch = !searchTerm || 
-                resource.title.toLowerCase().includes(searchTerm) ||
-                resource.description.toLowerCase().includes(searchTerm) ||
-                (resource.tags && resource.tags.some(tag => tag.toLowerCase().includes(searchTerm))) ||
-                resource.url.toLowerCase().includes(searchTerm);
+            const title = (resource.title || '').toLowerCase();
+            const description = (resource.description || '').toLowerCase();
+            const url = (resource.url || '').toLowerCase();
+            const matchesSearch = !searchTerm ||
+                title.includes(searchTerm) ||
+                description.includes(searchTerm) ||
+                (resource.tags && resource.tags.some(tag => String(tag).toLowerCase().includes(searchTerm))) ||
+                url.includes(searchTerm);
 
             const matchesCategory = !categoryFilter || resource.category === categoryFilter;
 
@@ -441,7 +588,10 @@ class SectionManager {
 
     isResourceOwner(resource) {
         if (!this.currentUser || !resource) return false;
-        return String(resource.userId || '') === String(this.currentUser.id || '');
+        // Treat legacy resources without userId as editable by section editors
+        const ownerId = resource.userId;
+        if (ownerId === undefined || ownerId === null || ownerId === '' || ownerId === 0) return true;
+        return String(ownerId) === String(this.currentUser.id || '');
     }
 
     isAdmin() {
@@ -469,7 +619,7 @@ class SectionManager {
                     </div>
                     <div class="form-group">
                         <label for="resourceUrl">URL *</label>
-                        <input type="url" id="resourceUrl" name="url" required>
+                        <input type="text" id="resourceUrl" name="url" required>
                     </div>
                     <div class="form-group">
                         <label for="resourceCategory">Category</label>
@@ -495,10 +645,12 @@ class SectionManager {
 
         // Handle form submission
         const form = modal.querySelector('#resourceForm');
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            this.saveResource(type, form);
-            modal.remove();
+            const success = await this.saveResource(type, form);
+            if (success) {
+                modal.remove();
+            }
         });
 
         return modal;
@@ -508,61 +660,71 @@ class SectionManager {
         const formData = new FormData(form);
         const resource = {
             id: Date.now().toString(),
-            title: formData.get('title'),
+            title: String(formData.get('title') || '').trim(),
             description: formData.get('description') || '',
-            url: formData.get('url'),
+            url: this.normalizeUrl(formData.get('url')),
             category: formData.get('category'),
             tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            userId: this.currentUser?.id || 0
         };
 
         // Validate URL
         if (!this.isValidUrl(resource.url)) {
             this.showMessage('Please enter a valid URL', 'error');
-            return;
+            return false;
         }
 
         await this.addResourceToSection(type, resource);
+        // Log content creation
+        try { this.logContentActivity('created', this.mapToStorageType(type), resource.title); } catch(_) {}
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} added successfully!`, 'success');
+        return true;
     }
 
     async addResourceToSection(type, resource) {
         try {
-            // Get existing section data
-            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-            
-            // Add the new resource to the appropriate array
+            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
             const resourceType = this.mapToStorageType(type);
-            if (!sectionData[resourceType]) {
-                sectionData[resourceType] = [];
+            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
+                if (!sectionData[resourceType]) sectionData[resourceType] = [];
+                sectionData[resourceType].push(resource);
+            } else {
+                if (!sectionData.custom) sectionData.custom = {};
+                if (!sectionData.custom[resourceType]) sectionData.custom[resourceType] = [];
+                sectionData.custom[resourceType].push(resource);
             }
-            sectionData[resourceType].push(resource);
-            
-            // Save back to localStorage
             localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            
-            // Also save to the main hub format for compatibility
+            // Signal hub to refresh
+            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+
+            // Compatibility hubData
             const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
             if (!hubData[this.currentSection]) {
-                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [] };
+                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
             }
-            if (!hubData[this.currentSection][resourceType]) {
-                hubData[this.currentSection][resourceType] = [];
+            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
+                if (!hubData[this.currentSection][resourceType]) hubData[this.currentSection][resourceType] = [];
+                hubData[this.currentSection][resourceType].push(resource);
+            } else {
+                if (!hubData[this.currentSection].custom) hubData[this.currentSection].custom = {};
+                if (!hubData[this.currentSection].custom[resourceType]) hubData[this.currentSection].custom[resourceType] = [];
+                hubData[this.currentSection].custom[resourceType].push(resource);
             }
-            hubData[this.currentSection][resourceType].push(resource);
             localStorage.setItem('informationHub', JSON.stringify(hubData));
-            
-            // Persist to IndexedDB so it shows up in queries
-            if (window.hubDatabase && hubDatabase.saveResource) {
-                await hubDatabase.saveResource({
+            // Signal hub to refresh
+            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+
+            if (window.hubDatabase && hubDatabase.saveResource &&
+                (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
+                this._safeDbCall(hubDatabase.saveResource({
                     ...resource,
                     sectionId: this.currentSection,
                     type: resourceType,
                     userId: this.currentUser?.id || 0
-                });
+                }));
             }
-            
             console.log('Resource saved successfully');
         } catch (error) {
             console.error('Error saving resource:', error);
@@ -576,8 +738,9 @@ class SectionManager {
             return;
         }
 
+        // Use merged source (DB + local) so DB-only items are editable
         const resources = await this.getResources(type);
-        const resource = resources.find(r => r.id === id);
+        const resource = resources.find(r => String(r.id) === String(id));
         if (!resource) return;
 
         if (!this.isAdmin() && !this.isResourceOwner(resource)) {
@@ -593,6 +756,7 @@ class SectionManager {
     createEditModal(type, resource) {
         const modal = document.createElement('div');
         modal.className = 'modal';
+        const tagsString = Array.isArray(resource.tags) ? resource.tags.join(', ') : '';
         modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
@@ -600,6 +764,9 @@ class SectionManager {
                     <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 </div>
                 <form id="editResourceForm">
+                    <input type="hidden" name="__origId" value="${this.escapeHtml(resource.id || '')}">
+                    <input type="hidden" name="__origTitle" value="${this.escapeHtml(resource.title || '')}">
+                    <input type="hidden" name="__origUrl" value="${this.escapeHtml(resource.url || '')}">
                     <div class="form-group">
                         <label for="editResourceTitle">Title *</label>
                         <input type="text" id="editResourceTitle" name="title" value="${this.escapeHtml(resource.title)}" required>
@@ -610,7 +777,7 @@ class SectionManager {
                     </div>
                     <div class="form-group">
                         <label for="editResourceUrl">URL *</label>
-                        <input type="url" id="editResourceUrl" name="url" value="${this.escapeHtml(resource.url)}" required>
+                        <input type="text" id="editResourceUrl" name="url" value="${this.escapeHtml(resource.url || '')}" required>
                     </div>
                     <div class="form-group">
                         <label for="editResourceCategory">Category</label>
@@ -624,11 +791,11 @@ class SectionManager {
                     </div>
                     <div class="form-group">
                         <label for="editResourceTags">Tags (comma-separated)</label>
-                        <input type="text" id="editResourceTags" name="tags" value="${this.escapeHtml(resource.tags.join(', '))}" placeholder="e.g., analysis, framework, financial">
+                        <input type="text" id="editResourceTags" name="tags" value="${this.escapeHtml(tagsString)}" placeholder="e.g., analysis, framework, financial">
                     </div>
                     <div class="form-actions">
                         <button type="button" onclick="this.closest('.modal').remove()" class="btn btn-secondary">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Resource</button>
+                        <button type="submit" class="btn btn-primary" onclick="(function(btn){var f=btn.closest('form'); if(!f) return; if(typeof f.requestSubmit==='function'){ f.requestSubmit(); } else { f.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true})); }})(this)">Update Resource</button>
                     </div>
                 </form>
             </div>
@@ -636,10 +803,48 @@ class SectionManager {
 
         // Handle form submission
         const form = modal.querySelector('#editResourceForm');
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            this.updateResource(type, id, form);
-            modal.remove();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const cancelBtn = form.querySelector('.btn.btn-secondary');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Updating...'; }
+            if (cancelBtn) cancelBtn.disabled = true;
+            let finished = false;
+            const reenable = () => {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update Resource'; }
+                if (cancelBtn) cancelBtn.disabled = false;
+            };
+            const fallback = setTimeout(() => {
+                if (!finished) {
+                    reenable();
+                    this.showMessage('Update is taking longer than expected. Please try again.', 'error');
+                }
+            }, 2500);
+            try {
+                const success = await this.updateResource(type, resource.id, form).catch(err => { this.showMessage(`Update failed: ${err?.message || err}`, 'error'); return false; });
+                finished = true;
+                clearTimeout(fallback);
+                reenable();
+                if (success) {
+                    try {
+                        const hdr = modal.querySelector('.modal-header h2');
+                        if (hdr) {
+                            const note = document.createElement('span');
+                            note.style.fontSize = '0.9rem';
+                            note.style.marginLeft = '10px';
+                            note.textContent = '✓ Saved';
+                            hdr.appendChild(note);
+                        }
+                    } catch (_) {}
+                    setTimeout(() => modal.remove(), 400);
+                }
+            } finally {
+                // Ensure buttons are restored in any case
+                if (!finished) {
+                    clearTimeout(fallback);
+                    reenable();
+                }
+            }
         });
 
         return modal;
@@ -647,67 +852,102 @@ class SectionManager {
 
     async updateResource(type, id, form) {
         const formData = new FormData(form);
-        const existingResources = await this.getResources(type);
-        const original = existingResources.find(r => r.id === id) || {};
+        const existingResources = await this.getResourcesLocalOnly(type);
+        // Prefer hidden original fields to avoid id mismatch
+        const origId = formData.get('__origId');
+        const origTitle = String(formData.get('__origTitle') || '');
+        const origUrl = String(formData.get('__origUrl') || '');
+        let original = existingResources.find(r => String(r.id) === String(origId)) || {};
+        if (!original || !original.id) {
+            original = existingResources.find(r => `${r.title || ''}|${r.url || ''}` === `${origTitle}|${origUrl}`) || {};
+        }
         const updatedResource = {
-            id: id,
-            title: formData.get('title'),
+            id: original.id || id,
+            title: String(formData.get('title') || '').trim(),
             description: formData.get('description') || '',
-            url: formData.get('url'),
+            url: this.normalizeUrl(formData.get('url')),
             category: formData.get('category'),
             tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag) : [],
             createdAt: original.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            userId: original.userId || this.currentUser?.id || 0
         };
 
         // Validate URL
         if (!this.isValidUrl(updatedResource.url)) {
             this.showMessage('Please enter a valid URL', 'error');
-            return;
+            return false;
         }
 
-        await this.updateResourceInSection(type, id, updatedResource);
+        await this.updateResourceInSection(type, id, updatedResource, original);
+        // Log content update
+        try { this.logContentActivity('updated', this.mapToStorageType(type), updatedResource.title); } catch(_) {}
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} updated successfully!`, 'success');
+        return true;
     }
 
-    async updateResourceInSection(type, id, updatedResource) {
+    async updateResourceInSection(type, id, updatedResource, original) {
         try {
-            // Get existing section data
-            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
             const resourceType = this.mapToStorageType(type);
-            
-            // Find and update the resource
-            if (sectionData[resourceType]) {
-                const index = sectionData[resourceType].findIndex(r => r.id === id);
-                if (index !== -1) {
-                    sectionData[resourceType][index] = updatedResource;
+
+            const updateInArray = (arr) => {
+                if (!arr) return;
+                const matchById = (r) => String(r.id) === String(id);
+                let index = arr.findIndex(matchById);
+                if (index === -1 && original) {
+                    const origKey = `${original.title || ''}|${original.url || ''}`;
+                    index = arr.findIndex(r => `${r.title || ''}|${r.url || ''}` === origKey);
                 }
+                if (index !== -1) arr[index] = updatedResource; else arr.push(updatedResource);
+            };
+
+            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
+                updateInArray(sectionData[resourceType]);
+            } else {
+                if (!sectionData.custom) sectionData.custom = {};
+                if (!sectionData.custom[resourceType]) sectionData.custom[resourceType] = [];
+                updateInArray(sectionData.custom[resourceType]);
             }
-            
-            // Save back to localStorage
             localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            
-            // Also update in the main hub format
+            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+
             const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            if (hubData[this.currentSection] && hubData[this.currentSection][resourceType]) {
-                const hubIndex = hubData[this.currentSection][resourceType].findIndex(r => r.id === id);
-                if (hubIndex !== -1) {
-                    hubData[this.currentSection][resourceType][hubIndex] = updatedResource;
+            if (!hubData[this.currentSection]) {
+                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
+            }
+            const updateHubArray = (arr) => {
+                if (!arr) return;
+                const matchByIdHub = (r) => String(r.id) === String(id);
+                let hubIndex = arr.findIndex(matchByIdHub);
+                if (hubIndex === -1 && original) {
+                    const origKey = `${original.title || ''}|${original.url || ''}`;
+                    hubIndex = arr.findIndex(r => `${r.title || ''}|${r.url || ''}` === origKey);
                 }
+                if (hubIndex !== -1) arr[hubIndex] = updatedResource; else arr.push(updatedResource);
+            };
+            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
+                if (!hubData[this.currentSection][resourceType]) hubData[this.currentSection][resourceType] = [];
+                updateHubArray(hubData[this.currentSection][resourceType]);
+            } else {
+                if (!hubData[this.currentSection].custom) hubData[this.currentSection].custom = {};
+                if (!hubData[this.currentSection].custom[resourceType]) hubData[this.currentSection].custom[resourceType] = [];
+                updateHubArray(hubData[this.currentSection].custom[resourceType]);
             }
             localStorage.setItem('informationHub', JSON.stringify(hubData));
-            
-            // Persist update to IndexedDB
-            if (window.hubDatabase && hubDatabase.saveResource) {
-                await hubDatabase.saveResource({
+            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+
+            if (window.hubDatabase && hubDatabase.saveResource &&
+                (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
+                this._safeDbCall(hubDatabase.saveResource({
                     ...updatedResource,
                     sectionId: this.currentSection,
                     type: resourceType,
                     userId: this.currentUser?.id || 0
-                });
+                }));
             }
-            
+
             console.log('Resource updated successfully');
         } catch (error) {
             console.error('Error updating resource:', error);
@@ -724,43 +964,56 @@ class SectionManager {
         if (!confirm('Are you sure you want to delete this resource?')) return;
 
         const resources = await this.getResources(type);
-        const resource = resources.find(r => r.id === id);
+        const resource = resources.find(r => String(r.id) === String(id));
         if (!this.isAdmin() && !this.isResourceOwner(resource)) {
             this.showMessage('You can only delete resources assigned to you', 'error');
             return;
         }
 
         await this.removeResourceFromSection(type, id);
+        // Log content deletion (use original resource title if available)
+        try { this.logContentActivity('deleted', this.mapToStorageType(type), resource?.title || ''); } catch(_) {}
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} deleted successfully!`, 'success');
     }
 
     async removeResourceFromSection(type, id) {
         try {
-            // Get existing section data
-            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
             const resourceType = this.mapToStorageType(type);
-            
-            // Remove the resource
-            if (sectionData[resourceType]) {
-                sectionData[resourceType] = sectionData[resourceType].filter(r => r.id !== id);
+
+            const removeFromArray = (arr) => {
+                if (!arr) return;
+                return arr.filter(r => String(r.id) !== String(id));
+            };
+
+            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
+                sectionData[resourceType] = removeFromArray(sectionData[resourceType]);
+            } else {
+                if (!sectionData.custom) sectionData.custom = {};
+                sectionData.custom[resourceType] = removeFromArray(sectionData.custom[resourceType] || []);
             }
-            
-            // Save back to localStorage
             localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            
-            // Also remove from the main hub format
+            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+
             const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            if (hubData[this.currentSection] && hubData[this.currentSection][resourceType]) {
-                hubData[this.currentSection][resourceType] = hubData[this.currentSection][resourceType].filter(r => r.id !== id);
+            if (!hubData[this.currentSection]) {
+                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
+            }
+            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
+                hubData[this.currentSection][resourceType] = removeFromArray(hubData[this.currentSection][resourceType]);
+            } else {
+                if (!hubData[this.currentSection].custom) hubData[this.currentSection].custom = {};
+                hubData[this.currentSection].custom[resourceType] = removeFromArray(hubData[this.currentSection].custom[resourceType] || []);
             }
             localStorage.setItem('informationHub', JSON.stringify(hubData));
-            
-            // Remove from IndexedDB
-            if (window.hubDatabase && hubDatabase.deleteResource) {
+            try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
+
+            if (window.hubDatabase && hubDatabase.deleteResource &&
+                (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
                 await hubDatabase.deleteResource(id);
             }
-            
+
             console.log('Resource deleted successfully');
         } catch (error) {
             console.error('Error deleting resource:', error);
@@ -771,6 +1024,7 @@ class SectionManager {
     // Utility Functions
     mapToStorageType(type) {
         const raw = String(type || '').toLowerCase();
+        // For default known types
         if (raw.includes('playbook')) return 'playbooks';
         if (raw.includes('box')) return 'boxLinks';
         if (raw.includes('dash')) return 'dashboards';
@@ -778,7 +1032,8 @@ class SectionManager {
             if (raw === 'boxlinks') return 'boxLinks';
             return raw;
         }
-        return 'playbooks';
+        // For custom types, store using the id as-is under a generic bucket
+        return raw;
     }
     isValidUrl(string) {
         try {
@@ -816,11 +1071,129 @@ class SectionManager {
     }
 
     goBackToHub() {
-        // Update the main hub statistics before going back
-        if (window.parent && window.parent.updateSectionStats) {
-            window.parent.updateSectionStats();
-        }
+        // Signal hub to refresh stats immediately on return
+        try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
         window.location.href = 'index.html';
+    }
+
+    loadSectionConfig() {
+        try {
+            const key = `section_config_${this.currentSection}`;
+            const raw = localStorage.getItem(key);
+            if (raw) return JSON.parse(raw);
+        } catch (_) {}
+        // Default config matching existing tabs/categories
+        return {
+            types: [
+                { id: 'playbooks', name: 'Playbooks', icon: 'fas fa-book' },
+                { id: 'box-links', name: 'Box Links', icon: 'fas fa-link' },
+                { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' }
+            ],
+            categories: ['process','procedure','guide','template','checklist']
+        };
+    }
+
+    saveSectionConfig(cfg) {
+        try {
+            const key = `section_config_${this.currentSection}`;
+            localStorage.setItem(key, JSON.stringify(cfg));
+            this.sectionConfig = cfg;
+        } catch (_) {}
+    }
+
+    renderDynamicUI() {
+        // Customize button visibility
+        const customizeBtn = document.getElementById('customizeBtn');
+        if (customizeBtn) {
+            customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
+        }
+        // Render tabs
+        const tabs = document.getElementById('navTabs');
+        if (tabs) {
+            tabs.innerHTML = this.sectionConfig.types.map((t, idx) => {
+                const active = (idx === 0 ? 'active' : '');
+                return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
+                    <i class="${this.normalizeIconClass(t.icon || '')}"></i> ${this.escapeHtml(t.name || t.id)}
+                </div>`;
+            }).join('');
+            // set default current tab to first type id
+            if (this.sectionConfig.types[0]) {
+                this.currentTab = this.sectionConfig.types[0].id;
+            }
+        }
+        // Render category filter
+        const catSel = document.getElementById('categoryFilter');
+        if (catSel) {
+            const options = ['<option value="">All Categories</option>'].concat(
+                (this.sectionConfig.categories || []).map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`) 
+            );
+            catSel.innerHTML = options.join('');
+        }
+        // Render content sections containers
+        const wrap = document.getElementById('dynamic-sections');
+        if (wrap) {
+            wrap.innerHTML = this.sectionConfig.types.map((t, idx) => {
+                const active = (idx === 0 ? 'active' : '');
+                return `<div class="content-section ${active}" id="${t.id}-section">
+                    <button class="add-resource-btn" onclick="addResource('${t.id}')" style="display: none;">
+                        <i class="fas fa-plus"></i> Add ${this.escapeHtml(t.name || t.id)}
+                    </button>
+                    <div class="resource-grid" id="${t.id}-grid"></div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    openCustomizeModal() {
+        if (!this.isAdmin()) {
+            this.showMessage('You do not have permission to customize', 'error');
+            return;
+        }
+        const cfg = this.sectionConfig;
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        const typesJson = this.escapeHtml(JSON.stringify(cfg.types, null, 2));
+        const cats = this.escapeHtml((cfg.categories || []).join(', '));
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:720px;">
+                <div class="modal-header">
+                    <h2>Customize Section</h2>
+                    <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p style="margin:8px 0 6px 0;">Resource Types (JSON array of { id, name, icon }):</p>
+                    <textarea id="cfgTypes" rows="10" style="width:100%; font-family:monospace;">${typesJson}</textarea>
+                    <p style="margin:12px 0 6px 0;">Categories (comma-separated):</p>
+                    <input id="cfgCats" type="text" style="width:100%;" value="${cats}" />
+                </div>
+                <div class="form-actions" style="padding:12px 16px 18px 16px;">
+                    <button type="button" class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveCfgBtn">Save</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.style.display = 'block';
+        modal.querySelector('#saveCfgBtn').addEventListener('click', () => {
+            try {
+                const types = JSON.parse(modal.querySelector('#cfgTypes').value || '[]');
+                const catsRaw = modal.querySelector('#cfgCats').value || '';
+                const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
+                if (!Array.isArray(types) || types.length === 0) {
+                    this.showMessage('Provide at least one type', 'error');
+                    return;
+                }
+                const validTypes = types.map(t => ({ id: String(t.id || '').trim() || 'type', name: String(t.name || t.id || 'Type').trim(), icon: String(t.icon || '').trim() }));
+                const cfgNew = { types: validTypes, categories };
+                this.saveSectionConfig(cfgNew);
+                this.renderDynamicUI();
+                this.renderCurrentTab();
+                this.showMessage('Section customized', 'success');
+                modal.remove();
+            } catch (e) {
+                this.showMessage('Invalid JSON for types', 'error');
+            }
+        });
     }
 }
 

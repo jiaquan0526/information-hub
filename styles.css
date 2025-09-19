@@ -126,14 +126,14 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 5px;
-    background: linear-gradient(90deg, #4CAF50, #45a049, #2E7D32);
+    height: 0; /* hide green top bar */
+    background: transparent;
 }
 
 .hub-card:hover {
     transform: translateY(-8px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-    border-color: #4CAF50;
+    border-color: transparent; /* remove green outline on hover */
 }
 
 .card-icon {
@@ -552,6 +552,9 @@ body {
     width: 90%;
     max-width: 600px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     animation: modalSlideIn 0.3s ease;
 }
 
@@ -597,6 +600,8 @@ body {
 /* Form Styles */
 form {
     padding: 30px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 .form-group {
@@ -639,8 +644,11 @@ form {
     gap: 15px;
     justify-content: flex-end;
     margin-top: 30px;
-    padding-top: 20px;
+    padding: 14px 0 0 0;
     border-top: 1px solid #eee;
+    position: sticky;
+    bottom: 0;
+    background: #fff;
 }
 
 .btn {

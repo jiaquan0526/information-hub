@@ -6,6 +6,9 @@
     <title>Information Hub - Central Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" href="logo.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="logo.png">
 </head>
 <body>
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
@@ -42,121 +45,16 @@
                     </div>
                 </div>
             </div>
+            <div id="infoBar" class="info-bar" style="display:none;">
+                <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                <div class="info-marquee">
+                    <div id="infoBarTrack" class="info-marquee-track"></div>
+                </div>
+                <a href="#" id="infoBarViewAll" class="info-view-all" onclick="openAuditFromInfoBar(event)">View all</a>
+            </div>
         </header>
 
-        <div class="hub-grid">
-            <!-- Costing Section -->
-            <div class="hub-card" onclick="navigateToSection('costing')">
-                <div class="card-icon">
-                    <i class="fas fa-calculator"></i>
-                </div>
-                <h3>Costing</h3>
-                <p>Financial analysis, cost management, and budgeting resources</p>
-                <div class="card-stats" id="costing-stats">
-                    <span><i class="fas fa-book"></i> <span id="costing-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="costing-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="costing-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- Supply Planning Section -->
-            <div class="hub-card" onclick="navigateToSection('supply-planning')">
-                <div class="card-icon">
-                    <i class="fas fa-truck"></i>
-                </div>
-                <h3>Supply Planning</h3>
-                <p>Supply chain management, inventory planning, and logistics</p>
-                <div class="card-stats" id="supply-planning-stats">
-                    <span><i class="fas fa-book"></i> <span id="supply-planning-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="supply-planning-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="supply-planning-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- Operations Section -->
-            <div class="hub-card" onclick="navigateToSection('operations')">
-                <div class="card-icon">
-                    <i class="fas fa-cogs"></i>
-                </div>
-                <h3>Operations</h3>
-                <p>Operational procedures, workflows, and process management</p>
-                <div class="card-stats" id="operations-stats">
-                    <span><i class="fas fa-book"></i> <span id="operations-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="operations-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="operations-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- Quality Management Section -->
-            <div class="hub-card" onclick="navigateToSection('quality')">
-                <div class="card-icon">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <h3>Quality Management</h3>
-                <p>Quality control, assurance, and compliance procedures</p>
-                <div class="card-stats" id="quality-stats">
-                    <span><i class="fas fa-book"></i> <span id="quality-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="quality-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="quality-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- Human Resources Section -->
-            <div class="hub-card" onclick="navigateToSection('hr')">
-                <div class="card-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <h3>Human Resources</h3>
-                <p>HR policies, procedures, and employee management resources</p>
-                <div class="card-stats" id="hr-stats">
-                    <span><i class="fas fa-book"></i> <span id="hr-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="hr-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="hr-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- IT & Technology Section -->
-            <div class="hub-card" onclick="navigateToSection('it')">
-                <div class="card-icon">
-                    <i class="fas fa-laptop-code"></i>
-                </div>
-                <h3>IT & Technology</h3>
-                <p>Technical documentation, system guides, and IT procedures</p>
-                <div class="card-stats" id="it-stats">
-                    <span><i class="fas fa-book"></i> <span id="it-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="it-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="it-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- Sales & Marketing Section -->
-            <div class="hub-card" onclick="navigateToSection('sales')">
-                <div class="card-icon">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-                <h3>Sales & Marketing</h3>
-                <p>Sales processes, marketing strategies, and customer management</p>
-                <div class="card-stats" id="sales-stats">
-                    <span><i class="fas fa-book"></i> <span id="sales-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="sales-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="sales-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-
-            <!-- Compliance & Legal Section -->
-            <div class="hub-card" onclick="navigateToSection('compliance')">
-                <div class="card-icon">
-                    <i class="fas fa-gavel"></i>
-                </div>
-                <h3>Compliance & Legal</h3>
-                <p>Regulatory compliance, legal procedures, and policy management</p>
-                <div class="card-stats" id="compliance-stats">
-                    <span><i class="fas fa-book"></i> <span id="compliance-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="compliance-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="compliance-dashboards">0</span> Dashboards</span>
-                </div>
-            </div>
-        </div>
+        <div class="hub-grid"></div>
 
         <div class="quick-actions">
             <h3>Quick Actions</h3>
@@ -164,8 +62,14 @@
                 <button class="action-btn" id="adminPanelBtn" onclick="openAdminPanel()">
                     <i class="fas fa-cog"></i> User Management
                 </button>
+                <button class="action-btn" onclick="openAuditFromInfoBar(event)">
+                    <i class="fas fa-clock"></i> Updated Resources
+                </button>
                 <button class="action-btn" id="exportBtn" onclick="exportAllData()" style="display:none;">
                     <i class="fas fa-download"></i> Export Data
+                </button>
+                <button class="action-btn" id="reshuffleBackgroundsBtn" onclick="reshuffleBackgrounds()" style="display:none;">
+                    <i class="fas fa-images"></i> Reshuffle Backgrounds
                 </button>
             </div>
         </div>
@@ -420,14 +324,6 @@
                                 <p>Export data for a specific section</p>
                                 <select id="sectionExportSelect">
                                     <option value="">Select Section</option>
-                                    <option value="costing">Costing</option>
-                                    <option value="supply-planning">Supply Planning</option>
-                                    <option value="operations">Operations</option>
-                                    <option value="quality">Quality Management</option>
-                                    <option value="hr">Human Resources</option>
-                                    <option value="it">IT & Technology</option>
-                                    <option value="sales">Sales & Marketing</option>
-                                    <option value="compliance">Compliance & Legal</option>
                                 </select>
                                 <button class="btn btn-secondary" onclick="exportSectionData()">
                                     <i class="fas fa-download"></i> Export Section
@@ -462,13 +358,15 @@
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
         // Check authentication before loading the hub
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             try {
             const session = localStorage.getItem('hubSession');
             if (!session) {
                 window.location.href = 'auth.html';
                 return;
             }
+            try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+            try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
             
                 // Hide loading screen and show main content FIRST
                 const loadingScreen = document.getElementById('loadingScreen');
@@ -484,6 +382,17 @@
                     console.log('Main content shown');
                 }
                 
+                // Ensure a minimal initial configuration if none exists
+                try {
+                    if (!localStorage.getItem('sectionOrder')) {
+                        const initialSections = [
+                            { id: 'example', name: 'Example', icon: 'fas fa-th-large', visible: true, order: 1, intro: 'Your first example section. Add more from the admin panel.' }
+                        ];
+                        localStorage.setItem('sectionOrder', JSON.stringify(initialSections));
+                    }
+                } catch (_) {}
+                // Try to load background image manifest (optional)
+                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                 // Rebuild hub cards dynamically from configuration
                 try { updateMainHubSections(); } catch (e) { console.warn('updateMainHubSections error', e); }
                 
@@ -514,8 +423,21 @@
                     if (currentSession) {
                         console.log('Auto-updating interface...');
                         updateUserInterface();
+                        try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+                        try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+                        try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
+                        try {
+                            if (localStorage.getItem('refreshHubNow') === '1') {
+                                localStorage.removeItem('refreshHubNow');
+                                updateSectionStats();
+                            }
+                        } catch(_) {}
                     }
                 }, 2000);
+                // Initialize info bar
+                try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+                try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+                try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
                 
             } catch (error) {
                 console.error('Error in DOMContentLoaded:', error);
@@ -542,7 +464,10 @@
                 const session = localStorage.getItem('hubSession');
                 if (session) {
                     console.log('Page became visible, updating user interface...');
-                    updateUserInterface();
+                    updateUserInterface(); try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+                    try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+                    try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
+                    try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
                 }
             }
         });
@@ -552,10 +477,66 @@
             const session = localStorage.getItem('hubSession');
             if (session) {
                 console.log('Window gained focus, updating user interface...');
-                updateUserInterface();
+                updateUserInterface(); try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+                try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
             }
         });
+
+        // Live refresh when section data changes in other tabs (e.g., Box Links rename)
+        window.addEventListener('storage', (e) => {
+            try {
+                if (!e) return;
+                const k = String(e.key || '');
+                if (k.startsWith('section_') || k === 'informationHub' || k === 'hubActivities') {
+                    console.log('Storage change detected:', k, '→ refreshing stats');
+                    updateUserInterface();
+                    updateSectionStats();
+                    try { rotateInfoBar(); } catch(_) {}
+                }
+                // Rebuild cards if per-section config changed to reflect label/name updates
+                if (k.startsWith('section_config_')) {
+                    console.log('Section config change detected:', k, '→ rebuilding hub cards');
+                    updateMainHubSections();
+                }
+            } catch (_) {}
+        });
         
+        // Helper: normalize resource type to buckets we display on cards
+        function normalizeResourceType(rawType) {
+            try {
+                const t = String(rawType || '').toLowerCase();
+                if (!t) return null;
+                if (t.includes('playbook')) return 'playbooks';
+                if (t.includes('boxlink') || t.includes('box link') || t.includes('box')) return 'boxLinks';
+                if (t.includes('dashboard')) return 'dashboards';
+            } catch (_) {}
+            return null;
+        }
+
+        // Canonicalization helpers to avoid double-counting across sources
+        function canonicalizeUrlForKey(url) {
+            try {
+                let raw = String(url || '').trim();
+                if (!raw) return '';
+                if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) raw = 'https://' + raw;
+                const u = new URL(raw);
+                // Lowercase host, remove trailing slash in pathname
+                const host = (u.host || '').toLowerCase();
+                const path = (u.pathname || '/').replace(/\/+$/, '');
+                const norm = `${u.protocol}//${host}${path}${u.search || ''}`;
+                return norm.toLowerCase();
+            } catch (_) {
+                return String(url || '').trim().toLowerCase();
+            }
+        }
+        function canonicalKeyForResource(r) {
+            const id = r && r.id !== undefined && r.id !== null ? String(r.id) : '';
+            if (id) return `id:${id}`;
+            const title = String(r?.title || '').trim().toLowerCase();
+            const urlKey = canonicalizeUrlForKey(r?.url);
+            return `t:${title}|u:${urlKey}`;
+        }
+
         // Function to update section statistics with real data (DB first, fallback to localStorage)
         async function updateSectionStats() {
             // Prefer dynamic sections from sectionOrder (visible ones)
@@ -572,62 +553,347 @@
             }
 
             const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
-            if (useDb) {
-                // Load counts from IndexedDB
-                await Promise.all(sections.map(async (sectionId) => {
-                    try {
-                        const all = await hubDatabase.getResourcesBySection(sectionId);
-                        const playbooks = all.filter(r => r.type === 'playbooks').length;
-                        const boxLinks = all.filter(r => r.type === 'boxLinks').length;
-                        const dashboards = all.filter(r => r.type === 'dashboards').length;
-                        const playbooksEl = document.getElementById(`${sectionId}-playbooks`);
-                        const boxLinksEl = document.getElementById(`${sectionId}-boxlinks`);
-                        const dashboardsEl = document.getElementById(`${sectionId}-dashboards`);
-                        if (playbooksEl) playbooksEl.textContent = playbooks;
-                        if (boxLinksEl) boxLinksEl.textContent = boxLinks;
-                        if (dashboardsEl) dashboardsEl.textContent = dashboards;
-                    } catch (_) {
-                        // Fallback per-section if DB query fails
-                        updateSectionStatsFallback(sectionId);
+            await Promise.all(sections.map(async (sectionId) => {
+                try {
+                    // Merge DB and both localStorage sources; de-duplicate by canonical key
+                    const byKey = new Map();
+                    const addList = (list, forcedBucket) => {
+                        (list || []).forEach(r => {
+                            const bucket = forcedBucket || normalizeResourceType(r?.type || r?.resourceType || r?.category);
+                            if (!bucket) return;
+                            const key = canonicalKeyForResource(r);
+                            if (!key) return;
+                            if (!byKey.has(key)) byKey.set(key, bucket);
+                        });
+                    };
+
+                    if (useDb) {
+                        try {
+                            const dbResources = await hubDatabase.getResourcesBySection(sectionId);
+                            addList(dbResources, null);
+                        } catch (_) {}
                     }
-                }));
-            } else {
-                // Fallback entirely to localStorage
-                sections.forEach(updateSectionStatsFallback);
-            }
+
+                    // LocalStorage per-section
+                    try {
+                        const sectionData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+                        addList(sectionData.playbooks, 'playbooks');
+                        addList(sectionData.boxLinks, 'boxLinks');
+                        addList(sectionData.dashboards, 'dashboards');
+                    } catch (_) {}
+
+                    // LocalStorage main hub format
+                    try {
+                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                        const s = hub[sectionId] || {};
+                        addList(s.playbooks, 'playbooks');
+                        addList(s.boxLinks, 'boxLinks');
+                        addList(s.dashboards, 'dashboards');
+                    } catch (_) {}
+
+                    let playbooks = 0, boxLinks = 0, dashboards = 0;
+                    byKey.forEach(bucket => {
+                        if (bucket === 'playbooks') playbooks++;
+                        else if (bucket === 'boxLinks') boxLinks++;
+                        else if (bucket === 'dashboards') dashboards++;
+                    });
+
+                    const playbooksEl = document.getElementById(`${sectionId}-playbooks`);
+                    const boxLinksEl = document.getElementById(`${sectionId}-boxlinks`);
+                    const dashboardsEl = document.getElementById(`${sectionId}-dashboards`);
+                    if (playbooksEl) playbooksEl.textContent = playbooks;
+                    if (boxLinksEl) boxLinksEl.textContent = boxLinks;
+                    if (dashboardsEl) dashboardsEl.textContent = dashboards;
+
+                    // Store last counts for lightweight change detection
+                    try {
+                        const prevKey = `section_counts_${sectionId}`;
+                        const prev = JSON.parse(localStorage.getItem(prevKey) || 'null');
+                        const current = { playbooks, boxLinks, dashboards };
+                        if (!prev || prev.playbooks !== playbooks || prev.boxLinks !== boxLinks || prev.dashboards !== dashboards) {
+                            localStorage.setItem(prevKey, JSON.stringify(current));
+                        }
+                    } catch(_) {}
+                } catch (_) {
+                    // Fallback per-section if any part fails
+                    updateSectionStatsFallback(sectionId);
+                }
+            }));
         }
 
         function updateSectionStatsFallback(section) {
-            let playbooks = 0, boxLinks = 0, dashboards = 0;
+            // LocalStorage-only union of per-section and main hub formats with de-duplication
             try {
-                // Prefer per-section storage
-                const raw = localStorage.getItem(`section_${section}`);
-                if (raw) {
-                    const data = JSON.parse(raw);
-                    playbooks = Array.isArray(data.playbooks) ? data.playbooks.length : 0;
-                    boxLinks = Array.isArray(data.boxLinks) ? data.boxLinks.length : 0;
-                    dashboards = Array.isArray(data.dashboards) ? data.dashboards.length : 0;
-                } else {
-                    // Legacy informationHub format
+                const byKey = new Map();
+                const addList = (list, forcedBucket) => {
+                    (list || []).forEach(r => {
+                        const bucket = forcedBucket || normalizeResourceType(r?.type || r?.resourceType || r?.category);
+                        if (!bucket) return;
+                        const key = canonicalKeyForResource(r);
+                        if (!key) return;
+                        if (!byKey.has(key)) byKey.set(key, bucket);
+                    });
+                };
+
+                // Per-section store
+                try {
+                    const data = JSON.parse(localStorage.getItem(`section_${section}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+                    addList(data.playbooks, 'playbooks');
+                    addList(data.boxLinks, 'boxLinks');
+                    addList(data.dashboards, 'dashboards');
+                } catch (_) {}
+
+                // Main hub format
+                try {
                     const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
                     const s = hub[section] || {};
-                    playbooks = Array.isArray(s.playbooks) ? s.playbooks.length : 0;
-                    boxLinks = Array.isArray(s.boxLinks) ? s.boxLinks.length : 0;
-                    dashboards = Array.isArray(s.dashboards) ? s.dashboards.length : 0;
-                }
+                    addList(s.playbooks, 'playbooks');
+                    addList(s.boxLinks, 'boxLinks');
+                    addList(s.dashboards, 'dashboards');
+                } catch (_) {}
+
+                let playbooks = 0, boxLinks = 0, dashboards = 0;
+                byKey.forEach(bucket => {
+                    if (bucket === 'playbooks') playbooks++;
+                    else if (bucket === 'boxLinks') boxLinks++;
+                    else if (bucket === 'dashboards') dashboards++;
+                });
+
+                const playbooksEl = document.getElementById(`${section}-playbooks`);
+                const boxLinksEl = document.getElementById(`${section}-boxlinks`);
+                const dashboardsEl = document.getElementById(`${section}-dashboards`);
+                if (playbooksEl) playbooksEl.textContent = playbooks;
+                if (boxLinksEl) boxLinksEl.textContent = boxLinks;
+                if (dashboardsEl) dashboardsEl.textContent = dashboards;
             } catch (_) {}
-            const playbooksEl = document.getElementById(`${section}-playbooks`);
-            const boxLinksEl = document.getElementById(`${section}-boxlinks`);
-            const dashboardsEl = document.getElementById(`${section}-dashboards`);
-            if (playbooksEl) playbooksEl.textContent = playbooks;
-            if (boxLinksEl) boxLinksEl.textContent = boxLinks;
-            if (dashboardsEl) dashboardsEl.textContent = dashboards;
         }
         
         // Simple test function
         window.testNavigation = function() {
             console.log('Test navigation called');
             alert('Navigation test - this should work!');
+        };
+        
+        // Centralized content activity logger
+        window.recordContentActivity = function({ action, section, type, title }) {
+            try {
+                const session = localStorage.getItem('hubSession');
+                let user = null; try { user = session ? JSON.parse(session) : null; } catch(_) {}
+                const username = user?.username || 'Unknown';
+                const entry = {
+                    username,
+                    action: action || 'updated',
+                    section: section || 'general',
+                    type: type || 'resource',
+                    title: title || '',
+                    timestamp: new Date().toISOString()
+                };
+                const list = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+                list.unshift(entry);
+                // Keep at most 1000 entries
+                if (list.length > 1000) list.length = 1000;
+                localStorage.setItem('hubActivities', JSON.stringify(list));
+                try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+            } catch(_) {}
+        };
+
+        // Filter: include only content updates (playbooks/boxlinks/dashboards)
+        function isContentActivity(a) {
+            try {
+                const t = String(a.type || a.resourceType || a.category || '').toLowerCase();
+                const title = String(a.title || a.resource || a.description || '').toLowerCase();
+                const action = String(a.action || '').toLowerCase();
+                const allowed = ['playbooks','playbook','boxlinks','boxlink','dashboards','dashboard'];
+                const disallowed = ['login','logout','session','auth','permission','role','user login','user logout'];
+                if (disallowed.some(k => t.includes(k) || action.includes(k) || title.includes(k))) return false;
+                if (allowed.some(k => t.includes(k) || title.includes(k))) return true;
+            } catch(_) {}
+            return false;
+        }
+
+        // Info bar marquee: build scrolling track from latest activities
+        window.rotateInfoBar = function() {
+            try {
+                const infoBar = document.getElementById('infoBar');
+                const track = document.getElementById('infoBarTrack');
+                if (!infoBar || !track) return;
+                // Ensure header logo/title visible as fail-safe
+                try {
+                    const logo = document.querySelector('.site-logo');
+                    if (logo) logo.style.display = '';
+                    const h1 = document.querySelector('.header-title h1');
+                    if (h1 && !h1.textContent.trim()) h1.textContent = 'Information Hub';
+                } catch(_) {}
+                // Prefer IndexedDB activities if available, else localStorage
+                let activities = [];
+                try {
+                    const ls = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+                    if (Array.isArray(ls)) activities = ls;
+                } catch (_) {}
+                // Filter to last 7 days
+                const now = Date.now();
+                const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+                activities = (activities || []).filter(a => {
+                    const t = new Date(a.timestamp).getTime();
+                    return Number.isFinite(t) && (now - t) <= sevenDaysMs && (now - t) >= 0;
+                });
+                // Keep only content activities
+                activities = activities.filter(isContentActivity);
+                if (!activities || activities.length === 0) {
+                    infoBar.style.display = 'none';
+                    return;
+                }
+                // Sort by timestamp desc
+                activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                const latest = activities.slice(0, 8);
+                // Resolve section display names
+                let sectionNames = {};
+                try { sectionNames = getSectionDisplayNames ? getSectionDisplayNames() : {}; } catch(_) {}
+                const prettyName = (key) => {
+                    if (!key) return 'General';
+                    if (sectionNames && sectionNames[key]) return sectionNames[key];
+                    const s = String(key).replace(/-/g, ' ');
+                    return s.charAt(0).toUpperCase() + s.slice(1);
+                };
+                // Build message HTML items
+                const items = latest.map(a => {
+                    const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
+                    const who = a.username || a.user || 'Someone';
+                    const section = a.section || a.sectionId || a.category || 'general';
+                    const sectionLabel = prettyName(section);
+                    const resource = a.title || a.resource || a.description || '';
+                    const action = a.action || a.type || 'updated';
+                    const safe = (t) => {
+                        const d = document.createElement('div');
+                        d.textContent = t || '';
+                        return d.innerHTML;
+                    };
+                    return `<span class="info-item"><strong>${safe(who)}</strong> ${safe(action)} ${resource ? `"${safe(resource)}" ` : ''}in <em>${safe(sectionLabel)}</em><span class="info-sep">•</span><span class="muted">${safe(when)}</span></span>`;
+                });
+                if (items.length === 0) { infoBar.style.display = 'none'; return; }
+                infoBar.style.display = 'flex';
+                // Duplicate items to enable seamless loop
+                const html = items.join('') + items.join('');
+                track.innerHTML = html;
+                // Adjust animation duration based on content width for a slower, readable speed
+                requestAnimationFrame(() => {
+                    const container = track.parentElement; // .info-marquee
+                    const containerWidth = container ? container.clientWidth : (window.innerWidth || 800);
+                    const width = Math.max(track.scrollWidth / 2, containerWidth); // width of one set
+                    const speedPixelsPerSecond = 30; // slower constant speed for readability
+                    const duration = Math.max(45, Math.min(240, width / speedPixelsPerSecond));
+                    track.style.animationDuration = duration + 's';
+                });
+            } catch (e) {
+                console.warn('rotateInfoBar error', e);
+            }
+        };
+
+        // Ensure header title and logo are visible; provide fallback icon if logo fails
+        window.ensureHeaderVisible = function() {
+            try {
+                let titleEl = document.querySelector('.header-title h1');
+                if (!titleEl) {
+                    const logoContainer = document.querySelector('.logo-container');
+                    if (logoContainer) {
+                        const h1 = document.createElement('h1');
+                        h1.textContent = 'Information Hub';
+                        logoContainer.appendChild(h1);
+                        titleEl = h1;
+                    }
+                }
+                if (titleEl) { titleEl.style.visibility = 'visible'; titleEl.style.color = '#fff'; }
+                if (!document.title || !document.title.trim()) {
+                    document.title = 'Information Hub - Central Dashboard';
+                }
+                const logoImg = document.querySelector('.site-logo');
+                if (logoImg) {
+                    logoImg.style.display = 'inline-block';
+                    const fallbackId = 'logoFallbackIcon';
+                    const ensureFallback = () => {
+                        if (!document.getElementById(fallbackId)) {
+                            const icon = document.createElement('i');
+                            icon.className = 'fas fa-table-cells-large';
+                            icon.id = fallbackId;
+                            icon.style.fontSize = '40px';
+                            icon.style.color = '#fff';
+                            logoImg.insertAdjacentElement('afterend', icon);
+                        }
+                    };
+                    const removeFallback = () => {
+                        const f = document.getElementById(fallbackId);
+                        if (f) f.remove();
+                    };
+                    const broken = logoImg.complete && logoImg.naturalWidth === 0;
+                    if (broken) {
+                        logoImg.style.display = 'none';
+                        ensureFallback();
+                    } else {
+                        logoImg.onerror = () => { logoImg.style.display = 'none'; ensureFallback(); };
+                        logoImg.onload = () => { logoImg.style.display = 'inline-block'; removeFallback(); };
+                    }
+                }
+            } catch (_) {}
+        };
+
+        // Observe header for unwanted removals/replacements and repair
+        window.startHeaderObserver = function() {
+            try {
+                const headerTitle = document.querySelector('.header-title');
+                if (!headerTitle) return;
+                const observer = new MutationObserver(() => {
+                    try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+                });
+                observer.observe(headerTitle, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+            } catch(_) {}
+        };
+
+        // Open audit log from info bar link - simple list only (content updates: playbooks/boxlinks/dashboards)
+        window.openAuditFromInfoBar = function(event) {
+            try { if (event) event.preventDefault(); } catch(_) {}
+            try {
+                let activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+                // Filter last 7 days like the marquee
+                const now = Date.now();
+                const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+                activities = (activities || []).filter(a => {
+                    const t = new Date(a.timestamp).getTime();
+                    return Number.isFinite(t) && (now - t) <= sevenDaysMs && (now - t) >= 0;
+                });
+                // Keep only content activities
+                activities = activities.filter(isContentActivity);
+                // Sort newest first and take up to 100
+                activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                const recent = activities.slice(0, 100);
+                const esc = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
+                // Display pretty section names and include action
+                let sectionNames = {};
+                try { sectionNames = getSectionDisplayNames ? getSectionDisplayNames() : {}; } catch(_) {}
+                const prettyName = (key) => {
+                    if (!key) return 'General';
+                    if (sectionNames && sectionNames[key]) return sectionNames[key];
+                    const s = String(key).replace(/-/g, ' ');
+                    return s.charAt(0).toUpperCase() + s.slice(1);
+                };
+                const content = recent.map(a => {
+                    const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
+                    const who = esc(a.username || a.user || 'Someone');
+                    const sectionKey = a.section || a.sectionId || a.category || 'general';
+                    const section = esc(prettyName(sectionKey));
+                    const resource = esc(a.title || a.resource || a.description || '');
+                    const action = esc(a.action || a.type || 'updated');
+                    return `<div style=\"padding:8px 0;border-bottom:1px solid #eee;display:flex;gap:10px;flex-wrap:wrap;align-items:center;\">\n                        <span><strong>${who}</strong></span>\n                        <span style=\"opacity:.6\">•</span>\n                        <span>${action}</span>\n                        <span style=\"opacity:.6\">•</span>\n                        <span>${section}</span>\n                        ${resource ? `<span style=\"opacity:.6\">•</span><span>${resource}</span>` : ''}\n                        <span style=\"margin-left:auto;color:#999;font-size:0.85rem;\">${esc(when)}</span>\n                    </div>`;
+                }).join('');
+                const wrapper = document.createElement('div');
+                wrapper.className = 'modal';
+                wrapper.style.display = 'block';
+                wrapper.innerHTML = `
+                    <div class=\"modal-content\" style=\"max-width:700px;\">
+                        <div class=\"modal-header\"><h2>Recent Updates (7 days)</h2><span class=\"close\" onclick=\"this.closest('.modal').remove()\">&times;</span></div>
+                        <div class=\"modal-body\" style=\"max-height:60vh;overflow:auto;padding:20px;\">\n                            <div style=\\\"display:flex;gap:10px;align-items:center;font-weight:600;border-bottom:1px solid #e9ecef;padding:6px 0;margin-bottom:6px;\\\">\n                                <span>Who</span>\n                                <span style=\\\"opacity:.6\\\">•</span>\n                                <span>Action</span>\n                                <span style=\\\"opacity:.6\\\">•</span>\n                                <span>Section</span>\n                                <span style=\\\"opacity:.6\\\">•</span>\n                                <span>Resource</span>\n                                <span style=\\\"margin-left:auto;\\\">When</span>\n                            </div>\n                            ${content || '<div>No recent updates.</div>'}\n                        </div>
+                    </div>`;
+                document.body.appendChild(wrapper);
+            } catch (e) { alert('Unable to open updates: ' + e.message); }
         };
 
         // Fallback navigation if the main app binding didn't attach
@@ -1616,6 +1882,93 @@
             };
         }
         
+        // Robust Restore JSON fallback (works even if DB is not ready)
+        if (typeof window.restoreJson !== 'function') {
+            window.restoreJson = async function() {
+                try {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'application/json,.json';
+                    input.onchange = async (e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (!file) return;
+                        let text = '';
+                        try {
+                            text = await file.text();
+                        } catch (readErr) {
+                            alert('Failed to read file: ' + readErr.message);
+                            return;
+                        }
+                        let data = null;
+                        try {
+                            data = JSON.parse(text);
+                        } catch (parseErr) {
+                            alert('Invalid JSON: ' + parseErr.message);
+                            return;
+                        }
+                        if (!confirm('This will overwrite local data. Continue?')) return;
+                        
+                        let importedToDb = false;
+                        try {
+                            if (window.hubDatabase && typeof hubDatabase.importRawState === 'function') {
+                                await hubDatabase.importRawState(data);
+                                importedToDb = true;
+                            }
+                        } catch (dbErr) {
+                            console.warn('DB import failed, falling back to localStorage restore:', dbErr);
+                        }
+                        
+                        if (!importedToDb) {
+                            try {
+                                // Prefer payload.localStorage format produced by backupJson fallback
+                                if (data && typeof data === 'object' && data.localStorage && typeof data.localStorage === 'object') {
+                                    const ls = data.localStorage;
+                                    const setIf = (key, value) => {
+                                        if (value !== undefined && value !== null) {
+                                            localStorage.setItem(key, JSON.stringify(value));
+                                        } else {
+                                            localStorage.removeItem(key);
+                                        }
+                                    };
+                                    setIf('sectionOrder', ls.sectionOrder);
+                                    setIf('hubUsers', ls.hubUsers);
+                                    setIf('informationHub', ls.informationHub);
+                                    setIf('hubActivities', ls.hubActivities);
+                                } else {
+                                    // Handle a more direct export shape
+                                    if (Array.isArray(data.users)) {
+                                        localStorage.setItem('hubUsers', JSON.stringify(data.users));
+                                    }
+                                    if (data.sectionOrder !== undefined) {
+                                        localStorage.setItem('sectionOrder', JSON.stringify(data.sectionOrder));
+                                    }
+                                    if (data.informationHub !== undefined) {
+                                        localStorage.setItem('informationHub', JSON.stringify(data.informationHub));
+                                    }
+                                    if (Array.isArray(data.activities) && localStorage.getItem('hubActivities') === null) {
+                                        localStorage.setItem('hubActivities', JSON.stringify(data.activities));
+                                    }
+                                }
+                            } catch (lsErr) {
+                                alert('Local restore failed: ' + (lsErr && lsErr.message ? lsErr.message : lsErr));
+                                return;
+                            }
+                        }
+                        
+                        try { if (typeof updateUserInterface === 'function') updateUserInterface(); } catch(_) {}
+                        try { if (typeof updateSectionStats === 'function') await updateSectionStats(); } catch(_) {}
+                        
+                        alert('Restore complete. The page will reload to apply changes.');
+                        window.location.reload();
+                    };
+                    input.click();
+                } catch (e) {
+                    console.error('Restore JSON failed', e);
+                    alert('Restore failed: ' + e.message);
+                }
+            };
+        }
+        
         window.showUserProfile = function() {
             const session = localStorage.getItem('hubSession');
             if (!session) {
@@ -1913,11 +2266,13 @@ Permissions:
                 
                 if (userNameEl) userNameEl.textContent = user.username;
                 if (userRoleEl) userRoleEl.textContent = user.role;
+                try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
                 
                 // Show/hide admin panel button and quick access
                 const adminBtn = document.getElementById('adminPanelBtn');
                 const adminQuickAccess = document.getElementById('adminQuickAccess');
                 const debugSection = document.getElementById('debugSection');
+                const reshuffleBtn = document.getElementById('reshuffleBackgroundsBtn');
                 
                 console.log('Admin button found:', !!adminBtn);
                 console.log('User role:', user.role);
@@ -1956,6 +2311,11 @@ Permissions:
                         }
                     }
 
+                    // Show reshuffle backgrounds only for admin
+                    if (reshuffleBtn) {
+                        reshuffleBtn.style.display = (user.role === 'admin') ? 'inline-flex' : 'none';
+                    }
+
                     // Role-based visibility of Assignments and Manage Sections tabs
                     const assignmentsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
                     const assignmentsContent = document.getElementById('assignments-tab');
@@ -1977,6 +2337,7 @@ Permissions:
                     if (adminBtn) adminBtn.style.display = 'none';
                     if (adminQuickAccess) adminQuickAccess.style.display = 'none';
                     if (debugSection) debugSection.style.display = 'none';
+                    if (reshuffleBtn) reshuffleBtn.style.display = 'none';
                     console.log('Admin controls hidden for regular user');
                 }
                 
@@ -2629,7 +2990,7 @@ Permissions:
             container.innerHTML = `
                 <div style="display:flex;align-items:center;gap:12px;margin:10px 0 15px 0;padding:10px 12px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;">
                     <i class="fas fa-user-circle" style="font-size:20px;color:#667eea"></i>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap;">
                         <strong>Signed in as:</strong>
                         <span>${user.username}</span>
                         <span class="user-role" style="margin-left:8px;">${roleLabel}</span>
@@ -3144,21 +3505,14 @@ Permissions:
                 return;
             }
             
-            if (confirm('Are you sure you want to reset all sections to default? This will restore the original 8 sections.')) {
+            if (confirm('Reset sections to a minimal default with a single example?')) {
                 sectionOrder = [
-                    { id: 'costing', name: 'Costing', icon: 'fas fa-calculator', visible: true, order: 1 },
-                    { id: 'supply-planning', name: 'Supply Planning', icon: 'fas fa-truck', visible: true, order: 2 },
-                    { id: 'operations', name: 'Operations', icon: 'fas fa-cogs', visible: true, order: 3 },
-                    { id: 'quality', name: 'Quality Management', icon: 'fas fa-check-circle', visible: true, order: 4 },
-                    { id: 'hr', name: 'Human Resources', icon: 'fas fa-users', visible: true, order: 5 },
-                    { id: 'it', name: 'IT & Technology', icon: 'fas fa-laptop-code', visible: true, order: 6 },
-                    { id: 'sales', name: 'Sales & Marketing', icon: 'fas fa-chart-line', visible: true, order: 7 },
-                    { id: 'compliance', name: 'Compliance & Legal', icon: 'fas fa-gavel', visible: true, order: 8 }
+                    { id: 'example', name: 'Example', icon: 'fas fa-th-large', visible: true, order: 1, intro: getDefaultIntroForSection('example') || 'Your first example section. Add more from the admin panel.' }
                 ];
                 localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
                 renderSectionsList();
                 updateMainHubSections();
-                alert('Sections reset to default!');
+                alert('Sections reset to minimal default!');
             }
         };
         
@@ -3236,7 +3590,8 @@ Permissions:
                 'hr': 'People operations policies, templates, onboarding, and workforce resources.',
                 'it': 'IT systems, tooling, security, and operational best practices.',
                 'sales': 'Sales playbooks, marketing assets, and performance dashboards.',
-                'compliance': 'Policies, legal, and regulatory guidance with reusable templates.'
+                'compliance': 'Policies, legal, and regulatory guidance with reusable templates.',
+                'example': 'Your first example section. Add more from the admin panel.'
             };
             return map[sectionId] || '';
         }
@@ -3274,29 +3629,150 @@ Permissions:
             return t.slice(0, Math.max(0, maxLen - 1)) + '…';
         }
         
+        // Background image support for sections (random, persistent per section)
+        let BACKGROUND_IMAGES = [];
+        async function ensureBackgroundImagesLoaded() {
+            try {
+                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
+                const resp = await fetch('background-pic/manifest.json', { cache: 'no-store' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`);
+                        return;
+                    }
+                }
+            } catch (_) {}
+            // Fallback to a baked-in list if manifest is missing
+            BACKGROUND_IMAGES = [
+                'background-pic/132169_L.png','background-pic/132170_L.png','background-pic/132173_K.png','background-pic/135253_L.png',
+                'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                'background-pic/162062_L.png','background-pic/164057_K.png','background-pic/166799_K.png','background-pic/168817_L.png',
+                'background-pic/171327_Y.png','background-pic/537081_L.png','background-pic/537082_K.png','background-pic/560846_L.png',
+                'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
+            ];
+        }
+
+        function getBackgroundImageForSection(sectionId) {
+            try {
+                const key = 'sectionBackgrounds';
+                const raw = localStorage.getItem(key);
+                let map = raw ? JSON.parse(raw) : {};
+                if (map[sectionId]) return map[sectionId];
+                // Choose an unused image first
+                const used = new Set(Object.values(map));
+                const pool = BACKGROUND_IMAGES.filter(p => !used.has(p));
+                const list = pool.length > 0 ? pool : BACKGROUND_IMAGES;
+                const choice = list[Math.floor(Math.random() * list.length)];
+                map[sectionId] = choice;
+                localStorage.setItem(key, JSON.stringify(map));
+                return choice;
+            } catch (_) {
+                // Fallback to a deterministic choice
+                const idx = Math.abs(hashCode(String(sectionId))) % BACKGROUND_IMAGES.length;
+                return BACKGROUND_IMAGES[idx];
+            }
+        }
+
+        function hashCode(str) {
+            let h = 0; for (let i = 0; i < str.length; i++) { h = (h << 5) - h + str.charCodeAt(i); h |= 0; }
+            return h;
+        }
+
+        function applyCardBackground(sectionCfg) {
+            try {
+                const card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionCfg.id}')"]`);
+                if (!card) return;
+                const img = getBackgroundImageForSection(sectionCfg.id);
+                if (!img) return;
+                card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
+                card.style.backgroundSize = 'cover';
+                card.style.backgroundPosition = 'center';
+                card.style.color = '#fff';
+                // Improve contrast on text/icons inside the card
+                try { card.querySelectorAll('h3, p, span, i').forEach(el => { el.style.color = '#fff'; }); } catch (_) {}
+            } catch (_) {}
+        }
+
+        // Admin utility: reshuffle all backgrounds and re-apply to hub cards
+        window.reshuffleBackgrounds = async function() {
+            try {
+                const session = localStorage.getItem('hubSession');
+                const user = session ? JSON.parse(session) : null;
+                if (!user || (user.role !== 'admin' && !user.permissions?.canManageUsers)) {
+                    alert('Only admins can reshuffle backgrounds');
+                    return;
+                }
+            } catch (_) {}
+            try {
+                localStorage.removeItem('sectionBackgrounds');
+                await ensureBackgroundImagesLoaded();
+                updateMainHubSections();
+                alert('Backgrounds reshuffled');
+            } catch (e) {
+                console.warn('Reshuffle failed', e);
+            }
+        };
+        
         function updateMainHubSections() {
             console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) return;
-            // Read dynamic config
-            let sections = [];
-            try {
-                const savedOrder = localStorage.getItem('sectionOrder');
-                if (savedOrder) {
-                    // Seed intros if any are missing
-                    seedSectionIntrosIfMissing();
-                    sections = JSON.parse(savedOrder)
-                        .filter(s => s.visible !== false)
-                        .sort((a, b) => (a.order || 999) - (b.order || 999));
-                }
-            } catch (e) { console.warn('Failed reading sectionOrder', e); }
-            // Clear existing (including any legacy static cards)
             hubGrid.innerHTML = '';
-            // Build cards dynamically
-            sections.forEach(cfg => {
-                ensureHubCard(cfg);
-                updateHubCardContent(cfg);
-            });
+            const sectionOrderRaw = localStorage.getItem('sectionOrder');
+            let sectionOrder = [];
+            try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
+            const visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+            if (visibleSections.length === 0) {
+                console.warn('No visible sections configured.');
+                return;
+            }
+            const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+            const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
+            const truncate = (t, n) => { const s = String(t||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
+
+            for (const section of visibleSections) {
+                // Resolve dynamic labels from per-section config if present
+                let labels = { playbooks: 'Playbooks', boxLinks: 'Box Links', dashboards: 'Dashboards' };
+                try {
+                    const cfgRaw = localStorage.getItem(`section_config_${section.id}`);
+                    if (cfgRaw) {
+                        const cfg = JSON.parse(cfgRaw);
+                        if (cfg && Array.isArray(cfg.types)) {
+                            const findName = (ids, fallback) => {
+                                const list = Array.isArray(ids) ? ids : [ids];
+                                for (const id of list) {
+                                    const found = cfg.types.find(t => String(t.id || '').toLowerCase() === String(id));
+                                    if (found && found.name) return String(found.name);
+                                }
+                                return fallback;
+                            };
+                            labels.playbooks = findName(['playbooks','playbook'], labels.playbooks);
+                            labels.boxLinks = findName(['box-links','boxlinks','box'], labels.boxLinks);
+                            labels.dashboards = findName(['dashboards','dashboard'], labels.dashboards);
+                        }
+                    }
+                } catch (_) {}
+
+                const cardHTML = `
+            <div class="hub-card" id="card-${section.id}" onclick="navigateToSection('${section.id}')">
+                <div class="card-header">
+                    <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
+                    <div class="card-title">
+                        <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
+                        <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                    </div>
+                </div>
+                <div class="card-stats" id="${section.id}-stats">
+                    <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> ${escapeHtml(labels.playbooks)}</span>
+                    <span><i class="fas fa-link"></i> <span id="${section.id}-boxlinks">0</span> ${escapeHtml(labels.boxLinks)}</span>
+                    <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> ${escapeHtml(labels.dashboards)}</span>
+                </div>
+            </div>`;
+                hubGrid.insertAdjacentHTML('beforeend', cardHTML);
+                // Apply background image to this card
+                try { applyCardBackground(section); } catch (_) {}
+            }
             // Stats for currently built sections
             updateSectionStats();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
@@ -3518,6 +3994,48 @@ Permissions:
             100% { transform: rotate(360deg); }
         }
         
+        /* Info bar styles */
+        .info-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            color: #333;
+            font-size: 0.95rem;
+            min-height: 28px;
+            width: 100%;
+            max-width: 100%;
+        }
+        .info-bar i { color: #4CAF50; }
+        .info-bar .muted { color: #888; }
+        .info-view-all { margin-left: 10px; font-size: 0.9rem; color: #667eea; text-decoration: none; white-space: nowrap; }
+        .info-view-all:hover { text-decoration: underline; }
+        /* Ensure header title/icon visibility */
+        .header-title h1 { color: #fff; visibility: visible; }
+        .logo-container .site-logo { display: inline-block; }
+        .info-marquee { position: relative; overflow: hidden; flex: 1 1 auto; min-width: 0; width: 100%; }
+        .header-title { max-width: 100%; }
+        .logo-container { flex-wrap: wrap; }
+        .info-marquee { position: relative; overflow: hidden; flex: 1; }
+        .info-marquee-track {
+            display: inline-block;
+            white-space: nowrap;
+            will-change: transform;
+            /* Base speed is intentionally slow; JS further adjusts duration */
+            animation: info-scroll 60s linear infinite;
+        }
+        .info-bar:hover .info-marquee-track { animation-play-state: paused; }
+        .info-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 24px; }
+        .info-sep { opacity: 0.4; padding: 0 8px; }
+        @keyframes info-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
         .sections-overview {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -4174,6 +4692,12 @@ Permissions:
             z-index: 2;
         }
         .sections-management .sections-list { padding-bottom: 8px; }
+
+        /* Quick Actions compact sizing */
+        .quick-actions { margin: 2px 0; padding: 0; background: transparent; border: 0; box-shadow: none; }
+        .quick-actions h3 { margin: 0 0 4px 0; font-size: 1rem; }
+        .quick-actions .action-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
+        .quick-actions .action-btn { padding: 4px 8px; font-size: 0.85rem; line-height: 1.1; }
     </style>
 </body>
 </html>

@@ -51,6 +51,119 @@ class ExcelExporter {
                 data.resources = Array.isArray(data.resources) ? data.resources : [];
             }
 
+            // ==== Merge latest section names/icons and resources across all sources ====
+            const canonicalizeUrlForKey = (url) => {
+                try {
+                    let raw = String(url || '').trim();
+                    if (!raw) return '';
+                    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) raw = 'https://' + raw;
+                    const u = new URL(raw);
+                    const host = (u.host || '').toLowerCase();
+                    const path = (u.pathname || '/').replace(/\/+$/, '');
+                    const norm = `${u.protocol}//${host}${path}${u.search || ''}`;
+                    return norm.toLowerCase();
+                } catch (_) {
+                    return String(url || '').trim().toLowerCase();
+                }
+            };
+            const canonicalKeyForResource = (r) => {
+                const id = r && r.id !== undefined && r.id !== null ? String(r.id) : '';
+                if (id) return `id:${id}`;
+                const title = String(r?.title || '').trim().toLowerCase();
+                const urlKey = canonicalizeUrlForKey(r?.url);
+                return `t:${title}|u:${urlKey}`;
+            };
+
+            // Build local resources union (informationHub + per-section stores)
+            const localUnion = [];
+            try {
+                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                Object.entries(hub).forEach(([sectionId, s]) => {
+                    ['playbooks','boxLinks','dashboards'].forEach(type => {
+                        (s?.[type] || []).forEach(r => localUnion.push({ ...r, sectionId, type }));
+                    });
+                });
+            } catch (_) {}
+            try {
+                // Per-section stores
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (!k || !k.startsWith('section_')) continue;
+                    // Skip non-section keys like sectionBackgrounds
+                    if (k === 'sectionBackgrounds' || k === 'section_config_') continue;
+                    const sectionId = k.slice('section_'.length);
+                    if (!sectionId) continue;
+                    try {
+                        const s = JSON.parse(localStorage.getItem(k) || '{}');
+                        ['playbooks','boxLinks','dashboards'].forEach(type => {
+                            (s?.[type] || []).forEach(r => localUnion.push({ ...r, sectionId, type }));
+                        });
+                    } catch (_) {}
+                }
+            } catch (_) {}
+
+            // Union DB resources + local resources
+            const byKey = new Map();
+            const consider = (r) => {
+                if (!r) return;
+                const key = canonicalKeyForResource(r);
+                if (!key) return;
+                if (!byKey.has(key)) byKey.set(key, r);
+            };
+            (data.resources || []).forEach(consider);
+            localUnion.forEach(consider);
+            const allResources = Array.from(byKey.values());
+            data.resources = allResources;
+
+            // Build canonical sections map: from sectionOrder first, then any sections seen in resources, then existing
+            const sectionsById = {};
+            try {
+                const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
+                (order || []).forEach(s => {
+                    if (!s || !s.id) return;
+                    sectionsById[s.id] = {
+                        id: s.id,
+                        sectionId: s.id,
+                        name: s.name || s.id,
+                        icon: s.icon || '',
+                        color: s.color || '',
+                        data: { playbooks: [], boxLinks: [], dashboards: [] }
+                    };
+                });
+            } catch (_) {}
+            // Ensure presence for any section referenced by a resource
+            allResources.forEach(r => {
+                const sid = r.sectionId || r.section || '';
+                if (!sid) return;
+                if (!sectionsById[sid]) {
+                    sectionsById[sid] = { id: sid, sectionId: sid, name: sid, icon: '', color: '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
+                }
+            });
+            // Merge in existing data.sections and prefer sectionOrder name/icon if present
+            (Array.isArray(data.sections) ? data.sections : []).forEach(sec => {
+                const sid = String(sec.sectionId || sec.id || '');
+                if (!sid) return;
+                sectionsById[sid] = {
+                    id: sid,
+                    sectionId: sid,
+                    name: sectionsById[sid]?.name || sec.name || sid,
+                    icon: sectionsById[sid]?.icon || sec.icon || '',
+                    color: sec.color || '',
+                    data: sectionsById[sid]?.data || sec.data || { playbooks: [], boxLinks: [], dashboards: [] }
+                };
+            });
+            // Recompute counts by assigning resources to sections
+            Object.values(sectionsById).forEach(s => { s.data = { playbooks: [], boxLinks: [], dashboards: [] }; });
+            allResources.forEach(r => {
+                const sid = r.sectionId || r.section || '';
+                const type = r.type || '';
+                if (!sid || !sectionsById[sid]) return;
+                if (type === 'playbooks' || type === 'boxLinks' || type === 'dashboards') {
+                    sectionsById[sid].data[type].push(r);
+                }
+            });
+            data.sections = Object.values(sectionsById);
+
             this.workbook = XLSX.utils.book_new();
 
             // Export Users
@@ -60,8 +173,8 @@ class ExcelExporter {
             // Export Sections
             this.exportSections(data.sections);
 
-            // Export Resources
-            this.exportResources(data.resources);
+            // Export Resources (use section names)
+            this.exportResources(data.resources, data.sections);
 
             // Export Activities
             this.exportActivities(data.activities);
@@ -115,8 +228,10 @@ class ExcelExporter {
     }
 
     exportSections(sections) {
+        const byId = {};
+        (sections || []).forEach(s => { byId[String(s.sectionId || s.id || '')] = s; });
         const sectionData = (sections || []).map(section => ({
-            'Section ID': section.sectionId,
+            'Section ID': section.sectionId || section.id,
             'Name': section.name,
             'Icon': section.icon,
             'Color': section.color,
@@ -129,14 +244,16 @@ class ExcelExporter {
         XLSX.utils.book_append_sheet(this.workbook, worksheet, 'Sections');
     }
 
-    exportResources(resources) {
+    exportResources(resources, sections) {
+        const nameById = {};
+        (sections || []).forEach(s => { const id = String(s.sectionId || s.id || ''); if (id) nameById[id] = s.name || id; });
         const resourceData = (resources || []).map(resource => ({
             'ID': resource.id,
             'Title': resource.title,
             'Description': resource.description || '',
             'URL': resource.url,
             'Type': resource.type,
-            'Section': resource.sectionId,
+            'Section': nameById[String(resource.sectionId || '')] || String(resource.sectionId || ''),
             'Category': resource.category || '',
             'Tags': resource.tags ? resource.tags.join(', ') : '',
             'Created By': resource.userId,
@@ -150,7 +267,16 @@ class ExcelExporter {
 
     exportUserAccess(users, sections) {
         try {
-            const sectionIds = Array.from(new Set((sections || []).map(s => s.sectionId || s.id).filter(Boolean)));
+            const nameById = {};
+            (sections || []).forEach(s => { const id = String(s.sectionId || s.id || ''); if (id) nameById[id] = s.name || id; });
+            // Build canonical section id set: sections + any in users' permissions
+            const idSet = new Set();
+            (sections || []).forEach(s => { const id = s.sectionId || s.id; if (id) idSet.add(id); });
+            (users || []).forEach(u => {
+                (u.permissions?.sections || []).forEach(id => id && idSet.add(id));
+                (u.permissions?.editableSections || []).forEach(id => id && idSet.add(id));
+            });
+            const sectionIds = Array.from(idSet);
             if (sectionIds.length === 0 || users.length === 0) return;
             const rows = [];
             users.forEach(user => {
@@ -166,7 +292,8 @@ class ExcelExporter {
                         'User ID': user.id,
                         'Username': user.username,
                         'Role': user.role,
-                        'Section': sectionId,
+                        'Section ID': sectionId,
+                        'Section Name': nameById[String(sectionId)] || String(sectionId),
                         'Can View': canView,
                         'Can Edit': canEdit,
                         'Can Delete': canDelete
@@ -200,6 +327,8 @@ class ExcelExporter {
             const activities = data.activities || [];
             const usersById = {};
             (data.users || []).forEach(u => { usersById[u.id] = u; });
+            const nameById = {};
+            (data.sections || []).forEach(s => { const id = String(s.sectionId || s.id || ''); if (id) nameById[id] = s.name || id; });
 
             // 1) Duration events (derived from CLOSE_* descriptions)
             const durationRows = activities
@@ -209,11 +338,12 @@ class ExcelExporter {
                     const seconds = match ? parseInt(match[1], 10) : '';
                     const sectionMatch = (a.description || '').match(/section\s+([\w-]+)/i);
                     const sectionId = a.action === 'CLOSE_SECTION' && sectionMatch ? sectionMatch[1] : '';
+                    const sectionName = sectionId ? (nameById[String(sectionId)] || sectionId) : '';
                     return {
                         'User ID': a.userId,
                         'Username': a.username || (usersById[a.userId]?.username || ''),
                         'Action': a.action,
-                        'Section': sectionId,
+                        'Section': sectionName,
                         'Duration (s)': seconds,
                         'Timestamp': a.timestamp ? new Date(a.timestamp).toLocaleString() : ''
                     };
@@ -251,12 +381,13 @@ class ExcelExporter {
             (data.resources || []).forEach(r => { resourcesById[r.id] = r; });
             const prettyViews = (data.views || []).map(v => {
                 const res = resourcesById[v.resourceId] || {};
+                const sectionName = res.sectionId ? (nameById[String(res.sectionId)] || res.sectionId) : '';
                 return {
                     'User ID': v.userId,
                     'Username': usersById[v.userId]?.username || '',
                     'Resource ID': v.resourceId,
                     'Resource Title': res.title || '',
-                    'Section': res.sectionId || '',
+                    'Section': sectionName,
                     'Type': res.type || '',
                     'Count': v.count,
                     'First Viewed At': v.firstViewedAt ? new Date(v.firstViewedAt).toLocaleString() : '',
@@ -380,6 +511,13 @@ class ExcelExporter {
 
             const userActivities = activities.filter(a => a.userId === userId);
 
+            // Build section name mapping from sectionOrder
+            let nameById = {};
+            try {
+                const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
+                (order || []).forEach(s => { if (s && s.id) nameById[s.id] = s.name || s.id; });
+            } catch (_) {}
+
             this.workbook = XLSX.utils.book_new();
 
             // User info
@@ -407,6 +545,25 @@ class ExcelExporter {
                 const activityWorksheet = XLSX.utils.json_to_sheet(activityData);
                 XLSX.utils.book_append_sheet(this.workbook, activityWorksheet, 'Activities');
             }
+
+            // Views detailed for the user, if available via DB views
+            try {
+                if (hubDatabase && hubDatabase.getAllViews) {
+                    const views = await hubDatabase.getAllViews();
+                    const myViews = (views || []).filter(v => v.userId === userId);
+                    if (myViews.length > 0) {
+                        // We don't have resources here; keep minimal but map section if possible from description (not ideal)
+                        const viewData = myViews.map(v => ({
+                            'Resource ID': v.resourceId,
+                            'Count': v.count,
+                            'First Viewed At': v.firstViewedAt ? new Date(v.firstViewedAt).toLocaleString() : '',
+                            'Last Viewed At': v.lastViewedAt ? new Date(v.lastViewedAt).toLocaleString() : ''
+                        }));
+                        const viewsWs = XLSX.utils.json_to_sheet(viewData);
+                        XLSX.utils.book_append_sheet(this.workbook, viewsWs, 'Views');
+                    }
+                }
+            } catch (_) {}
 
             const fileName = `${user.username}_Data_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
             XLSX.writeFile(this.workbook, fileName);

@@ -134,6 +134,13 @@ class InformationHub {
             }
         }
 
+        // Show/hide reshuffle backgrounds button for admins only
+        const reshuffleBtn = document.getElementById('reshuffleBackgroundsBtn');
+        if (reshuffleBtn) {
+            const role = (this.currentUser.role || '').toLowerCase();
+            reshuffleBtn.style.display = (role === 'admin') ? 'inline-flex' : 'none';
+        }
+
         // Update hub cards with access restrictions
         this.updateHubCardsAccess();
     }
@@ -482,24 +489,17 @@ class InformationHub {
 
     // Sample Data
     addSampleData() {
-        // Only add sample data if no data exists
-        const hasData = Object.values(this.sections).some(section => 
-            section.playbooks.length > 0 || section.boxLinks.length > 0 || section.dashboards.length > 0
-        );
-        
-        if (hasData) return;
-
-        // Add sample data for each section
-        this.addSampleDataForSection('costing');
-        this.addSampleDataForSection('supply-planning');
-        this.addSampleDataForSection('operations');
-        this.addSampleDataForSection('quality');
-        this.addSampleDataForSection('hr');
-        this.addSampleDataForSection('it');
-        this.addSampleDataForSection('sales');
-        this.addSampleDataForSection('compliance');
-        
-        this.saveData();
+        // Start blank by default. Only seed example if no data anywhere.
+        try {
+            const anyLocal = localStorage.getItem('informationHub');
+            const anySectionOrder = localStorage.getItem('sectionOrder');
+            if (anyLocal || anySectionOrder) return;
+        } catch (_) {}
+        // Optional: Seed a tiny example dataset in the single example section if present
+        if (this.sections['example']) {
+            this.addSampleDataForSection('example');
+            this.saveData();
+        }
     }
 
     addSampleDataForSection(sectionId) {
@@ -520,20 +520,8 @@ class InformationHub {
 
     getSamplePlaybooks(sectionId) {
         const playbookTemplates = {
-            'costing': [
-                { title: 'Cost Analysis Framework', description: 'Step-by-step guide for conducting comprehensive cost analysis', url: 'https://example.com/cost-analysis', tags: ['analysis', 'framework', 'financial'] },
-                { title: 'Budget Planning Process', description: 'Detailed process for annual budget planning and allocation', url: 'https://example.com/budget-planning', tags: ['budget', 'planning', 'annual'] },
-                { title: 'ROI Calculation Methods', description: 'Various methods for calculating return on investment', url: 'https://example.com/roi-methods', tags: ['roi', 'calculation', 'investment'] }
-            ],
-            'supply-planning': [
-                { title: 'Demand Forecasting Guide', description: 'Methods and tools for accurate demand forecasting', url: 'https://example.com/demand-forecasting', tags: ['forecasting', 'demand', 'planning'] },
-                { title: 'Inventory Optimization', description: 'Best practices for inventory level optimization', url: 'https://example.com/inventory-optimization', tags: ['inventory', 'optimization', 'supply'] },
-                { title: 'Supplier Management Process', description: 'Complete supplier selection and management workflow', url: 'https://example.com/supplier-management', tags: ['supplier', 'management', 'procurement'] }
-            ],
-            'operations': [
-                { title: 'Process Improvement Methodology', description: 'Lean Six Sigma approach to process optimization', url: 'https://example.com/process-improvement', tags: ['lean', 'six-sigma', 'optimization'] },
-                { title: 'Quality Control Procedures', description: 'Standard operating procedures for quality control', url: 'https://example.com/quality-control', tags: ['quality', 'control', 'procedures'] },
-                { title: 'Equipment Maintenance Schedule', description: 'Preventive maintenance planning and scheduling', url: 'https://example.com/maintenance-schedule', tags: ['maintenance', 'equipment', 'preventive'] }
+            'example': [
+                { title: 'Getting Started Guide', description: 'How to add your first resources', url: 'https://example.com/getting-started', tags: ['onboarding','setup'] }
             ]
         };
 
@@ -547,17 +535,8 @@ class InformationHub {
 
     getSampleBoxLinks(sectionId) {
         const boxLinkTemplates = {
-            'costing': [
-                { title: 'Financial Reports Repository', description: 'Central repository for all financial reports and statements', url: 'https://box.com/financial-reports', tags: ['reports', 'financial', 'repository'] },
-                { title: 'Cost Templates Library', description: 'Collection of cost calculation and analysis templates', url: 'https://box.com/cost-templates', tags: ['templates', 'cost', 'calculations'] }
-            ],
-            'supply-planning': [
-                { title: 'Supplier Database', description: 'Comprehensive database of suppliers and vendor information', url: 'https://box.com/supplier-database', tags: ['suppliers', 'database', 'vendors'] },
-                { title: 'Inventory Reports Archive', description: 'Historical inventory reports and analysis', url: 'https://box.com/inventory-reports', tags: ['inventory', 'reports', 'archive'] }
-            ],
-            'operations': [
-                { title: 'SOP Documentation', description: 'Standard Operating Procedures documentation library', url: 'https://box.com/sop-docs', tags: ['sop', 'procedures', 'documentation'] },
-                { title: 'Equipment Manuals', description: 'Equipment operation and maintenance manuals', url: 'https://box.com/equipment-manuals', tags: ['equipment', 'manuals', 'maintenance'] }
+            'example': [
+                { title: 'Company Docs Folder', description: 'Place to store your team docs', url: 'https://box.com/', tags: ['storage','docs'] }
             ]
         };
 
@@ -571,17 +550,8 @@ class InformationHub {
 
     getSampleDashboards(sectionId) {
         const dashboardTemplates = {
-            'costing': [
-                { title: 'Cost Analysis Dashboard', description: 'Real-time cost analysis and budget tracking dashboard', url: 'https://dashboard.example.com/cost-analysis', tags: ['cost', 'analysis', 'budget'] },
-                { title: 'Financial Performance Metrics', description: 'Key financial performance indicators and metrics', url: 'https://dashboard.example.com/financial-metrics', tags: ['financial', 'metrics', 'performance'] }
-            ],
-            'supply-planning': [
-                { title: 'Supply Chain Visibility', description: 'End-to-end supply chain monitoring and visibility', url: 'https://dashboard.example.com/supply-chain', tags: ['supply-chain', 'visibility', 'monitoring'] },
-                { title: 'Inventory Levels Dashboard', description: 'Real-time inventory levels and stock monitoring', url: 'https://dashboard.example.com/inventory-levels', tags: ['inventory', 'levels', 'monitoring'] }
-            ],
-            'operations': [
-                { title: 'Production Metrics Dashboard', description: 'Key production metrics and performance indicators', url: 'https://dashboard.example.com/production-metrics', tags: ['production', 'metrics', 'performance'] },
-                { title: 'Equipment Status Monitor', description: 'Real-time equipment status and health monitoring', url: 'https://dashboard.example.com/equipment-status', tags: ['equipment', 'status', 'monitoring'] }
+            'example': [
+                { title: 'Starter Dashboard', description: 'A placeholder dashboard link', url: 'https://dashboard.example.com', tags: ['starter'] }
             ]
         };
 

@@ -3,17 +3,17 @@
 ## Quick Steps to Deploy Your Information Hub
 
 ### 1. Create GitHub Repository
-- Go to [github.com](https://github.com)
+- Go to `https://github.com/new`
 - Click "+" → "New repository"
-- Name: `information-hub`
+- Name: `YOUR_REPO_NAME` (e.g., `playbook-hub`)
 - Make it **Public**
 - Don't initialize with README
 - Click "Create repository"
 
 ### 2. Upload Files
-After creating the repository, you'll see upload instructions. Upload these files:
+Upload all files from your project root, including folders:
 
-**Required Files to Upload:**
+**Required items:**
 ```
 auth.html
 index.html
@@ -24,20 +24,23 @@ section-script.js
 database.js
 excel-export.js
 logo.svg
-README.md
+redirect.html
+start.html
+.nojekyll
+background-pic/            # images and manifest.json
 ```
 
 ### 3. Enable GitHub Pages
 - Go to your repository on GitHub
-- Click "Settings" tab
-- Scroll down to "Pages" section
-- Under "Source", select "Deploy from a branch"
-- Select "main" branch
+- Click "Settings" tab → "Pages"
+- Source: "Deploy from a branch"
+- Branch: `main`
+- Folder: `/` (root)
 - Click "Save"
 
 ### 4. Access Your Live Site
-Your Information Hub will be available at:
-`https://YOUR_USERNAME.github.io/information-hub`
+Your site will be available at:
+`https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/`
 
 ## Default Login Credentials
 - **Admin**: `admin` / `admin123`
