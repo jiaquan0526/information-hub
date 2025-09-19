@@ -3755,42 +3755,7 @@ Permissions:
                 }
             } catch (_) {}
         }
-        async function getOptimizedImageUrl(src, targetWidth = 1200, targetHeight = 720, quality = 0.82) {
-            try {
-                const map = getOptimizedMapping();
-                if (map[src]) return map[src];
-                // Keep GIFs animated by skipping optimization
-                if (/\.gif(\?|$)/i.test(src)) {
-                    map[src] = src;
-                    setOptimizedMapping(map);
-                    return src;
-                }
-                const img = await new Promise((resolve, reject) => {
-                    const i = new Image();
-                    i.crossOrigin = 'anonymous';
-                    i.onload = () => resolve(i);
-                    i.onerror = reject;
-                    i.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
-                });
-                const naturalW = Math.max(1, Number(img.naturalWidth || 1));
-                const naturalH = Math.max(1, Number(img.naturalHeight || 1));
-                const ratio = Math.min(targetWidth / naturalW, targetHeight / naturalH, 1);
-                const outW = Math.max(1, Math.floor(naturalW * ratio));
-                const outH = Math.max(1, Math.floor(naturalH * ratio));
-                const canvas = document.createElement('canvas');
-                canvas.width = outW;
-                canvas.height = outH;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, outW, outH);
-                // Prefer JPEG for smaller size; transparency isn't needed under gradient
-                const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                map[src] = dataUrl || src;
-                setOptimizedMapping(map);
-                return map[src];
-            } catch (_) {
-                return src;
-            }
-        }
+        async function getOptimizedImageUrl(src) { return src; }
 
         function getBackgroundImageForSection(sectionId) {
             try {
@@ -3836,17 +3801,8 @@ Permissions:
                     }
                 } catch (_) {}
                 if (!img) {
-                    // Use precomputed optimized image (thumbnail) if available
-                    const raw = resolveValidBackground(sectionCfg.id);
-                    const chosen = await raw;
-                    if (chosen) {
-                        try {
-                            // Try smaller target for card backgrounds
-                            img = await getOptimizedImageUrl(chosen, 640, 360, 0.82);
-                        } catch(_) {
-                            img = chosen;
-                        }
-                    }
+                    const chosen = await resolveValidBackground(sectionCfg.id);
+                    if (chosen) img = chosen;
                 }
                 if (!img) return;
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
@@ -4284,50 +4240,8 @@ Permissions:
             _bgQueue.push({ section });
             _processBgQueue();
         }
-        function isLowDataConnection() {
-            try {
-                const force = localStorage.getItem('forceBackgrounds');
-                if (force === '1') return false;
-                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                if (!conn) return false;
-                if (conn.saveData) return true;
-                const down = Number(conn.downlink || 0);
-                return down > 0 && down < 1.5; // treat <1.5Mbps as low
-            } catch (_) { return false; }
-        }
-        function initBackgroundLazyLoad(sections) {
-            try {
-                if (isLowDataConnection()) {
-                    // Skip heavy backgrounds on slow connections; keep gradient only
-                    return;
-                }
-                if (!('IntersectionObserver' in window)) {
-                    // Fallback: schedule all
-                    (sections || []).forEach(s => scheduleCardBackground(s));
-                    return;
-                }
-                const io = new IntersectionObserver((entries, obs) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            try {
-                                const card = entry.target;
-                                const sid = card.getAttribute('data-section-id');
-                                const sec = (sections || []).find(s => s.id === sid);
-                                if (sec) scheduleCardBackground(sec);
-                            } catch (_) {}
-                            obs.unobserve(entry.target);
-                        }
-                    });
-                }, { rootMargin: '300px 0px' });
-                (sections || []).forEach(s => {
-                    const card = document.getElementById(`card-${s.id}`);
-                    if (card) io.observe(card);
-                });
-            } catch (_) {
-                // Fallback schedule all
-                (sections || []).forEach(s => scheduleCardBackground(s));
-            }
-        }
+        function isLowDataConnection() { return false; }
+        function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
     </script>
     
     <style>
