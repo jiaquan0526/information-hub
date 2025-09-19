@@ -531,10 +531,22 @@
         }
         function canonicalKeyForResource(r) {
             const id = r && r.id !== undefined && r.id !== null ? String(r.id) : '';
-            if (id) return `id:${id}`;
             const title = String(r?.title || '').trim().toLowerCase();
             const urlKey = canonicalizeUrlForKey(r?.url);
-            return `t:${title}|u:${urlKey}`;
+            // Prefer pair key for robust de-duplication across regenerated IDs
+            const pair = `t:${title}|u:${urlKey}`;
+            return pair || (id ? `id:${id}` : '');
+        }
+        function seenAdd(seenById, seenByPair, r) {
+            const id = r && r.id !== undefined && r.id !== null ? String(r.id) : '';
+            const title = String(r?.title || '').trim().toLowerCase();
+            const urlKey = canonicalizeUrlForKey(r?.url);
+            const pair = `t:${title}|u:${urlKey}`;
+            if (pair && seenByPair.has(pair)) return false;
+            if (id && seenById.has(id)) return false;
+            if (pair) seenByPair.add(pair);
+            if (id) seenById.add(id);
+            return true;
         }
 
         // Function to update section statistics with real data (DB first, fallback to localStorage)
@@ -555,12 +567,15 @@
             const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
             await Promise.all(sections.map(async (sectionId) => {
                 try {
-                    // Merge DB and both localStorage sources; de-duplicate by canonical key
+                    // Merge DB and both localStorage sources; de-duplicate by title+URL (and ID as secondary)
                     const byKey = new Map();
+                    const seenById = new Set();
+                    const seenByPair = new Set();
                     const addList = (list, forcedBucket) => {
                         (list || []).forEach(r => {
                             const bucket = forcedBucket || normalizeResourceType(r?.type || r?.resourceType || r?.category);
                             if (!bucket) return;
+                            if (!seenAdd(seenById, seenByPair, r)) return;
                             const key = canonicalKeyForResource(r);
                             if (!key) return;
                             if (!byKey.has(key)) byKey.set(key, bucket);
@@ -625,10 +640,13 @@
             // LocalStorage-only union of per-section and main hub formats with de-duplication
             try {
                 const byKey = new Map();
+                const seenById = new Set();
+                const seenByPair = new Set();
                 const addList = (list, forcedBucket) => {
                     (list || []).forEach(r => {
                         const bucket = forcedBucket || normalizeResourceType(r?.type || r?.resourceType || r?.category);
                         if (!bucket) return;
+                        if (!seenAdd(seenById, seenByPair, r)) return;
                         const key = canonicalKeyForResource(r);
                         if (!key) return;
                         if (!byKey.has(key)) byKey.set(key, bucket);
@@ -3631,7 +3649,7 @@ Permissions:
         
         // Background image support for sections (random, persistent per section)
         let BACKGROUND_IMAGES = [];
-        async function ensureBackgroundImagesLoaded(force) {
+        async function ensureBackgroundImagesLoaded() {
             try {
                 // Always attempt to re-read manifest to reflect folder updates. Bypass cache.
                 const bust = Date.now();
@@ -3687,11 +3705,11 @@ Permissions:
             return h;
         }
 
-        function applyCardBackground(sectionCfg) {
+        async function applyCardBackground(sectionCfg) {
             try {
                 const card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionCfg.id}')"]`);
                 if (!card) return;
-                const img = getBackgroundImageForSection(sectionCfg.id);
+                const img = await resolveValidBackground(sectionCfg.id);
                 if (!img) return;
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';
@@ -3996,6 +4014,38 @@ Permissions:
                 }
             });
         };
+
+        // Ensure selected image actually loads; if not, remap to another available image
+        function resolveValidBackground(sectionId, attempts = 0) {
+            return new Promise((resolve) => {
+                try {
+                    if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) return resolve(null);
+                    const candidate = getBackgroundImageForSection(sectionId);
+                    if (!candidate) return resolve(null);
+                    const testImg = new Image();
+                    testImg.onload = () => resolve(candidate);
+                    testImg.onerror = () => {
+                        try {
+                            const key = 'sectionBackgrounds';
+                            const raw = localStorage.getItem(key);
+                            const map = raw ? JSON.parse(raw) : {};
+                            if (map && map[sectionId]) {
+                                delete map[sectionId];
+                                localStorage.setItem(key, JSON.stringify(map));
+                            }
+                        } catch (_) {}
+                        if (attempts < Math.min(5, BACKGROUND_IMAGES.length)) {
+                            resolveValidBackground(sectionId, attempts + 1).then(resolve);
+                        } else {
+                            resolve(null);
+                        }
+                    };
+                    testImg.src = candidate + (candidate.includes('?') ? '&' : '?') + 't=' + Date.now();
+                } catch (_) {
+                    resolve(null);
+                }
+            });
+        }
     </script>
     
     <style>
