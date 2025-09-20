@@ -14,7 +14,7 @@
     <link rel="prefetch" href="section.html" as="document" crossorigin>
     <link rel="preload" href="section-script.js" as="script">
     <link rel="preload" href="database.js" as="script">
-    <link rel="preconnect" href="https://wsrv.nl" crossorigin>
+    
 </head>
 <body>
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
@@ -3920,8 +3920,8 @@ Permissions:
                         if (!resp.ok) continue;
                         const data = await resp.json();
                         if (Array.isArray(data) && data.length > 0) {
-                            const files = data
-                                .filter(x => x && x.type === 'file' && /\.(png|jpe?g|gif|webp|svg)$/i.test(x.name || ''))
+                        const files = data
+                                .filter(x => x && x.type === 'file' && /\.(png|jpe?g|gif|svg)$/i.test(x.name || ''))
                                 .map(x => `background-pic/${x.name}`);
                             if (files.length > 0) return files;
                         }
@@ -3980,41 +3980,7 @@ Permissions:
             } catch (_) {}
         }
         async function getOptimizedImageUrl(src, width = 1400, height = 0, quality = 0.74) {
-            try {
-                // Local files or unsupported protocols: skip CDN
-                if (!/^https?:/i.test(location.protocol)) return src;
-                // Prefer build-generated WebP under dist/background-pic/opt when present
-                const base = String(src || '').replace(/^.*\//, '').replace(/\.[^.]+$/, '');
-                const candidate = `background-pic/opt/${base}.webp`;
-                // Probe once and cache mapping
-                const map = getOptimizedMapping();
-                if (map[src]) return map[src];
-                const ok = await fetch(candidate, { method: 'HEAD' }).then(r => r.ok).catch(() => false);
-                if (ok) {
-                    setOptimizedMapping({ ...map, [src]: candidate });
-                    return candidate;
-                }
-                // Fallback to CDN-based on-the-fly optimization (no backend required)
-                const abs = new URL(src, location.href).href;
-                const encoded = encodeURIComponent(abs);
-                const w = Math.max(640, Math.min(1920, width|0));
-                const q = Math.round(Math.max(50, Math.min(85, quality * 100)));
-                const cdn = `https://wsrv.nl/?url=${encoded}&w=${w}&q=${q}&output=webp`;
-                const canLoad = await new Promise((resolve) => {
-                    try {
-                        const img = new Image();
-                        img.onload = () => resolve(true);
-                        img.onerror = () => resolve(false);
-                        img.referrerPolicy = 'no-referrer';
-                        img.decoding = 'async';
-                        img.src = cdn;
-                    } catch (_) { resolve(false); }
-                });
-                if (canLoad) {
-                    setOptimizedMapping({ ...map, [src]: cdn });
-                    return cdn;
-                }
-            } catch (_) {}
+            // WebP/CDN optimization disabled; always use original source
             return src;
         }
 

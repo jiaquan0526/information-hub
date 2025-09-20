@@ -213,16 +213,8 @@ class SectionManager {
                     try {
                         if (disable) return; // skip applying heavy backgrounds if disabled
                         const chosen = heavyList.includes(img) ? preferList[0] : img;
-                        const optimized = (() => {
-                            try {
-                                if (!/^https?:/i.test(location.protocol)) return chosen;
-                                const w = Math.max(640, Math.min(1600, container.clientWidth || 1200));
-                                const abs = new URL(chosen, location.href).href;
-                                const url = encodeURIComponent(abs);
-                                return `https://wsrv.nl/?url=${url}&w=${w}&q=74&output=webp`;
-                            } catch(_) { return chosen; }
-                        })();
-                        container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${optimized}')`;
+                        // WebP/CDN optimization disabled; use original image
+                        container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${chosen}')`;
                         container.style.backgroundSize = 'cover';
                         container.style.backgroundPosition = 'center';
                     } catch(_) {}
