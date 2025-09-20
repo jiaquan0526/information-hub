@@ -810,6 +810,12 @@ form {
     pointer-events: none;
 }
 
+/* Smooth page transition fallback */
+body.fade-out {
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
 /* Success/Error messages */
 .message {
     padding: 15px 20px;

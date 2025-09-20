@@ -6,14 +6,17 @@
     <title>Information Hub - Central Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="dns-prefetch" href="//cdnjs.cloudflare.com">
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"></noscript>
     <link rel="icon" href="logo.svg" type="image/svg+xml">
+    <link rel="preload" as="image" href="logo.svg">
     <link rel="alternate icon" href="favicon.ico">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="prefetch" href="section.html" as="document" crossorigin>
     <link rel="preload" href="section-script.js" as="script">
     <link rel="preload" href="database.js" as="script">
+    <link rel="preload" href="hub-script.js" as="script">
     
 </head>
 <body>
@@ -31,7 +34,7 @@
             <div class="header-content">
                 <div class="header-title">
                     <div class="logo-container">
-                        <img src="logo.svg" alt="Company Logo" class="site-logo" loading="eager" decoding="async">
+                        <img src="logo.svg" alt="Company Logo" class="site-logo" loading="eager" decoding="async" fetchpriority="high">
                         <h1>Information Hub</h1>
                     </div>
                     <p>Central dashboard for accessing all functional areas and resources</p>
@@ -68,12 +71,7 @@
                 <button class="action-btn" id="adminPanelBtn" onclick="openAdminPanel()" style="display:none;">
                     <i class="fas fa-cog"></i> User Management
                 </button>
-                <button class="action-btn" onclick="openAuditFromInfoBar(event)">
-                    <i class="fas fa-clock"></i> Updated Resources
-                </button>
-                <button class="action-btn" id="exportBtn" onclick="exportAllData()" style="display:none;">
-                    <i class="fas fa-download"></i> Export Data
-                </button>
+                
                 <button class="action-btn" id="reshuffleBackgroundsBtn" onclick="reshuffleBackgrounds()" style="display:none;">
                     <i class="fas fa-images"></i> Reshuffle Backgrounds
                 </button>

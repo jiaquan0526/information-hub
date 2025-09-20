@@ -1188,7 +1188,20 @@ class SectionManager {
     goBackToHub() {
         // Signal hub to refresh stats immediately on return
         this._notifyHub({ type: 'NAV_BACK' });
-        window.location.href = 'index.html';
+        const go = () => { window.location.href = 'index.html'; };
+        try {
+            if (document.startViewTransition) {
+                document.startViewTransition(() => go());
+            } else {
+                const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                if (!prefersReduced) {
+                    document.body.classList.add('fade-out');
+                    setTimeout(go, 150);
+                } else {
+                    go();
+                }
+            }
+        } catch (_) { go(); }
     }
 
     loadSectionConfig() {

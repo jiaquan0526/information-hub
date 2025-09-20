@@ -220,8 +220,23 @@ class InformationHub {
             }
         } catch (_) {}
 
-        // Navigate to a dedicated section page
-        window.location.href = `section.html?section=${sectionId}`;
+        // Navigate to a dedicated section page with a smooth transition
+        const go = () => { window.location.href = `section.html?section=${sectionId}`; };
+        try {
+            if (document.startViewTransition) {
+                // Use View Transitions API when available
+                document.startViewTransition(() => go());
+            } else {
+                // Fallback: quick fade-out
+                const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                if (!prefersReduced) {
+                    document.body.classList.add('fade-out');
+                    setTimeout(go, 150);
+                } else {
+                    go();
+                }
+            }
+        } catch (_) { go(); }
     }
 
     bindSectionEvents() {
