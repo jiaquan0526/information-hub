@@ -47,9 +47,18 @@ class SectionManager {
         this.checkAccess();
         // Section session start
         this.sectionSessionStartMs = Date.now();
+        // One-time migration: ensure all resources in this section have stable unique IDs
+        try { this.ensureResourceIdsForCurrentSection(); } catch (_) {}
         this.loadSectionData();
         this.bindEvents();
         this.renderDynamicUI();
+        // Ensure filters are cleared on entry to avoid stale search/category narrowing results
+        try {
+            const searchInput = document.getElementById('searchInput');
+            const categoryFilter = document.getElementById('categoryFilter');
+            if (searchInput) searchInput.value = '';
+            if (categoryFilter) categoryFilter.value = '';
+        } catch (_) {}
         // Show content early to avoid spinner stuck on minor errors
         const loadingEl = document.getElementById('loadingScreen');
         const contentEl = document.getElementById('mainContent');
@@ -177,30 +186,52 @@ class SectionManager {
             introEl.style.display = intro ? 'block' : 'none';
         }
 
-        // Apply persistent background image per section
+        // Apply persistent background image per section (defer heavy images)
         try {
+            const disable = (() => { try { return localStorage.getItem('disableBackgrounds') === '1' || localStorage.getItem('disableBackgrounds') === 'true'; } catch(_) { return false; } })();
             const key = 'sectionBackgrounds';
             const raw = localStorage.getItem(key);
             const map = raw ? JSON.parse(raw) : {};
             let img = map[this.currentSection];
-            if (!img) {
-                // Choose deterministically if hub mapping is missing
-                const list = [
-                    'background-pic/132169_L.png','background-pic/132170_L.png','background-pic/132173_K.png','background-pic/135253_L.png',
-                    'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
-                    'background-pic/162062_L.png','background-pic/164057_K.png','background-pic/166799_K.png','background-pic/168817_L.png',
-                    'background-pic/171327_Y.png','background-pic/537081_L.png','background-pic/537082_K.png','background-pic/560846_L.png',
-                    'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
-                ];
-                const idx = Math.abs(this._hash(this.currentSection)) % list.length;
-                img = list[idx];
-            }
             const container = document.querySelector('.container');
-            if (container && img) {
-                container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.90), rgba(255,255,255,0.90)), url('${img}')`;
-                container.style.backgroundSize = 'cover';
-                container.style.backgroundPosition = 'center';
+            const preferList = [
+                'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
+                'background-pic/537082_K.png','background-pic/560846_L.png'
+            ];
+            const heavyList = [
+                'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
+            ];
+            if (!img) {
+                const idx = Math.abs(this._hash(this.currentSection)) % preferList.length;
+                img = preferList[idx];
+            }
+            if (container) {
                 container.style.borderRadius = '12px';
+                container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
+                const applyBg = () => {
+                    try {
+                        if (disable) return; // skip applying heavy backgrounds if disabled
+                        const chosen = heavyList.includes(img) ? preferList[0] : img;
+                        const optimized = (() => {
+                            try {
+                                if (!/^https?:/i.test(location.protocol)) return chosen;
+                                const w = Math.max(640, Math.min(1600, container.clientWidth || 1200));
+                                const abs = new URL(chosen, location.href).href;
+                                const url = encodeURIComponent(abs);
+                                return `https://wsrv.nl/?url=${url}&w=${w}&q=74&output=webp`;
+                            } catch(_) { return chosen; }
+                        })();
+                        container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${optimized}')`;
+                        container.style.backgroundSize = 'cover';
+                        container.style.backgroundPosition = 'center';
+                    } catch(_) {}
+                };
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(applyBg, { timeout: 1200 });
+                } else {
+                    setTimeout(applyBg, 200);
+                }
             }
         } catch (_) {}
     }
@@ -338,6 +369,14 @@ class SectionManager {
             section.classList.remove('active');
         });
         document.getElementById(`${tabName}-section`).classList.add('active');
+
+        // Reset filters on tab change so counts and visible items match expectations
+        try {
+            const searchInput = document.getElementById('searchInput');
+            const categoryFilter = document.getElementById('categoryFilter');
+            if (searchInput) searchInput.value = '';
+            if (categoryFilter) categoryFilter.value = '';
+        } catch (_) {}
 
         // Render the appropriate content
         this.renderCurrentTab();
@@ -677,7 +716,7 @@ class SectionManager {
     async saveResource(type, form) {
         const formData = new FormData(form);
         const resource = {
-            id: Date.now().toString(),
+            id: this.generateResourceId(this.mapToStorageType(type)),
             title: String(formData.get('title') || '').trim(),
             description: formData.get('description') || '',
             url: this.normalizeUrl(formData.get('url')),
@@ -879,7 +918,7 @@ class SectionManager {
             original = existingResources.find(r => `${r.title || ''}|${r.url || ''}` === `${origTitle}|${origUrl}`) || {};
         }
         const updatedResource = {
-            id: original.id || id,
+            id: original.id || id || this.generateResourceId(this.mapToStorageType(type)),
             title: String(formData.get('title') || '').trim(),
             description: formData.get('description') || '',
             url: this.normalizeUrl(formData.get('url')),
@@ -902,6 +941,73 @@ class SectionManager {
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} updated successfully!`, 'success');
         return true;
+    }
+
+    // Generate stable unique IDs for resources in this section: sectionId:type:time:random
+    generateResourceId(storageType) {
+        try {
+            const ts = Date.now().toString(36);
+            let rand = '';
+            try {
+                const arr = new Uint32Array(2);
+                (window.crypto || window.msCrypto).getRandomValues(arr);
+                rand = Array.from(arr).map(n => n.toString(36)).join('');
+            } catch (_) {
+                rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+            }
+            const type = storageType || 'resource';
+            return `${this.currentSection}:${type}:${ts}:${rand}`;
+        } catch (_) {
+            return `${this.currentSection}:${storageType || 'resource'}:${Date.now()}`;
+        }
+    }
+
+    // Assign missing IDs to legacy resources in this section across local stores and DB (best-effort)
+    async ensureResourceIdsForCurrentSection() {
+        const sectionId = this.currentSection;
+        const types = ['playbooks', 'boxLinks', 'dashboards'];
+        try {
+            // Per-section store
+            let sectionData = {};
+            try { sectionData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{}'); } catch(_) { sectionData = {}; }
+            let changed = false;
+            for (const t of types) {
+                const arr = Array.isArray(sectionData[t]) ? sectionData[t] : [];
+                for (const r of arr) {
+                    if (r.id === undefined || r.id === null || r.id === '') {
+                        r.id = this.generateResourceId(t);
+                        changed = true;
+                        try { if (window.hubDatabase && hubDatabase.saveResource) hubDatabase.saveResource({ ...r, sectionId, type: t, userId: r.userId || this.currentUser?.id || 0 }); } catch(_) {}
+                    }
+                }
+                sectionData[t] = arr;
+            }
+            if (changed) {
+                localStorage.setItem(`section_${sectionId}`, JSON.stringify(sectionData));
+            }
+        } catch(_) {}
+
+        try {
+            // informationHub store
+            let hub = {};
+            try { hub = JSON.parse(localStorage.getItem('informationHub') || '{}'); } catch(_) { hub = {}; }
+            hub[sectionId] = hub[sectionId] || { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
+            let changedHub = false;
+            for (const t of types) {
+                const arr = Array.isArray(hub[sectionId][t]) ? hub[sectionId][t] : [];
+                for (const r of arr) {
+                    if (r.id === undefined || r.id === null || r.id === '') {
+                        r.id = this.generateResourceId(t);
+                        changedHub = true;
+                        try { if (window.hubDatabase && hubDatabase.saveResource) hubDatabase.saveResource({ ...r, sectionId, type: t, userId: r.userId || this.currentUser?.id || 0 }); } catch(_) {}
+                    }
+                }
+                hub[sectionId][t] = arr;
+            }
+            if (changedHub) {
+                localStorage.setItem('informationHub', JSON.stringify(hub));
+            }
+        } catch(_) {}
     }
 
     async updateResourceInSection(type, id, updatedResource, original) {

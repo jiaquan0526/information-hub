@@ -507,15 +507,15 @@ class InformationHub {
         
         // Sample playbooks
         const samplePlaybooks = this.getSamplePlaybooks(sectionId);
-        section.playbooks = samplePlaybooks;
+        section.playbooks = samplePlaybooks.map(r => ({ ...r, id: r.id || `${sectionId}:playbooks:${Date.now()}:${Math.random().toString(36).slice(2)}` }));
 
         // Sample box links
         const sampleBoxLinks = this.getSampleBoxLinks(sectionId);
-        section.boxLinks = sampleBoxLinks;
+        section.boxLinks = sampleBoxLinks.map(r => ({ ...r, id: r.id || `${sectionId}:boxLinks:${Date.now()}:${Math.random().toString(36).slice(2)}` }));
 
         // Sample dashboards
         const sampleDashboards = this.getSampleDashboards(sectionId);
-        section.dashboards = sampleDashboards;
+        section.dashboards = sampleDashboards.map(r => ({ ...r, id: r.id || `${sectionId}:dashboards:${Date.now()}:${Math.random().toString(36).slice(2)}` }));
     }
 
     getSamplePlaybooks(sectionId) {
@@ -926,18 +926,16 @@ class InformationHub {
     };
 }
 
-// Initialize the application
+// Initialize the application (once)
 let informationHub;
-
-// Initialize immediately when script loads
-informationHub = new InformationHub();
-
-// Also initialize on DOM ready as backup
-document.addEventListener('DOMContentLoaded', () => {
-    if (!informationHub) {
-        informationHub = new InformationHub();
-    }
-});
-
-// Export for global access
-window.informationHub = informationHub;
+function initInformationHubOnce() {
+	if (informationHub && informationHub instanceof InformationHub) return;
+	informationHub = new InformationHub();
+	// Export for global access
+	window.informationHub = informationHub;
+}
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', initInformationHubOnce);
+} else {
+	initInformationHubOnce();
+}

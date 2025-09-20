@@ -10,14 +10,20 @@
 - Don't initialize with README
 - Click "Create repository"
 
-### 2. Upload Files
-Upload all files from your project root, including folders:
-
-**Required items:**
+### 2. Build and Upload Files
+- On your machine, run:
+```bash
+npm install
+npm run build
 ```
-auth.html
+- Upload the contents of the `dist/` folder to your repository root (so that `index.html` sits at repo root)
+
+**Required items now come from `dist/`:**
+```
 index.html
 styles.css
+auth.html
+section.html
 auth-script.js
 hub-script.js
 section-script.js
@@ -26,7 +32,6 @@ excel-export.js
 logo.svg
 redirect.html
 start.html
-.nojekyll
 background-pic/            # images and manifest.json
 ```
 
@@ -50,7 +55,7 @@ Your site will be available at:
 ## Features Included
 ✅ Custom architectural logo
 ✅ Database functionality (IndexedDB)
-✅ Excel export capabilities
+✅ Excel export capabilities (loaded on demand)
 ✅ Role-based access control
 ✅ 8 functional sections
 ✅ Admin panel
@@ -59,8 +64,7 @@ Your site will be available at:
 
 ## Troubleshooting
 - If site doesn't load immediately, wait 5-10 minutes for GitHub Pages to deploy
-- Check that all files are uploaded correctly
-- Ensure repository is public for free GitHub Pages
+- Ensure `index.html` is in the repository root (from `dist/`)
 - Clear browser cache if needed
 
 ## Custom Domain (Optional)

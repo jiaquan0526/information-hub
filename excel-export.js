@@ -2,11 +2,28 @@
 class ExcelExporter {
     constructor() {
         this.workbook = null;
+        this._xlsxReady = false;
+    }
+
+    async ensureXlsxLoaded() {
+        if (this._xlsxReady && typeof XLSX !== 'undefined') return;
+        if (typeof XLSX === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                script.async = true;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load XLSX library'));
+                document.head.appendChild(script);
+            });
+        }
+        this._xlsxReady = true;
     }
 
     // Create Excel file from hub data
     async exportToExcel() {
         try {
+            await this.ensureXlsxLoaded();
             let data;
             try {
                 if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.exportAllData) {
@@ -437,6 +454,7 @@ class ExcelExporter {
     // Export specific section data
     async exportSectionToExcel(sectionId) {
         try {
+            await this.ensureXlsxLoaded();
             const [section, resources] = await Promise.all([
                 hubDatabase.getSection(sectionId),
                 hubDatabase.getResourcesBySection(sectionId)
@@ -500,6 +518,7 @@ class ExcelExporter {
     // Export user-specific data
     async exportUserDataToExcel(userId) {
         try {
+            await this.ensureXlsxLoaded();
             const [user, activities] = await Promise.all([
                 hubDatabase.getUser(userId),
                 hubDatabase.getActivities()

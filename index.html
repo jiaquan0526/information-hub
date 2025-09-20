@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Information Hub - Central Dashboard</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"></noscript>
     <link rel="icon" href="logo.svg" type="image/svg+xml">
     <link rel="alternate icon" href="favicon.ico">
     <link rel="apple-touch-icon" href="logo.png">
+    <link rel="prefetch" href="section.html" as="document" crossorigin>
+    <link rel="preload" href="section-script.js" as="script">
+    <link rel="preload" href="database.js" as="script">
+    <link rel="preconnect" href="https://wsrv.nl" crossorigin>
 </head>
 <body>
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
@@ -25,7 +31,7 @@
             <div class="header-content">
                 <div class="header-title">
                     <div class="logo-container">
-                        <img src="logo.svg" alt="Company Logo" class="site-logo">
+                        <img src="logo.svg" alt="Company Logo" class="site-logo" loading="eager" decoding="async">
                         <h1>Information Hub</h1>
                     </div>
                     <p>Central dashboard for accessing all functional areas and resources</p>
@@ -59,7 +65,7 @@
         <div class="quick-actions">
             <h3>Quick Actions</h3>
             <div class="action-buttons">
-                <button class="action-btn" id="adminPanelBtn" onclick="openAdminPanel()">
+                <button class="action-btn" id="adminPanelBtn" onclick="openAdminPanel()" style="display:none;">
                     <i class="fas fa-cog"></i> User Management
                 </button>
                 <button class="action-btn" onclick="openAuditFromInfoBar(event)">
@@ -70,6 +76,9 @@
                 </button>
                 <button class="action-btn" id="reshuffleBackgroundsBtn" onclick="reshuffleBackgrounds()" style="display:none;">
                     <i class="fas fa-images"></i> Reshuffle Backgrounds
+                </button>
+                <button class="action-btn" id="toggleBackgroundsBtn" onclick="toggleBackgrounds()">
+                    <i class="fas fa-image"></i> Toggle Backgrounds
                 </button>
             </div>
         </div>
@@ -348,11 +357,11 @@
     </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="database.js"></script>
-    <script src="excel-export.js"></script>
-    <script src="auth-script.js"></script>
-    <script src="hub-script.js"></script>
+    <!-- Defer scripts to improve First Paint; XLSX will be loaded on demand -->
+    <script src="database.js" defer></script>
+    <script src="excel-export.js" defer></script>
+    <script src="auth-script.js" defer></script>
+    <script src="hub-script.js" defer></script>
     <script>
         // Debug: Check if navigateToSection function exists
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
@@ -540,6 +549,36 @@
                 };
             }
         } catch (_) {}
+
+        // Backgrounds: toggle + detection helpers
+        function backgroundsDisabled() {
+            try {
+                const flag = localStorage.getItem('disableBackgrounds');
+                if (flag === '1' || flag === 'true') return true;
+            } catch (_) {}
+            try {
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return true;
+            } catch (_) {}
+            return false;
+        }
+
+        function updateBackgroundToggleButton() {
+            const btn = document.getElementById('toggleBackgroundsBtn');
+            if (!btn) return;
+            const off = backgroundsDisabled();
+            btn.innerHTML = off ? '<i class="fas fa-image"></i> Enable Backgrounds' : '<i class="fas fa-image"></i> Disable Backgrounds';
+        }
+
+        window.toggleBackgrounds = function() {
+            try {
+                const off = backgroundsDisabled();
+                localStorage.setItem('disableBackgrounds', off ? '0' : '1');
+                updateBackgroundToggleButton();
+                // Rebuild to apply immediately
+                updateMainHubSections();
+            } catch (_) {}
+        };
         
         // Helper: normalize resource type to buckets we display on cards
         function normalizeResourceType(rawType) {
@@ -605,53 +644,66 @@
             }
 
             const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
+            const getKey = (r) => {
+                const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
+                return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
+            };
+            const newer = (a, b) => {
+                const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
+                const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
+                return tb >= ta ? b : a;
+            };
+            const normType = (t) => {
+                const raw = String(t || '').toLowerCase();
+                if (raw.includes('playbook')) return 'playbooks';
+                if (raw.includes('box')) return 'boxLinks';
+                if (raw.includes('dash')) return 'dashboards';
+                if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') return raw === 'boxlinks' ? 'boxLinks' : raw;
+                return '';
+            };
+
             await Promise.all(sections.map(async (sectionId) => {
                 try {
-                    // Merge DB and both localStorage sources; de-duplicate by title+URL (and ID as secondary)
-                    const byKey = new Map();
-                    const seenById = new Set();
-                    const seenByPair = new Set();
-                    const addList = (list, forcedBucket) => {
-                        (list || []).forEach(r => {
-                            const bucket = forcedBucket || normalizeResourceType(r?.type || r?.resourceType || r?.category);
-                            if (!bucket) return;
-                            if (!seenAdd(seenById, seenByPair, r)) return;
-                            const key = canonicalKeyForResource(r);
-                            if (!key) return;
-                            if (!byKey.has(key)) byKey.set(key, bucket);
-                        });
+                    const idSets = {
+                        playbooks: new Map(),
+                        boxLinks: new Map(),
+                        dashboards: new Map()
+                    };
+                    const consider = (type, r) => {
+                        if (!r) return;
+                        const id = r.id;
+                        if (id === undefined || id === null || id === '') return;
+                        const ts = Date.parse(r?.updatedAt || r?.createdAt || 0) || 0;
+                        const prev = idSets[type].get(String(id));
+                        if (!prev || ts >= prev) idSets[type].set(String(id), ts);
                     };
 
                     if (useDb) {
-                        try {
-                            const dbResources = await hubDatabase.getResourcesBySection(sectionId);
-                            addList(dbResources, null);
-                        } catch (_) {}
+                        try { (await hubDatabase.getResourcesByType(sectionId, 'playbooks')).forEach(r => consider('playbooks', r)); } catch(_) {}
+                        try { (await hubDatabase.getResourcesByType(sectionId, 'boxLinks')).forEach(r => consider('boxLinks', r)); } catch(_) {}
+                        try { (await hubDatabase.getResourcesByType(sectionId, 'dashboards')).forEach(r => consider('dashboards', r)); } catch(_) {}
                     }
 
                     // LocalStorage per-section
                     try {
                         const sectionData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-                        addList(sectionData.playbooks, 'playbooks');
-                        addList(sectionData.boxLinks, 'boxLinks');
-                        addList(sectionData.dashboards, 'dashboards');
+                        (sectionData.playbooks || []).forEach(r => consider('playbooks', r));
+                        (sectionData.boxLinks || []).forEach(r => consider('boxLinks', r));
+                        (sectionData.dashboards || []).forEach(r => consider('dashboards', r));
                     } catch (_) {}
 
                     // LocalStorage main hub format
                     try {
                         const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
                         const s = hub[sectionId] || {};
-                        addList(s.playbooks, 'playbooks');
-                        addList(s.boxLinks, 'boxLinks');
-                        addList(s.dashboards, 'dashboards');
+                        (s.playbooks || []).forEach(r => consider('playbooks', r));
+                        (s.boxLinks || []).forEach(r => consider('boxLinks', r));
+                        (s.dashboards || []).forEach(r => consider('dashboards', r));
                     } catch (_) {}
 
-                    let playbooks = 0, boxLinks = 0, dashboards = 0;
-                    byKey.forEach(bucket => {
-                        if (bucket === 'playbooks') playbooks++;
-                        else if (bucket === 'boxLinks') boxLinks++;
-                        else if (bucket === 'dashboards') dashboards++;
-                    });
+                    const playbooks = idSets.playbooks.size;
+                    const boxLinks = idSets.boxLinks.size;
+                    const dashboards = idSets.dashboards.size;
 
                     const playbooksEl = document.getElementById(`${sectionId}-playbooks`);
                     const boxLinksEl = document.getElementById(`${sectionId}-boxlinks`);
@@ -660,7 +712,6 @@
                     if (boxLinksEl) boxLinksEl.textContent = boxLinks;
                     if (dashboardsEl) dashboardsEl.textContent = dashboards;
 
-                    // Store last counts for lightweight change detection
                     try {
                         const prevKey = `section_counts_${sectionId}`;
                         const prev = JSON.parse(localStorage.getItem(prevKey) || 'null');
@@ -670,53 +721,144 @@
                         }
                     } catch(_) {}
                 } catch (_) {
-                    // Fallback per-section if any part fails
                     updateSectionStatsFallback(sectionId);
                 }
             }));
         }
 
-        function updateSectionStatsFallback(section) {
-            // LocalStorage-only union of per-section and main hub formats with de-duplication
+        // Debug helper: Inspect resources contributing to counts
+        window.debugSectionResources = async function(sectionId = 'costing', type = 'playbooks') {
+            const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
+            const getKey = (r) => {
+                const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
+                return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
+            };
+            const newer = (a, b) => {
+                const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
+                const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
+                return tb >= ta ? b : a;
+            };
+            const normType = (t) => {
+                const raw = String(t || '').toLowerCase();
+                if (raw.includes('playbook')) return 'playbooks';
+                if (raw.includes('box')) return 'boxLinks';
+                if (raw.includes('dash')) return 'dashboards';
+                if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') return raw === 'boxlinks' ? 'boxLinks' : raw;
+                return '';
+            };
+
+            const byKey = new Map();
+            const consider = (r, forcedType, origin) => {
+                if (!r) return;
+                const t = forcedType || normType(r.type || r.resourceType || r.category);
+                if (t !== type) return;
+                const key = getKey(r);
+                if (!key) return;
+                const withMeta = { ...r, type: t, __origin: origin };
+                if (!byKey.has(key)) byKey.set(key, withMeta); else byKey.set(key, newer(byKey.get(key), withMeta));
+            };
+
+            if (useDb) {
+                try {
+                    const dbResources = await hubDatabase.getResourcesBySection(sectionId);
+                    (dbResources || []).forEach(r => consider(r, null, 'db'));
+                } catch (_) {}
+            }
+
             try {
-                const byKey = new Map();
-                const seenById = new Set();
-                const seenByPair = new Set();
-                const addList = (list, forcedBucket) => {
-                    (list || []).forEach(r => {
-                        const bucket = forcedBucket || normalizeResourceType(r?.type || r?.resourceType || r?.category);
-                        if (!bucket) return;
-                        if (!seenAdd(seenById, seenByPair, r)) return;
-                        const key = canonicalKeyForResource(r);
-                        if (!key) return;
-                        if (!byKey.has(key)) byKey.set(key, bucket);
-                    });
+                const sData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+                (sData.playbooks || []).forEach(r => consider(r, 'playbooks', 'ls:section'));
+                (sData.boxLinks || []).forEach(r => consider(r, 'boxLinks', 'ls:section'));
+                (sData.dashboards || []).forEach(r => consider(r, 'dashboards', 'ls:section'));
+            } catch (_) {}
+
+            try {
+                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                const s = hub[sectionId] || {};
+                (s.playbooks || []).forEach(r => consider(r, 'playbooks', 'ls:hub'));
+                (s.boxLinks || []).forEach(r => consider(r, 'boxLinks', 'ls:hub'));
+                (s.dashboards || []).forEach(r => consider(r, 'dashboards', 'ls:hub'));
+            } catch (_) {}
+
+            const list = Array.from(byKey.values());
+            console.log(`[debugSectionResources] ${sectionId} ${type} →`, list.length, list);
+            alert(`${sectionId} ${type} unique count: ${list.length}`);
+            return list;
+        };
+
+        // Repair helper: unify section data across stores, assign IDs if missing, and persist
+        window.repairSectionData = async function(sectionId = 'costing') {
+            const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
+            const ensureId = (r, t) => {
+                if (r.id !== undefined && r.id !== null && r.id !== '') return r;
+                const ts = Date.now().toString(36);
+                const rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+                return { ...r, id: `${sectionId}:${t}:${ts}:${rand}` };
+            };
+            const types = ['playbooks','boxLinks','dashboards'];
+            let hub = {}; try { hub = JSON.parse(localStorage.getItem('informationHub') || '{}'); } catch(_) { hub = {}; }
+            let sec = {}; try { sec = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{}'); } catch(_) { sec = {}; }
+            hub[sectionId] = hub[sectionId] || { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
+            const out = { playbooks: [], boxLinks: [], dashboards: [] };
+            const byKey = new Map();
+            const keyOf = (r) => {
+                const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
+                return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
+            };
+            const newer = (a, b) => {
+                const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
+                const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
+                return tb >= ta ? b : a;
+            };
+            const addAll = (arr, t) => (arr || []).forEach(r => {
+                const withId = ensureId(r, t);
+                const k = keyOf(withId);
+                if (!k) return;
+                if (!byKey.has(k)) byKey.set(k, { ...withId, type: t }); else byKey.set(k, newer(byKey.get(k), { ...withId, type: t }));
+            });
+            types.forEach(t => { addAll(hub[sectionId][t], t); addAll(sec[t], t); });
+            if (useDb) {
+                try { (await hubDatabase.getResourcesBySection(sectionId)).forEach(r => addAll([r], r.type)); } catch(_) {}
+            }
+            byKey.forEach(r => { if (r.type && out[r.type]) out[r.type].push(r); });
+            localStorage.setItem(`section_${sectionId}`, JSON.stringify(out));
+            hub[sectionId] = { ...(hub[sectionId] || {}), ...out };
+            localStorage.setItem('informationHub', JSON.stringify(hub));
+            if (useDb) {
+                try { for (const t of types) { for (const r of out[t]) { await hubDatabase.saveResource({ ...r, sectionId, type: t }); } } } catch(_) {}
+            }
+            updateSectionStats();
+            alert(`Repaired section '${sectionId}'. Counts recalculated.`);
+        };
+
+        function updateSectionStatsFallback(section) {
+            // LocalStorage-only union using unique ids per type (latest timestamp kept)
+            try {
+                const idSets = {
+                    playbooks: new Map(),
+                    boxLinks: new Map(),
+                    dashboards: new Map()
                 };
-
-                // Per-section store
-                try {
-                    const data = JSON.parse(localStorage.getItem(`section_${section}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-                    addList(data.playbooks, 'playbooks');
-                    addList(data.boxLinks, 'boxLinks');
-                    addList(data.dashboards, 'dashboards');
-                } catch (_) {}
-
-                // Main hub format
-                try {
-                    const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                    const s = hub[section] || {};
-                    addList(s.playbooks, 'playbooks');
-                    addList(s.boxLinks, 'boxLinks');
-                    addList(s.dashboards, 'dashboards');
-                } catch (_) {}
-
-                let playbooks = 0, boxLinks = 0, dashboards = 0;
-                byKey.forEach(bucket => {
-                    if (bucket === 'playbooks') playbooks++;
-                    else if (bucket === 'boxLinks') boxLinks++;
-                    else if (bucket === 'dashboards') dashboards++;
-                });
-
+                const consider = (type, r) => {
+                    if (!r) return;
+                    const id = r.id;
+                    if (id === undefined || id === null || id === '') return;
+                    const ts = Date.parse(r?.updatedAt || r?.createdAt || 0) || 0;
+                    const prev = idSets[type].get(String(id));
+                    if (!prev || ts >= prev) idSets[type].set(String(id), ts);
+                };
+                const data = JSON.parse(localStorage.getItem(`section_${section}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
+                (data.playbooks || []).forEach(r => consider('playbooks', r));
+                (data.boxLinks || []).forEach(r => consider('boxLinks', r));
+                (data.dashboards || []).forEach(r => consider('dashboards', r));
+                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                const s = hub[section] || {};
+                (s.playbooks || []).forEach(r => consider('playbooks', r));
+                (s.boxLinks || []).forEach(r => consider('boxLinks', r));
+                (s.dashboards || []).forEach(r => consider('dashboards', r));
+                const playbooks = idSets.playbooks.size;
+                const boxLinks = idSets.boxLinks.size;
+                const dashboards = idSets.dashboards.size;
                 const playbooksEl = document.getElementById(`${section}-playbooks`);
                 const boxLinksEl = document.getElementById(`${section}-boxlinks`);
                 const dashboardsEl = document.getElementById(`${section}-dashboards`);
@@ -3238,7 +3380,7 @@ Permissions:
                     </div>
                     <div class="section-info">
                         <div class="section-icon">
-                            ${section.image ? `<img src="${section.image}" class="section-img-icon">` : `<i class="${section.icon || 'fas fa-th-large'}"></i>`}
+                            ${section.image ? `<img src="${section.image}" class="section-img-icon" loading="lazy" decoding="async">` : `<i class="${section.icon || 'fas fa-th-large'}"></i>`}
                         </div>
                         <div class="section-details">
                             <h4>${section.name}</h4>
@@ -3580,7 +3722,7 @@ Permissions:
             const existing = document.querySelector(`[onclick="navigateToSection('${section.id}')"]`);
             if (existing) return;
             const iconClass = normalizeIconClass((section.icon && section.icon.trim()) ? section.icon : 'fa-solid fa-table-cells-large');
-            const iconHtml = section.image ? `<img src="${section.image}" class="section-img-icon">` : `<i class="${iconClass}"></i>`;
+            const iconHtml = section.image ? `<img src="${section.image}" class="section-img-icon" loading="lazy" decoding="async">` : `<i class="${iconClass}"></i>`;
             const cardHTML = `
             <div class="hub-card" onclick="navigateToSection('${section.id}')">
                 <div class="card-icon">
@@ -3608,7 +3750,7 @@ Permissions:
             if (iconContainer) {
                 const iconClass = normalizeIconClass((section.icon && section.icon.trim()) ? section.icon : 'fa-solid fa-table-cells-large');
                 if (section.image) {
-                    iconContainer.innerHTML = `<img src="${section.image}" class="section-img-icon">`;
+                    iconContainer.innerHTML = `<img src="${section.image}" class="section-img-icon" loading="lazy" decoding="async">`;
             } else {
                     iconContainer.innerHTML = `<i class="${iconClass}"></i>`;
                 }
@@ -3837,7 +3979,44 @@ Permissions:
                 }
             } catch (_) {}
         }
-        async function getOptimizedImageUrl(src) { return src; }
+        async function getOptimizedImageUrl(src, width = 1400, height = 0, quality = 0.74) {
+            try {
+                // Local files or unsupported protocols: skip CDN
+                if (!/^https?:/i.test(location.protocol)) return src;
+                // Prefer build-generated WebP under dist/background-pic/opt when present
+                const base = String(src || '').replace(/^.*\//, '').replace(/\.[^.]+$/, '');
+                const candidate = `background-pic/opt/${base}.webp`;
+                // Probe once and cache mapping
+                const map = getOptimizedMapping();
+                if (map[src]) return map[src];
+                const ok = await fetch(candidate, { method: 'HEAD' }).then(r => r.ok).catch(() => false);
+                if (ok) {
+                    setOptimizedMapping({ ...map, [src]: candidate });
+                    return candidate;
+                }
+                // Fallback to CDN-based on-the-fly optimization (no backend required)
+                const abs = new URL(src, location.href).href;
+                const encoded = encodeURIComponent(abs);
+                const w = Math.max(640, Math.min(1920, width|0));
+                const q = Math.round(Math.max(50, Math.min(85, quality * 100)));
+                const cdn = `https://wsrv.nl/?url=${encoded}&w=${w}&q=${q}&output=webp`;
+                const canLoad = await new Promise((resolve) => {
+                    try {
+                        const img = new Image();
+                        img.onload = () => resolve(true);
+                        img.onerror = () => resolve(false);
+                        img.referrerPolicy = 'no-referrer';
+                        img.decoding = 'async';
+                        img.src = cdn;
+                    } catch (_) { resolve(false); }
+                });
+                if (canLoad) {
+                    setOptimizedMapping({ ...map, [src]: cdn });
+                    return cdn;
+                }
+            } catch (_) {}
+            return src;
+        }
 
         function getBackgroundImageForSection(sectionId) {
             try {
@@ -3990,7 +4169,10 @@ Permissions:
 
             // Pre-assign a pool of images large enough for all sections, allowing duplicates when needed
             try {
-                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
+                if (backgroundsDisabled()) {
+                    try { localStorage.removeItem('sectionBackgrounds'); } catch(_) {}
+                }
+                if (!backgroundsDisabled() && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
                     const needed = visibleSections.length;
                     const pool = [];
                     // Shuffle a copy to vary selections a bit
@@ -4061,8 +4243,9 @@ Permissions:
             }
             // Stats for currently built sections
             updateSectionStats();
-            // Initialize lazy loading for backgrounds
-            initBackgroundLazyLoad(visibleSections);
+            // Initialize lazy loading for backgrounds (skip when disabled)
+            if (!backgroundsDisabled()) initBackgroundLazyLoad(visibleSections);
+            updateBackgroundToggleButton();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
         }
         

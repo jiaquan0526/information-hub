@@ -51,6 +51,13 @@ class HubDatabase {
             resourcesStore.createIndex('userId', 'userId', { unique: false });
             resourcesStore.createIndex('createdAt', 'createdAt', { unique: false });
         }
+        // Add a composite unique index to ensure per-section+type+url uniqueness when present
+        try {
+            const resStore = db.transaction(['resources'], 'versionchange').objectStore('resources');
+            if (resStore && !resStore.indexNames.contains('sec_type_url')) {
+                resStore.createIndex('sec_type_url', ['sectionId','type','url'], { unique: false });
+            }
+        } catch (_) {}
 
         // Activities store (audit log)
         if (!db.objectStoreNames.contains('activities')) {
