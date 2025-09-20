@@ -18,6 +18,21 @@
     <link rel="preload" href="database.js" as="script">
     <link rel="preload" href="hub-script.js" as="script">
     
+    <script>
+    // Default-disable heavy backgrounds on GitHub Pages for faster loads; user can re-enable via toggle
+    try {
+        (function(){
+            var host = String(location.hostname||'').toLowerCase();
+            if (host.endsWith('.github.io')) {
+                var hasPref = localStorage.getItem('disableBackgrounds');
+                if (hasPref === null || hasPref === undefined) {
+                    localStorage.setItem('disableBackgrounds','1');
+                }
+            }
+        })();
+    } catch (_) {}
+    </script>
+
 </head>
 <body>
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
@@ -4061,7 +4076,20 @@ Permissions:
             const sectionOrderRaw = localStorage.getItem('sectionOrder');
             let sectionOrder = [];
             try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
-            const visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+            let visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+            // Filter by user permissions to prevent flashing of admin-only sections
+            try {
+                const sessionRaw = localStorage.getItem('hubSession');
+                if (sessionRaw) {
+                    const user = JSON.parse(sessionRaw);
+                    const role = String(user.role || '').toLowerCase();
+                    const canAll = !!(user.permissions && user.permissions.canEditAllSections);
+                    if (!(role === 'admin' || canAll)) {
+                        const allowed = new Set((user.permissions && user.permissions.sections) || []);
+                        visibleSections = visibleSections.filter(s => allowed.has(s.id));
+                    }
+                }
+            } catch (_) {}
             if (visibleSections.length === 0) {
                 console.warn('No visible sections configured.');
                 return;

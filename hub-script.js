@@ -141,15 +141,17 @@ class InformationHub {
             reshuffleBtn.style.display = (role === 'admin') ? 'inline-flex' : 'none';
         }
 
-        // Update hub cards with access restrictions
+        // Update hub cards with access restrictions immediately
         this.updateHubCardsAccess();
+        try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch (_) {}
     }
 
     updateHubCardsAccess() {
         const hubCards = document.querySelectorAll('.hub-card');
         hubCards.forEach(card => {
             const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-            if (!this.currentUser.permissions.sections.includes(sectionId)) {
+            const allowed = (this.currentUser && this.currentUser.permissions && Array.isArray(this.currentUser.permissions.sections)) ? this.currentUser.permissions.sections : [];
+            if (!allowed.includes(sectionId)) {
                 card.classList.add('restricted');
                 card.onclick = () => {
                     this.showMessage('You do not have access to this section', 'error');
