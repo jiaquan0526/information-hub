@@ -3832,55 +3832,15 @@ Permissions:
         // Background image support for sections (random, persistent per section)
         let BACKGROUND_IMAGES = [];
         async function ensureBackgroundImagesLoaded() {
-            try {
-                // Prefer locally regenerated manifest if present (persists until next reshuffle)
-                try {
-                    const local = JSON.parse(localStorage.getItem('bgLocalManifest') || 'null');
-                    if (local && Array.isArray(local.files) && local.files.length > 0) {
-                        let files = local.files.slice();
-                        files = await filterExistingBackgroundImages(files);
-                        if (files.length > 0) {
-                            BACKGROUND_IMAGES = files;
-                            try { localStorage.setItem('bgLocalManifest', JSON.stringify({ files, ts: Date.now() })); } catch(_) {}
-                            return;
-                        }
-                    }
-                } catch (_) {}
-                // Online refresh path 1: GitHub API listing
-                try {
-                    let ghFiles = await getFilesFromGitHub();
-                    ghFiles = await filterExistingBackgroundImages(ghFiles);
-                    if (Array.isArray(ghFiles) && ghFiles.length > 0) {
-                        BACKGROUND_IMAGES = ghFiles;
-                        try { localStorage.setItem('bgLocalManifest', JSON.stringify({ files: ghFiles.slice(), ts: Date.now() })); } catch(_) {}
-                        return;
-                    }
-                } catch (_) {}
-                // Online refresh path 2: file manifest.json in repo
-                try {
-                    const bust = Date.now();
-                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            let files = data.map(p => `background-pic/${p}`);
-                            files = await filterExistingBackgroundImages(files);
-                            BACKGROUND_IMAGES = files;
-                            try { localStorage.setItem('bgLocalManifest', JSON.stringify({ files: files.slice(), ts: Date.now() })); } catch(_) {}
-                            return;
-                        }
-                    }
-                } catch (_) {}
-            } catch (_) {}
-            // Fallback to a baked-in list (only files present in repo) if manifest is missing or empty
+            // Fast path: skip network probing and use the baked-in list immediately
             if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) {
                 BACKGROUND_IMAGES = [
                     'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
                     'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
-                    'background-pic/537082_K.png','background-pic/560846_L.png',
-                    'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
+                    'background-pic/537082_K.png','background-pic/560846_L.png'
                 ];
             }
+            return;
         }
 
         // Optimize background images client-side and cache results
@@ -3932,29 +3892,8 @@ Permissions:
         }
         // Validate that manifest images actually exist by attempting to load them
         async function filterExistingBackgroundImages(files) {
-            try {
-                const input = Array.isArray(files) ? files.slice() : [];
-                const results = [];
-                const queue = input.slice();
-                const concurrency = 4;
-                const workers = new Array(concurrency).fill(0).map(async () => {
-                    while (queue.length > 0) {
-                        const src = queue.shift();
-                        if (!src) continue;
-                        try {
-                            await new Promise((resolve, reject) => {
-                                const img = new Image();
-                                img.onload = () => resolve();
-                                img.onerror = reject;
-                                img.src = src + (src.includes('?') ? '&' : '?') + 't=' + Date.now();
-                            });
-                            results.push(src);
-                        } catch (_) { /* skip missing */ }
-                    }
-                });
-                await Promise.all(workers);
-                return results;
-            } catch (_) { return Array.isArray(files) ? files : []; }
+            // Skip probing to avoid blocking load; assume listed files exist
+            try { return Array.isArray(files) ? files : []; } catch (_) { return Array.isArray(files) ? files : []; }
         }
         function getOptimizedMapping() {
             try {
