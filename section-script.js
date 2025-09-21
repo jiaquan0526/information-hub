@@ -209,12 +209,24 @@ class SectionManager {
             if (container) {
                 container.style.borderRadius = '12px';
                 container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
-                const applyBg = () => {
+                const applyBg = async () => {
                     try {
-                        if (disable) return; // skip applying heavy backgrounds if disabled
+                        // Skip on user-disabled or low-data connections
+                        try {
+                            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                            if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
+                        } catch (_) {}
+                        if (disable) return;
                         const chosen = heavyList.includes(img) ? preferList[0] : img;
-                        // WebP/CDN optimization disabled; use original image
-                        container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${chosen}')`;
+                        // Prefer WebP if available using the hub page helper when present
+                        let finalUrl = chosen;
+                        try {
+                            if (typeof window.getOptimizedImageUrl === 'function') {
+                                const opt = await window.getOptimizedImageUrl(chosen);
+                                if (opt) finalUrl = opt;
+                            }
+                        } catch (_) {}
+                        container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${finalUrl}')`;
                         container.style.backgroundSize = 'cover';
                         container.style.backgroundPosition = 'center';
                     } catch(_) {}
