@@ -148,6 +148,26 @@ class HubDatabase {
         });
     }
 
+    // Section configuration (tabs/categories) helpers
+    async saveSectionConfig(sectionId, config) {
+        if (!sectionId) throw new Error('sectionId required');
+        const existing = await this.getSection(sectionId).catch(() => null);
+        const record = existing ? { ...existing } : { id: sectionId, sectionId };
+        record.config = config || {};
+        const transaction = this.db.transaction(['sections'], 'readwrite');
+        const store = transaction.objectStore('sections');
+        return new Promise((resolve, reject) => {
+            const request = store.put(record);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getSectionConfig(sectionId) {
+        const rec = await this.getSection(sectionId).catch(() => null);
+        return rec && rec.config ? rec.config : null;
+    }
+
     // Resource Management
     async saveResource(resource) {
         const transaction = this.db.transaction(['resources'], 'readwrite');

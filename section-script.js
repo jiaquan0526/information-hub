@@ -1217,7 +1217,12 @@ class SectionManager {
     }
 
     loadSectionConfig() {
+        // Prefer DB-backed config for cross-user consistency, fallback to localStorage
         try {
+            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
+                const cached = localStorage.getItem(`section_config_${this.currentSection}`);
+                if (cached) return JSON.parse(cached);
+            }
             const key = `section_config_${this.currentSection}`;
             const raw = localStorage.getItem(key);
             if (raw) return JSON.parse(raw);
@@ -1227,7 +1232,8 @@ class SectionManager {
             types: [
                 { id: 'playbooks', name: 'Playbooks', icon: 'fas fa-book' },
                 { id: 'box-links', name: 'Box Links', icon: 'fas fa-link' },
-                { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' }
+                { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' },
+                { id: 'reports', name: 'Reports', icon: 'fas fa-file-alt' }
             ],
             categories: ['process','procedure','guide','template','checklist']
         };
@@ -1239,6 +1245,13 @@ class SectionManager {
             localStorage.setItem(key, JSON.stringify(cfg));
             this.sectionConfig = cfg;
             this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
+            // Persist to GitHub as source of truth for all users (admin-only)
+            try {
+                const isAdmin = this.isAdmin();
+                if (isAdmin && window.githubData && typeof githubData.saveSectionConfig === 'function') {
+                    githubData.saveSectionConfig(this.currentSection, cfg).catch(() => {});
+                }
+            } catch (_) {}
         } catch (_) {}
     }
 
@@ -1283,6 +1296,28 @@ class SectionManager {
                 </div>`;
             }).join('');
         }
+    }
+
+    async _refreshSectionConfigFromDb() {
+        try {
+            let cfg = null;
+            try {
+                if (window.githubData && typeof githubData.getSectionConfig === 'function') {
+                    cfg = await githubData.getSectionConfig(this.currentSection);
+                }
+            } catch (_) {}
+            if (!cfg) {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
+                    cfg = await hubDatabase.getSectionConfig(this.currentSection);
+                }
+            }
+            if (cfg && typeof cfg === 'object') {
+                localStorage.setItem(`section_config_${this.currentSection}`, JSON.stringify(cfg));
+                this.sectionConfig = cfg;
+                this.renderDynamicUI();
+                this.renderCurrentTab();
+            }
+        } catch (_) {}
     }
 
     openCustomizeModal() {
