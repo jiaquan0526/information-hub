@@ -717,9 +717,9 @@
             return true;
         }
 
-        // Function to update section statistics with real data (DB first, fallback to localStorage)
+        // Function to update section statistics using Supabase as the single source of truth
         async function updateSectionStats() {
-            // Prefer dynamic sections from sectionOrder (visible ones)
+            // Determine which sections are visible in the UI
             let sections = [];
             const savedOrder = localStorage.getItem('sectionOrder');
             if (savedOrder) {
@@ -732,24 +732,25 @@
                 sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
             }
 
-            const useDb = false; // Enforce GitHub-only reads for consistency
-            const getKey = (r) => {
-                const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
-                return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
-            };
-            const newer = (a, b) => {
-                const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
-                const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
-                return tb >= ta ? b : a;
-            };
-            const normType = (t) => {
+            // Load section configs from Supabase once (optional)
+            const sectionConfigById = new Map();
+            try {
+                if (window.fetchSections) {
+                    const list = await window.fetchSections();
+                    (list || []).forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
+                }
+            } catch (_) {}
+
+            const normUiType = (t) => {
                 const raw = String(t || '').toLowerCase().trim();
                 if (raw.includes('playbook')) return 'playbooks';
                 if (raw.includes('box')) return 'boxLinks';
                 if (raw.includes('dash')) return 'dashboards';
                 if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') return raw === 'boxlinks' ? 'boxLinks' : raw;
-                return raw;
+                return '';
             };
+            const mapUiToDbType = (ui) => ui === 'playbooks' ? 'playbook' : ui === 'boxLinks' ? 'link' : ui === 'dashboards' ? 'dashboard' : null;
+
             function updateCountDom(sectionId, tid, count) {
                 try {
                     const el1 = document.getElementById(`${sectionId}-${tid}`);
@@ -761,84 +762,32 @@
             }
 
             await Promise.all(sections.map(async (sectionId) => {
+                // Determine types for this section (from Supabase config if available)
+                let typesList = ['playbooks','box-links','dashboards'];
                 try {
-                    // Resolve configured types for this section (mirror section page tabs)
-                    let typesList = ['playbooks','box-links','dashboards'];
-                    try {
-                        let cfg = null;
-                        if (window.githubData && typeof githubData.getSectionConfig === 'function') {
-                            try { cfg = await githubData.getSectionConfig(sectionId); } catch(_) { cfg = null; }
-                        }
-                        if (!cfg && window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
-                            try { cfg = await hubDatabase.getSectionConfig(sectionId); } catch(_) { cfg = null; }
-                        }
-                        if (!cfg) {
-                            const cfgRaw = localStorage.getItem(`section_config_${sectionId}`);
-                            if (cfgRaw) cfg = JSON.parse(cfgRaw);
-                        }
-                        if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
-                            typesList = cfg.types.map(t => String(t.id || '').trim()).filter(Boolean);
-                        }
-                    } catch(_) {}
-
-            const normalizedTypes = Array.from(new Set(typesList.map(t => normType(t))));
-            const typeMaps = new Map();
-            normalizedTypes.forEach(t => typeMaps.set(t, new Map()));
-
-            const consider = (tid, r) => {
-                        if (!r || !typeMaps.has(tid)) return;
-                        const key = getKey(r);
-                        if (!key) return;
-                        const m = typeMaps.get(tid);
-                        const ts = Date.parse(r?.updatedAt || r?.createdAt || 0) || 0;
-                        const prev = m.get(key);
-                        if (!prev || ts >= prev) m.set(key, ts);
-                    };
-
-            // GitHub-backed resources as the only source of truth
-            try {
-                if (window.githubData && typeof githubData.getResourcesByType === 'function') {
-                    for (const tid of normalizedTypes) {
-                        try { (await githubData.getResourcesByType(sectionId, tid)).forEach(r => consider(tid, r)); } catch(_) {}
+                    const cfg = sectionConfigById.get(sectionId);
+                    if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
+                        typesList = cfg.types.map(t => String((t && t.id !== undefined ? t.id : t) || '').trim()).filter(Boolean);
                     }
-                }
-            } catch (_) {}
+                } catch (_) {}
+                const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
 
-                    // Build counts map for all known types
-                    const counts = {};
-                    for (const [tid, m] of typeMaps.entries()) counts[tid] = m.size;
-                    // Update only the types currently displayed on the card to stay consistent with UI
+                // Query Supabase counts per type and update DOM
+                await Promise.all(normalizedTypes.map(async (tid) => {
+                    const dbType = mapUiToDbType(tid);
+                    if (!dbType || !window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
                     try {
-                        const statsEl = document.getElementById(`${sectionId}-stats`);
-                        if (statsEl) {
-                            const nodes = statsEl.querySelectorAll('span > span[id^="'+sectionId+'-"]');
-                            nodes.forEach(function(node){
-                                try {
-                                    const id = String(node.id||'');
-                                    const suffix = id.slice((sectionId+'-').length);
-                                    const key = (suffix === 'boxlinks') ? 'boxLinks' : suffix;
-                                    const val = counts[key] || 0;
-                                    node.textContent = val;
-                                } catch(_) {}
-                            });
-                        } else {
-                            // Fallback: update all known types
-                            for (const [tid, val] of Object.entries(counts)) updateCountDom(sectionId, tid, val);
-                        }
-                    } catch(_) {
-                        for (const [tid, val] of Object.entries(counts)) updateCountDom(sectionId, tid, val);
+                        const { count, error } = await window.supabaseClient
+                            .from('resources')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('section_id', sectionId)
+                            .eq('type', dbType);
+                        if (error) throw error;
+                        updateCountDom(sectionId, tid, count || 0);
+                    } catch (_) {
+                        updateCountDom(sectionId, tid, 0);
                     }
-
-                    // Persist latest counts snapshot (generic by type)
-                    try {
-                        const prevKey = `section_counts_${sectionId}`;
-                        const prev = JSON.parse(localStorage.getItem(prevKey) || 'null');
-                        const changed = JSON.stringify(prev || {}) !== JSON.stringify(counts || {});
-                        if (changed) localStorage.setItem(prevKey, JSON.stringify(counts));
-                    } catch(_) {}
-                } catch (_) {
-                    updateSectionStatsFallback(sectionId);
-                }
+                }));
             }));
         }
 
@@ -4481,8 +4430,8 @@ Permissions:
             console.log('=== SAVE DEBUG COMPLETE ===');
         };
         
-        // Load section assignments for admin panel
-        window.loadSectionAssignments = function() {
+        // Load section assignments for admin panel (GitHub-driven)
+        window.loadSectionAssignments = async function() {
             console.log('Loading section assignments...');
             
             // Get all users from localStorage
@@ -4494,17 +4443,17 @@ Permissions:
                 return;
             }
             
-            // Get all available sections
-            const allSections = [
-                { id: 'costing', name: 'Costing', icon: 'fas fa-calculator' },
-                { id: 'supply-planning', name: 'Supply Planning', icon: 'fas fa-truck' },
-                { id: 'operations', name: 'Operations', icon: 'fas fa-cogs' },
-                { id: 'quality', name: 'Quality Management', icon: 'fas fa-check-circle' },
-                { id: 'hr', name: 'Human Resources', icon: 'fas fa-users' },
-                { id: 'it', name: 'IT & Technology', icon: 'fas fa-laptop-code' },
-                { id: 'sales', name: 'Sales & Marketing', icon: 'fas fa-chart-line' },
-                { id: 'compliance', name: 'Compliance & Legal', icon: 'fas fa-gavel' }
-            ];
+            // Get all available sections from GitHub; fallback to local cache
+            let allSections = [];
+            try {
+                if (window.githubData && typeof githubData.readSections === 'function') {
+                    const remote = await githubData.readSections();
+                    allSections = Array.isArray(remote.json) ? remote.json : [];
+                }
+            } catch(_) {}
+            if (!Array.isArray(allSections) || allSections.length === 0) {
+                try { allSections = JSON.parse(localStorage.getItem('sectionOrder') || '[]'); } catch(_) { allSections = []; }
+            }
             
             assignmentsList.innerHTML = users.map(user => {
                 const userSections = user.permissions && user.permissions.sections ? user.permissions.sections : [];
@@ -5592,6 +5541,77 @@ Permissions:
             }
             document.addEventListener('DOMContentLoaded', function(){ ensureGithubConnectButton(); });
             window.addEventListener('focus', function(){ ensureGithubConnectButton(); });
+        })();
+    </script>
+    <script>
+        window.SUPABASE_URL = 'https://pioubcszuayewepdawzt.supabase.co';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k';
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        (function(){
+            if (window.supabaseClient) return;
+            var SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR-PROJECT-ref.supabase.co';
+            var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
+            try {
+                window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+                window.fetchSections = async function(){
+                    var q = window.supabaseClient
+                        .from('sections')
+                        .select('section_id,name,icon,color,config')
+                        .order('name', { ascending: true });
+                    var res = await q;
+                    if (res.error) throw res.error;
+                    return res.data || [];
+                };
+
+                window.fetchResourcesBySection = async function(sectionId, type){
+                    var q = window.supabaseClient
+                        .from('resources')
+                        .select('*')
+                        .eq('section_id', sectionId);
+                    if (type) q = q.eq('type', type);
+                    q = q.order('created_at', { ascending: false });
+                    var res = await q;
+                    if (res.error) throw res.error;
+                    return res.data || [];
+                };
+
+                window.addResource = async function(rec){
+                    var res = await window.supabaseClient
+                        .from('resources')
+                        .insert(rec)
+                        .select()
+                        .single();
+                    if (res.error) throw res.error;
+                    return res.data;
+                };
+
+                window.recordView = async function(resourceId){
+                    try {
+                        var ures = await window.supabaseClient.auth.getUser();
+                        var userId = (ures && ures.data && ures.data.user && ures.data.user.id) ? ures.data.user.id : null;
+                        var r = await window.supabaseClient.rpc('increment_view', { p_user_id: userId, p_resource_id: resourceId });
+                        if (r && r.error) console.warn('view rpc failed', r.error);
+                    } catch(e) { console.warn('recordView failed', e); }
+                };
+
+                // Realtime: refresh hub stats on any resource or section change
+                try {
+                    if (!window.supabaseHubChannel) {
+                        var ch = window.supabaseClient
+                            .channel('hub-realtime')
+                            .on('postgres_changes', { event: '*', schema: 'public', table: 'resources' }, function(){ try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {} })
+                            .on('postgres_changes', { event: '*', schema: 'public', table: 'sections' }, function(){ try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {} })
+                            .subscribe();
+                        window.supabaseHubChannel = ch;
+                        try { window.addEventListener('beforeunload', function(){ try { window.supabaseClient.removeChannel(ch); } catch(_) {} }, { once: true }); } catch(_) {}
+                    }
+                } catch(_) {}
+            } catch (e) {
+                console.warn('Supabase init failed', e);
+            }
         })();
     </script>
 </body>

@@ -680,27 +680,36 @@ class InformationHub {
         }
     }
 
-    loadUsersList() {
-        const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+    async loadUsersList() {
         const usersList = document.getElementById('usersList');
-        
-        usersList.innerHTML = users.map(user => `
-            <div class="user-item">
-                <div class="user-details-info">
-                    <div class="name">${user.name || user.username}</div>
-                    <div class="role">${user.role}</div>
-                    <div class="sections">Access: ${user.permissions.sections.length} sections</div>
+        if (!usersList) return;
+        try {
+            if (!window.supabaseClient) throw new Error('Supabase not initialized');
+            const { data, error } = await window.supabaseClient
+                .from('profiles')
+                .select('id, username, role, name, email, permissions');
+            if (error) throw error;
+            const users = Array.isArray(data) ? data : [];
+            usersList.innerHTML = users.map(user => `
+                <div class="user-item">
+                    <div class="user-details-info">
+                        <div class="name">${this.escapeHtml(user.name || user.username || user.email || '')}</div>
+                        <div class="role">${this.escapeHtml(user.role || '')}</div>
+                        <div class="sections">Access: ${(user.permissions && Array.isArray(user.permissions.sections)) ? user.permissions.sections.length : 0} sections</div>
+                    </div>
+                    <div class="user-item-actions">
+                        <button class="btn btn-secondary" onclick="editUser('${user.id}')" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteUser('${user.id}')" title="Disable">
+                            <i class="fas fa-user-slash"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="user-item-actions">
-                    <button class="btn btn-secondary" onclick="editUser(${user.id})" title="Edit">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-danger" onclick="deleteUser(${user.id})" title="Delete">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+            `).join('');
+        } catch (e) {
+            usersList.innerHTML = '<div class="user-item">Failed to load users from Supabase.</div>';
+        }
     }
 
     loadAuditLog() {
@@ -719,61 +728,28 @@ class InformationHub {
         `).join('');
     }
 
-    addUser() {
-        const username = prompt('Enter username:');
-        if (!username) return;
-
-        const password = prompt('Enter password:');
-        if (!password) return;
-
-        const name = prompt('Enter full name:');
-        const email = prompt('Enter email:');
-        const role = prompt('Enter role (admin/manager/user):');
-        
-        if (!['admin', 'manager', 'user'].includes(role)) {
-            this.showMessage('Invalid role. Must be admin, manager, or user', 'error');
-            return;
-        }
-
-        const newUser = {
-            id: Date.now(),
-            username: username,
-            password: password,
-            name: name || username,
-            email: email || '',
-            role: role,
-            permissions: this.getDefaultPermissions(role),
-            createdAt: new Date().toISOString()
-        };
-
-        // Mandatory GitHub sync first
+    async addUser() {
         try {
-            if (window.githubData && typeof githubData.upsertUser === 'function') {
-                githubData.upsertUser(newUser);
-            } else {
-                this.showMessage('GitHub sync unavailable – cannot add user.', 'error');
-                return;
+            if (!window.supabaseClient) { this.showMessage('Supabase not initialized', 'error'); return; }
+            const email = prompt('Enter email for the new user:');
+            if (!email) return;
+            const password = prompt('Enter temporary password:');
+            if (!password) return;
+            const name = prompt('Enter full name (optional):') || '';
+            const roleInput = prompt('Enter role (admin/editor/viewer):', 'viewer') || 'viewer';
+            const role = ['admin','editor','viewer'].includes(roleInput) ? roleInput : 'viewer';
+
+            const { data: signUpData, error: signUpError } = await window.supabaseClient.auth.signUp({ email, password, options: { data: { name } } });
+            if (signUpError) { this.showMessage('Sign up failed: ' + signUpError.message, 'error'); return; }
+            const newUserId = signUpData.user ? signUpData.user.id : null;
+            if (newUserId) {
+                await window.supabaseClient.from('profiles').upsert({ id: newUserId, email, username: email, name, role });
             }
+            this.showMessage('User invited/created. If email confirmation is required, ask them to verify.', 'success');
+            await this.loadUsersList();
         } catch (e) {
-            this.showMessage('GitHub sync failed – user not created.', 'error');
-            return;
+            this.showMessage('Failed to add user', 'error');
         }
-        // Mirror to local/DB
-        const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-        users.push(newUser);
-        localStorage.setItem('hubUsers', JSON.stringify(users));
-        try {
-            if (window.hubDatabase && hubDatabase.saveUser) {
-                hubDatabase.saveUser(newUser);
-            }
-        } catch (_) {}
-
-        // Refresh export users dropdown if visible
-        try { this.loadExportOptions(); } catch (_) {}
-
-        this.loadUsersList();
-        this.showMessage('User added successfully', 'success');
-        this.logActivity('CREATE_USER', `Created user: ${username}`);
     }
 
     getDefaultPermissions(role) {
@@ -786,7 +762,7 @@ class InformationHub {
                 canManageRoles: true,
                 sections: ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance']
             },
-            'manager': {
+            'editor': {
                 canManageUsers: false,
                 canEditAllSections: false,
                 canDeleteResources: true,
@@ -794,7 +770,7 @@ class InformationHub {
                 canManageRoles: false,
                 sections: ['costing', 'supply-planning', 'operations', 'quality']
             },
-            'user': {
+            'viewer': {
                 canManageUsers: false,
                 canEditAllSections: false,
                 canDeleteResources: false,
@@ -803,7 +779,7 @@ class InformationHub {
                 sections: ['costing', 'supply-planning']
             }
         };
-        return permissions[role] || permissions['user'];
+        return permissions[role] || permissions['viewer'];
     }
 
     logActivity(action, description) {
@@ -832,35 +808,34 @@ class InformationHub {
 
     // Export Functions
     async loadExportOptions() {
-        // Load users for export dropdown
-        let users = [];
-        try { users = await hubDatabase.getAllUsers(); } catch (_) { users = []; }
+        // Load users for export dropdown (Supabase profiles)
+        const userSelect = document.getElementById('userExportSelect');
+        if (userSelect) userSelect.innerHTML = '<option value="">Select User</option>';
         try {
-            const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const byId = new Map((users || []).map(u => [u.id, u]));
-            lsUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
-            users = Array.from(byId.values());
-        } catch (_) {}
-        // Role-based visibility: admin -> all; manager -> only users; user -> self
-        try {
+            if (!window.supabaseClient) return;
+            const { data, error } = await window.supabaseClient
+                .from('profiles')
+                .select('id, username, role');
+            if (error) throw error;
+            const users = Array.isArray(data) ? data : [];
             const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
-            const role = String(me?.role || '').toLowerCase();
-            if (role === 'manager') {
-                users = users.filter(u => String(u.role || '').toLowerCase() === 'user' || u.id === me.userId || u.id === me.id);
-            } else if (role !== 'admin') {
-                users = users.filter(u => u.id === me?.userId || u.id === me?.id);
+            const myRole = String(me?.role || '').toLowerCase();
+            const filtered = users.filter(u => {
+                if (myRole === 'admin') return true;
+                if (myRole === 'manager') return String(u.id) === String(me?.userId || me?.id);
+                return String(u.id) === String(me?.userId || me?.id);
+            });
+            if (userSelect) {
+                filtered.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.username || user.id} (${user.role || ''})`;
+                    userSelect.appendChild(option);
+                });
             }
         } catch (_) {}
-        const userSelect = document.getElementById('userExportSelect');
-        userSelect.innerHTML = '<option value="">Select User</option>';
-        users.forEach(user => {
-            const option = document.createElement('option');
-            option.value = user.id;
-            option.textContent = `${user.username} (${user.role})`;
-            userSelect.appendChild(option);
-        });
 
-        // Load sections for export dropdown (GitHub first)
+        // Load sections for export dropdown (still using GitHub config for names)
         try {
             let sections = [];
             try {
@@ -891,6 +866,63 @@ class InformationHub {
     // Expose for index.html to call directly
     window.loadExportOptions = async () => {
         try { await this.loadExportOptions(); } catch (_) {}
+    };
+
+    // Supabase-backed user management actions
+    window.editUser = async (userId) => {
+        try {
+            if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+            const { data: prof, error } = await window.supabaseClient
+                .from('profiles')
+                .select('id, username, name, email, role, permissions')
+                .eq('id', userId)
+                .single();
+            if (error) { alert('Failed to load user'); return; }
+            const name = prompt('Full name:', prof.name || '') ?? prof.name || '';
+            const roleInput = prompt('Role (admin/editor/viewer):', prof.role || 'viewer') || prof.role || 'viewer';
+            const role = ['admin','editor','viewer'].includes(roleInput) ? roleInput : (prof.role || 'viewer');
+            // Keep existing permissions; optional tweak for disabled flag
+            const perms = prof.permissions || {};
+            if (perms.disabled === true) {
+                if (confirm('User is disabled. Re-enable this user?')) { delete perms.disabled; }
+            }
+            const { error: upErr } = await window.supabaseClient
+                .from('profiles')
+                .update({ name, role, permissions: perms })
+                .eq('id', userId);
+            if (upErr) { alert('Update failed: ' + upErr.message); return; }
+            try { informationHub.showMessage('User updated', 'success'); } catch (_) {}
+            try { await informationHub.loadUsersList(); } catch (_) {}
+        } catch (e) {
+            alert('Edit failed');
+        }
+    };
+
+    window.deleteUser = async (userId) => {
+        try {
+            if (!confirm('Disable this user? They will keep their auth account but be marked disabled in profiles.')) return;
+            if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+            // Soft-disable: set permissions.disabled = true and clear sections
+            const { data: prof, error } = await window.supabaseClient
+                .from('profiles')
+                .select('permissions')
+                .eq('id', userId)
+                .single();
+            if (error) { alert('Failed to load user'); return; }
+            const perms = Object.assign({}, prof?.permissions || {});
+            perms.disabled = true;
+            if (Array.isArray(perms.sections)) perms.sections = [];
+            if (Array.isArray(perms.editableSections)) perms.editableSections = [];
+            const { error: upErr } = await window.supabaseClient
+                .from('profiles')
+                .update({ permissions: perms })
+                .eq('id', userId);
+            if (upErr) { alert('Disable failed: ' + upErr.message); return; }
+            try { informationHub.showMessage('User disabled', 'success'); } catch (_) {}
+            try { await informationHub.loadUsersList(); } catch (_) {}
+        } catch (e) {
+            alert('Disable failed');
+        }
     };
 
     // Global export functions
@@ -1012,7 +1044,7 @@ class InformationHub {
     // JSON Backup/Restore (raw)
     window.backupJson = async () => {
         try {
-            // Admin-only hint (non-blocking)
+            // Admin-only hint (non-blocking for download)
             try {
                 const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
                 if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
@@ -1028,18 +1060,26 @@ class InformationHub {
                 try { const r = await githubData.readJson('data/section-configs.json'); sectionConfigs = r.json && typeof r.json==='object' ? r.json : {}; } catch(_) {}
                 try { const r = await githubData.readJson('data/audit-log.json'); activities = Array.isArray(r.json) ? r.json : []; } catch(_) {}
                 try { const r = await githubData.readJson('data/views.json'); views = Array.isArray(r.json) ? r.json : []; } catch(_) {}
+                // Per-section resources
                 for (const s of (sections||[])) {
                     const sid = String(s.id||'').trim(); if (!sid) continue;
                     try { const r = await githubData.readSectionResources(sid); resources[sid] = r.json || {}; } catch(_) { resources[sid] = {}; }
                 }
             }
+
+            // Fallback: DB/local export if GitHub is empty
             if ((sections||[]).length===0 && window.hubDatabase && hubDatabase.exportRawState) {
                 try {
                     const raw = await hubDatabase.exportRawState();
                     users = raw.users||users; sections = raw.sections||sections; activities = raw.activities||activities; views = raw.views||views;
                 } catch(_) {}
             }
-            const payload = { exportDate: new Date().toISOString(), users, sections, sectionConfigs, resources, activities, views };
+
+            const payload = {
+                exportDate: new Date().toISOString(),
+                users, sections, sectionConfigs, resources, activities, views
+            };
+
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -1057,6 +1097,7 @@ class InformationHub {
 
     window.restoreJson = async () => {
         try {
+            // Admin-only guard
             const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
             if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
                 this.showMessage('Only admin can restore data', 'error');
@@ -1071,15 +1112,28 @@ class InformationHub {
                 const text = await file.text();
                 const json = JSON.parse(text);
                 if (!window.githubData) throw new Error('GitHub API unavailable');
+                // Users
                 try { if (Array.isArray(json.users)) await githubData.writeUsers(json.users, 'Restore users'); } catch(_) {}
+                // Sections
                 try { if (Array.isArray(json.sections)) await githubData.writeSections(json.sections, 'Restore sections'); } catch(_) {}
-                try { if (json.sectionConfigs && typeof json.sectionConfigs === 'object') await githubData.writeJson('data/section-configs.json', json.sectionConfigs, 'Restore section configs'); } catch(_) {}
+                // Section configs
+                try {
+                    if (json.sectionConfigs && typeof json.sectionConfigs === 'object') {
+                        await githubData.writeJson('data/section-configs.json', json.sectionConfigs, 'Restore section configs');
+                    }
+                } catch(_) {}
+                // Resources (as map: { [sectionId]: { typeId:[...] } })
                 try {
                     const res = json.resources && typeof json.resources === 'object' ? json.resources : {};
-                    for (const sid of Object.keys(res)) await githubData.writeSectionResources(sid, res[sid] || {}, 'Restore resources');
+                    for (const sid of Object.keys(res)) {
+                        await githubData.writeSectionResources(sid, res[sid] || {}, 'Restore resources');
+                    }
                 } catch(_) {}
+                // Optional: audit + views
                 try { if (Array.isArray(json.activities)) await githubData.writeJson('data/audit-log.json', json.activities, 'Restore audit log'); } catch(_) {}
                 try { if (Array.isArray(json.views)) await githubData.writeJson('data/views.json', json.views, 'Restore views'); } catch(_) {}
+
+                // Refresh UI
                 try { updateMainHubSections(); } catch(_) {}
                 this.showMessage('Restore completed', 'success');
             };

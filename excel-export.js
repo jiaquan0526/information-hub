@@ -51,7 +51,7 @@ class ExcelExporter {
         this._xlsxReady = true;
     }
 
-    // Create Excel file from hub data
+    // Create Excel file from GitHub data only
     async exportToExcel() {
         try {
             try {
@@ -71,51 +71,10 @@ class ExcelExporter {
                 this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
                 return { success: true, fileName: jsonName, fallback: 'json' };
             }
-            let data;
-            try {
-                if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.exportAllData) {
-                    data = await hubDatabase.exportAllData();
-                }
-            } catch (_) {}
-            if (!data) {
-                const usersLS = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                const infoHub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-                const sections = Object.keys(infoHub).map(id => ({
-                    id,
-                    sectionId: id,
-                    name: infoHub[id]?.name || id,
-                    icon: infoHub[id]?.icon || '',
-                    color: infoHub[id]?.color || '',
-                    data: infoHub[id] || { playbooks: [], boxLinks: [], dashboards: [] }
-                }));
-                const resources = [];
-                Object.entries(infoHub).forEach(([sectionId, s]) => {
-                    ['playbooks','boxLinks','dashboards'].forEach(type => {
-                        (s?.[type] || []).forEach(r => resources.push({ ...r, sectionId, type }));
-                    });
-                });
-                data = {
-                    users: usersLS.map(u => this._withPermissionDefaults(u)),
-                    sections,
-                    resources,
-                    activities,
-                    views: [],
-                    exportDate: new Date().toISOString(),
-                    totalRecords: {
-                        users: usersLS.length,
-                        sections: sections.length,
-                        resources: resources.length,
-                        activities: activities.length,
-                        views: 0
-                    }
-                };
-            } else {
-                data.users = (data.users || []).map(u => this._withPermissionDefaults(u));
-                data.resources = Array.isArray(data.resources) ? data.resources : [];
-            }
+            // Build dataset from GitHub only
+            if (!window.githubData) throw new Error('GitHub API unavailable');
 
-            // ==== Merge latest section names/icons and resources across all sources ====
+            // Helper
             const canonicalizeUrlForKey = (url) => {
                 try {
                     let raw = String(url || '').trim();
@@ -130,103 +89,62 @@ class ExcelExporter {
                     return String(url || '').trim().toLowerCase();
                 }
             };
-            const canonicalKeyForResource = (r) => {
-                const id = r && r.id !== undefined && r.id !== null ? String(r.id) : '';
-                if (id) return `id:${id}`;
-                const title = String(r?.title || '').trim().toLowerCase();
-                const urlKey = canonicalizeUrlForKey(r?.url);
-                return `t:${title}|u:${urlKey}`;
-            };
+            // Read GitHub data
+            const usersResp = await githubData.readUsers();
+            const users = Array.isArray(usersResp.json) ? usersResp.json : [];
+            const sectionsResp = await githubData.readSections();
+            const sections = Array.isArray(sectionsResp.json) ? sectionsResp.json : [];
+            const activitiesResp = await githubData.readJson('data/audit-log.json');
+            const activities = Array.isArray(activitiesResp.json) ? activitiesResp.json : [];
+            const viewsResp = await githubData.readJson('data/views.json');
+            const views = Array.isArray(viewsResp.json) ? viewsResp.json : [];
 
-            // Build local resources union (informationHub + per-section stores)
-            const localUnion = [];
-            try {
-                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                Object.entries(hub).forEach(([sectionId, s]) => {
+            // Flatten resources
+            const resources = [];
+            for (const s of sections) {
+                const sid = String(s.id || '').trim(); if (!sid) continue;
+                try {
+                    const r = await githubData.readSectionResources(sid);
+                    const json = r.json || {};
                     ['playbooks','boxLinks','dashboards'].forEach(type => {
-                        (s?.[type] || []).forEach(r => localUnion.push({ ...r, sectionId, type }));
+                        (json[type] || []).forEach(item => resources.push({ ...item, sectionId: sid, type }));
                     });
-                });
-            } catch (_) {}
-            try {
-                // Per-section stores
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    if (!k || !k.startsWith('section_')) continue;
-                    // Skip non-section keys like sectionBackgrounds
-                    if (k === 'sectionBackgrounds' || k === 'section_config_') continue;
-                    const sectionId = k.slice('section_'.length);
-                    if (!sectionId) continue;
-                    try {
-                        const s = JSON.parse(localStorage.getItem(k) || '{}');
-                        ['playbooks','boxLinks','dashboards'].forEach(type => {
-                            (s?.[type] || []).forEach(r => localUnion.push({ ...r, sectionId, type }));
+                    // Include any custom types as well
+                    Object.keys(json).forEach(k => {
+                        if (k === 'updatedAt' || k === 'playbooks' || k === 'boxLinks' || k === 'dashboards') return;
+                        (json[k] || []).forEach(item => resources.push({ ...item, sectionId: sid, type: k }));
                         });
                     } catch (_) {}
                 }
-            } catch (_) {}
 
-            // Union DB resources + local resources
-            const byKey = new Map();
-            const consider = (r) => {
-                if (!r) return;
-                const key = canonicalKeyForResource(r);
-                if (!key) return;
-                if (!byKey.has(key)) byKey.set(key, r);
-            };
-            (data.resources || []).forEach(consider);
-            localUnion.forEach(consider);
-            const allResources = Array.from(byKey.values());
-            data.resources = allResources;
-
-            // Build canonical sections map: from sectionOrder first, then any sections seen in resources, then existing
+            // Enrich sections with counts
             const sectionsById = {};
-            try {
-                const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
-                (order || []).forEach(s => {
-                    if (!s || !s.id) return;
-                    sectionsById[s.id] = {
-                        id: s.id,
-                        sectionId: s.id,
-                        name: s.name || s.id,
-                        icon: s.icon || '',
-                        color: s.color || '',
-                        data: { playbooks: [], boxLinks: [], dashboards: [] }
-                    };
-                });
-            } catch (_) {}
-            // Ensure presence for any section referenced by a resource
-            allResources.forEach(r => {
-                const sid = r.sectionId || r.section || '';
-                if (!sid) return;
-                if (!sectionsById[sid]) {
-                    sectionsById[sid] = { id: sid, sectionId: sid, name: sid, icon: '', color: '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
-                }
+            sections.forEach(sec => {
+                const sid = String(sec.id || '').trim(); if (!sid) return;
+                sectionsById[sid] = { id: sid, sectionId: sid, name: sec.name || sid, icon: sec.icon || '', color: sec.color || '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
             });
-            // Merge in existing data.sections and prefer sectionOrder name/icon if present
-            (Array.isArray(data.sections) ? data.sections : []).forEach(sec => {
-                const sid = String(sec.sectionId || sec.id || '');
-                if (!sid) return;
-                sectionsById[sid] = {
-                    id: sid,
-                    sectionId: sid,
-                    name: sectionsById[sid]?.name || sec.name || sid,
-                    icon: sectionsById[sid]?.icon || sec.icon || '',
-                    color: sec.color || '',
-                    data: sectionsById[sid]?.data || sec.data || { playbooks: [], boxLinks: [], dashboards: [] }
-                };
-            });
-            // Recompute counts by assigning resources to sections
-            Object.values(sectionsById).forEach(s => { s.data = { playbooks: [], boxLinks: [], dashboards: [] }; });
-            allResources.forEach(r => {
-                const sid = r.sectionId || r.section || '';
-                const type = r.type || '';
+            resources.forEach(r => {
+                const sid = r.sectionId; const type = r.type || '';
                 if (!sid || !sectionsById[sid]) return;
-                if (type === 'playbooks' || type === 'boxLinks' || type === 'dashboards') {
+                if (!sectionsById[sid].data[type]) sectionsById[sid].data[type] = [];
                     sectionsById[sid].data[type].push(r);
-                }
             });
-            data.sections = Object.values(sectionsById);
+
+            const data = {
+                users: users.map(u => this._normalizePermissions(u)),
+                sections: Object.values(sectionsById),
+                resources,
+                activities,
+                views,
+                exportDate: new Date().toISOString(),
+                totalRecords: {
+                    users: users.length,
+                    sections: sections.length,
+                    resources: resources.length,
+                    activities: activities.length,
+                    views: views.length
+                }
+            };
 
             this.workbook = XLSX.utils.book_new();
 
@@ -810,14 +728,9 @@ class ExcelExporter {
         }
     }
 
-    _withPermissionDefaults(user) {
+    _normalizePermissions(user) {
         const role = (user.role || 'user').toLowerCase();
-        const defaults = {
-            admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
-            manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
-            user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
-        };
-        const perms = user.permissions || defaults[role] || defaults.user;
+        const perms = user.permissions || {};
         return { ...user, role, permissions: { sections: perms.sections || [], editableSections: perms.editableSections || [], ...perms } };
     }
 }

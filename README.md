@@ -237,3 +237,23 @@ Notes:
 - `.nojekyll` avoids Jekyll processing so static assets load correctly.
 - All paths are relative; the app works under a subpath like `/YOUR_REPO_NAME/`.
 
+### Supabase setup (required)
+- In `index.html` and `auth.html`, set `window.SUPABASE_URL` and `window.SUPABASE_ANON_KEY`.
+- In Supabase, enable Realtime for `public.resources` and `public.sections`.
+- Add your deployed GitHub Pages URL to Supabase Auth Redirect URLs.
+
+### 🔒 Secure GitHub Writer (Serverless)
+
+If you host on Vercel or Netlify, you can enable server-side writes to GitHub so tokens are never exposed in the browser. This repo includes:
+
+- Vercel endpoint: `api/gh-write.js`
+- Netlify function: `netlify/functions/gh-write.js`
+
+Set these environment variables on your platform:
+
+- `GITHUB_TOKEN` (required) – repo-scoped with contents:write
+- `GH_OWNER`, `GH_REPO`, `GH_BRANCH` (optional) – if not on `*.github.io`
+- `ALLOWED_ORIGINS` (optional) – CSV of allowed origins for CORS
+
+Clients will automatically attempt the secure endpoint first (2s timeout), then fall back to direct GitHub API writes if unavailable.
+

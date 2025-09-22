@@ -9,28 +9,8 @@ class SectionManager {
         this.init();
     }
 
-    // Content activity logger for section page (writes to localStorage)
-    logContentActivity(action, resourceType, title) {
-        try {
-            const username = this.currentUser?.username || 'Unknown';
-            const type = (resourceType === 'boxLinks') ? 'boxlink'
-                       : (resourceType === 'playbooks') ? 'playbook'
-                       : (resourceType === 'dashboards') ? 'dashboard'
-                       : String(resourceType || 'resource');
-            const entry = {
-                username,
-                action: action || 'updated',
-                section: this.currentSection || 'general',
-                type,
-                title: title || '',
-                timestamp: new Date().toISOString()
-            };
-            const list = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-            list.unshift(entry);
-            if (list.length > 1000) list.length = 1000;
-            localStorage.setItem('hubActivities', JSON.stringify(list));
-        } catch (_) {}
-    }
+    // Content activity logger (no-op without Supabase auth)
+    logContentActivity(action, resourceType, title) { try {} catch (_) {} }
 
     getCurrentUser() {
         const session = localStorage.getItem('hubSession');
@@ -47,15 +27,16 @@ class SectionManager {
         this.checkAccess();
         // Section session start
         this.sectionSessionStartMs = Date.now();
-        // One-time migration: ensure all resources in this section have stable unique IDs
-        try { this.ensureResourceIdsForCurrentSection(); } catch (_) {}
+        // IDs are handled by Supabase; no local migrations
         this.loadSectionData();
         this.bindEvents();
         this.renderDynamicUI();
-        // Asynchronously refresh section config from DB so all users share the same tabs
+        // Asynchronously refresh section config from Supabase so all users share the same tabs
         try { this._refreshSectionConfigFromDb(); } catch (_) {}
-        // Set up periodic GitHub auto-refresh to keep resources/config in sync across users
-        try { this._setupGitHubAutoRefresh(); } catch (_) {}
+        // Periodic auto-refresh from Supabase to keep view fresh
+        try { this._setupAutoRefresh(); } catch (_) {}
+        // Realtime: subscribe to resources/config for this section
+        try { this._setupRealtime(); } catch (_) {}
         // Ensure filters are cleared on entry to avoid stale search/category narrowing results
         try {
             const searchInput = document.getElementById('searchInput');
@@ -191,6 +172,7 @@ class SectionManager {
         } catch (_) {}
 
         if (!sectionConfig) {
+            // No named defaults; show section id and a generic icon
             sectionConfig = { name: this.currentSection, icon: 'fas fa-th-large', intro: '' };
         }
 
@@ -354,33 +336,7 @@ class SectionManager {
             this._sectionSessionLogged = true;
             const durationMs = Date.now() - (this.sectionSessionStartMs || Date.now());
             try {
-                if (window.hubDatabase && hubDatabase.saveActivity && this.currentUser) {
-                    hubDatabase.saveActivity({
-                        id: Date.now().toString(),
-                        userId: this.currentUser.id,
-                        username: this.currentUser.username,
-                        action: 'CLOSE_SECTION',
-                        description: `Closed section ${this.currentSection} after ${Math.round(durationMs/1000)}s`,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-                // Hourly GitHub sync of audit log: enqueue recent activity
-                try {
-                    if (window.githubData && typeof githubData.upsertAudit === 'function') {
-                        const entry = {
-                            id: `sec-close:${this.currentSection}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-                            userId: this.currentUser.id,
-                            username: this.currentUser.username,
-                            action: 'CLOSE_SECTION',
-                            description: `Closed section ${this.currentSection}`,
-                            timestamp: new Date().toISOString()
-                        };
-                        // Debounce via local queue and periodic flusher elsewhere
-                        const q = JSON.parse(localStorage.getItem('auditQueue') || '[]');
-                        q.push(entry);
-                        localStorage.setItem('auditQueue', JSON.stringify(q.slice(-500)));
-                    }
-                } catch (_) {}
+                // Optionally write to Supabase activities if you decide to expose it client-side
             } catch (_) {}
         };
         window.addEventListener('beforeunload', logClose);
@@ -389,16 +345,7 @@ class SectionManager {
         });
         // Log open
         try {
-            if (window.hubDatabase && hubDatabase.saveActivity && this.currentUser) {
-                hubDatabase.saveActivity({
-                    id: Date.now().toString(),
-                    userId: this.currentUser.id,
-                    username: this.currentUser.username,
-                    action: 'OPEN_SECTION',
-                    description: `Opened section ${this.currentSection}`,
-                    timestamp: new Date().toISOString()
-                });
-            }
+            // Optionally write OPEN_SECTION to Supabase here
         } catch (_) {}
     }
 
@@ -434,19 +381,7 @@ class SectionManager {
         // Render the appropriate content
         this.renderCurrentTab();
 
-        // Log tab switch as activity
-        try {
-            if (window.hubDatabase && hubDatabase.saveActivity && this.currentUser) {
-                hubDatabase.saveActivity({
-                    id: Date.now().toString(),
-                    userId: this.currentUser.id,
-                    username: this.currentUser.username,
-                    action: 'SWITCH_SECTION_TAB',
-                    description: `Switched to tab ${tabName} in section ${this.currentSection}`,
-                    timestamp: new Date().toISOString()
-                });
-            }
-        } catch (_) {}
+        // Optionally log SWITCH_SECTION_TAB to Supabase
     }
 
     renderCurrentTab() {
@@ -466,7 +401,7 @@ class SectionManager {
             addBtn.style.display = this.canEditResource() ? 'inline-flex' : 'none';
         }
 
-        // DB-only: fetch and render
+        // Supabase-only: fetch and render
         try {
             const resources = await this.getResources(type);
             const filteredResources = this.getFilteredResources(resources);
@@ -486,20 +421,20 @@ class SectionManager {
     }
 
     async getResources(type) {
-        const storageType = this.mapToStorageType(type);
-        // Prefer GitHub as cross-user source of truth; fallback to DB
+        const uiType = this.mapToStorageType(type); // 'playbooks' | 'boxLinks' | 'dashboards'
+        const dbType = this._mapUiTypeToDbType(uiType); // 'playbook' | 'link' | 'dashboard'
+        if (!window.supabaseClient) return [];
         try {
-            if (window.githubData && typeof githubData.getResourcesByType === 'function') {
-                const arr = await this._safeDbFetch(githubData.getResourcesByType(this.currentSection, storageType), 1500, []);
-                if (Array.isArray(arr) && arr.length >= 0) return arr;
-            }
-        } catch (_) {}
-        if (!(window.hubDatabase && hubDatabase.getResourcesByType)) return [];
-        return await this._safeDbFetch(
-            hubDatabase.getResourcesByType(this.currentSection, storageType),
-            1500,
-            []
-        );
+            const { data, error } = await window.supabaseClient
+                .from('resources')
+                .select('*')
+                .eq('section_id', this.currentSection)
+                .eq('type', dbType)
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            const list = Array.isArray(data) ? data : [];
+            return list.map(r => this._normalizeResourceRow(r, uiType));
+        } catch (_) { return []; }
     }
 
     // Local-only fast resource fetch (no DB calls)
@@ -576,18 +511,10 @@ class SectionManager {
             if (!card) return;
             const resourceId = card.getAttribute('data-id');
             try {
-                if (window.hubDatabase && hubDatabase.recordView) {
-                    await hubDatabase.recordView(this.currentUser?.id || null, resourceId);
-                }
-                if (window.hubDatabase && hubDatabase.saveActivity && this.currentUser) {
-                    await hubDatabase.saveActivity({
-                        id: Date.now().toString(),
-                        userId: this.currentUser.id,
-                        username: this.currentUser.username,
-                        action: 'VIEW_RESOURCE',
-                        description: `Viewed resource ${resourceId} in section ${this.currentSection}`,
-                        timestamp: new Date().toISOString()
-                    });
+                if (window.supabaseClient && typeof window.supabaseClient.rpc === 'function') {
+                    const u = await window.supabaseClient.auth.getUser();
+                    const uid = (u && u.data && u.data.user && u.data.user.id) ? u.data.user.id : null;
+                    await window.supabaseClient.rpc('increment_view', { p_user_id: uid, p_resource_id: resourceId });
                 }
             } catch (_) {}
         });
@@ -713,14 +640,11 @@ class SectionManager {
     async saveResource(type, form) {
         const formData = new FormData(form);
         const resource = {
-            id: this.generateResourceId(this.mapToStorageType(type)),
             title: String(formData.get('title') || '').trim(),
             description: formData.get('description') || '',
             url: this.normalizeUrl(formData.get('url')),
             category: formData.get('category'),
-            tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-            createdAt: new Date().toISOString(),
-            userId: this.currentUser?.id || 0
+            tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag) : []
         };
 
         // Validate URL
@@ -743,30 +667,21 @@ class SectionManager {
 
     async addResourceToSection(type, resource) {
         try {
-            const resourceType = this.mapToStorageType(type);
-            // Mandatory: write to GitHub first; abort on failure
-            if (window.githubData && typeof githubData.upsertResource === 'function') {
-                await githubData.upsertResource(this.currentSection, resourceType, {
-                    ...resource,
-                    sectionId: this.currentSection,
-                    type: resourceType,
-                    userId: this.currentUser?.id || 0
-                });
-            } else {
-                throw new Error('GitHub sync unavailable');
-            }
-            // Mirror to IndexedDB (best-effort cache)
-            if (window.hubDatabase && hubDatabase.saveResource) {
-                await this._safeDbCall(hubDatabase.saveResource({
-                    ...resource,
-                    sectionId: this.currentSection,
-                    type: resourceType,
-                    userId: this.currentUser?.id || 0
-                }));
-            }
-            // Signal hub to refresh
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType });
-            console.log('Resource saved successfully');
+            const uiType = this.mapToStorageType(type);
+            const dbType = this._mapUiTypeToDbType(uiType);
+            if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            const payload = {
+                section_id: this.currentSection,
+                type: dbType,
+                title: resource.title,
+                description: resource.description || '',
+                url: resource.url,
+                tags: resource.tags || [],
+                extra: { category: resource.category || '' }
+            };
+            const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
+            if (error) throw error;
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType: uiType });
             return true;
         } catch (error) {
             console.error('Error saving resource:', error);
@@ -895,24 +810,15 @@ class SectionManager {
 
     async updateResource(type, id, form) {
         const formData = new FormData(form);
-        const existingResources = await this.getResourcesLocalOnly(type);
-        // Prefer hidden original fields to avoid id mismatch
         const origId = formData.get('__origId');
-        const origTitle = String(formData.get('__origTitle') || '');
-        const origUrl = String(formData.get('__origUrl') || '');
-        let original = existingResources.find(r => String(r.id) === String(origId)) || {};
-        if (!original || !original.id) {
-            original = existingResources.find(r => `${r.title || ''}|${r.url || ''}` === `${origTitle}|${origUrl}`) || {};
-        }
+        const existingResources = await this.getResources(type);
+        const original = existingResources.find(r => String(r.id) === String(origId)) || {};
         const updatedResource = {
-            id: original.id || id || this.generateResourceId(this.mapToStorageType(type)),
             title: String(formData.get('title') || '').trim(),
             description: formData.get('description') || '',
             url: this.normalizeUrl(formData.get('url')),
             category: formData.get('category'),
             tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-            createdAt: original.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
             userId: original.userId || this.currentUser?.id || 0
         };
 
@@ -922,7 +828,7 @@ class SectionManager {
             return false;
         }
 
-        await this.updateResourceInSection(type, id, updatedResource, original);
+        await this.updateResourceInSection(type, original.id || id, updatedResource, original);
         // Log content update
         try { this.logContentActivity('updated', this.mapToStorageType(type), updatedResource.title); } catch(_) {}
         this.renderCurrentTab();
@@ -999,30 +905,21 @@ class SectionManager {
 
     async updateResourceInSection(type, id, updatedResource, original) {
         try {
-            const resourceType = this.mapToStorageType(type);
-            // Mandatory: write to GitHub first
-            if (window.githubData && typeof githubData.upsertResource === 'function') {
-                await githubData.upsertResource(this.currentSection, resourceType, {
-                    ...updatedResource,
-                    sectionId: this.currentSection,
-                    type: resourceType,
-                    userId: this.currentUser?.id || 0
-                });
-            } else {
-                throw new Error('GitHub sync unavailable');
-            }
-            // Mirror to IndexedDB (best-effort)
-            if (window.hubDatabase && hubDatabase.saveResource) {
-                await this._safeDbCall(hubDatabase.saveResource({
-                    ...updatedResource,
-                    sectionId: this.currentSection,
-                    type: resourceType,
-                    userId: this.currentUser?.id || 0
-                }));
-            }
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType });
-
-            console.log('Resource updated successfully');
+            const uiType = this.mapToStorageType(type);
+            const payload = {
+                title: updatedResource.title,
+                description: updatedResource.description || '',
+                url: updatedResource.url,
+                tags: updatedResource.tags || [],
+                extra: { category: updatedResource.category || '' }
+            };
+            if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            const { error } = await window.supabaseClient
+                .from('resources')
+                .update(payload)
+                .eq('id', id);
+            if (error) throw error;
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType: uiType });
             return true;
         } catch (error) {
             console.error('Error updating resource:', error);
@@ -1056,20 +953,14 @@ class SectionManager {
 
     async removeResourceFromSection(type, id) {
         try {
-            const resourceType = this.mapToStorageType(type);
-            // Mandatory: delete on GitHub first
-            if (window.githubData && typeof githubData.deleteResource === 'function') {
-                await githubData.deleteResource(this.currentSection, id);
-            } else {
-                throw new Error('GitHub sync unavailable');
-            }
-            // Mirror delete in DB (best-effort)
-            if (window.hubDatabase && hubDatabase.deleteResource) {
-                await this._safeDbCall(hubDatabase.deleteResource(id));
-            }
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType });
-
-            console.log('Resource deleted successfully');
+            const uiType = this.mapToStorageType(type);
+            if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            const { error } = await window.supabaseClient
+                .from('resources')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType: uiType });
             return true;
         } catch (error) {
             console.error('Error deleting resource:', error);
@@ -1087,6 +978,43 @@ class SectionManager {
         if (raw === 'dashboards' || raw === 'dashboard') return 'dashboards';
         // Custom types: use id as-is (no accidental substring mapping)
         return raw;
+    }
+    async _requireSupabaseAuth() {
+        try {
+            if (!window.supabaseClient || !window.supabaseClient.auth) return false;
+            const res = await window.supabaseClient.auth.getUser();
+            const user = res && res.data ? res.data.user : null;
+            if (!user) {
+                this.showMessage('Please sign in to perform this action.', 'error');
+                try { window.location.href = 'auth.html'; } catch (_) {}
+                return false;
+            }
+            return true;
+        } catch (_) { return false; }
+    }
+    _mapUiTypeToDbType(uiType) {
+        if (uiType === 'playbooks') return 'playbook';
+        if (uiType === 'boxLinks') return 'link';
+        if (uiType === 'dashboards') return 'dashboard';
+        return String(uiType || '').trim();
+    }
+    _normalizeResourceRow(row, uiType) {
+        try {
+            return {
+                id: row.id,
+                title: row.title || '',
+                description: row.description || '',
+                url: row.url || '',
+                tags: Array.isArray(row.tags) ? row.tags : [],
+                category: (row.extra && row.extra.category) ? row.extra.category : '',
+                createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+                updatedAt: row.updated_at || row.updatedAt || undefined,
+                userId: row.created_by || row.user_id || row.userId || null,
+                type: uiType
+            };
+        } catch (_) {
+            return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: new Date().toISOString(), type: uiType };
+        }
     }
     isValidUrl(string) {
         try {
@@ -1143,82 +1071,39 @@ class SectionManager {
     }
 
     loadSectionConfig() {
-        // Prefer DB-backed config for cross-user consistency, fallback to localStorage
-        try {
-            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
-                // Synchronous caller path: return placeholder; async refresh below
-                const cached = localStorage.getItem(`section_config_${this.currentSection}`);
-                if (cached) return JSON.parse(cached);
-            }
-            const key = `section_config_${this.currentSection}`;
-            const raw = localStorage.getItem(key);
-            if (raw) return JSON.parse(raw);
-        } catch (_) {}
-        // Default config matching existing tabs/categories
+        // Default config as placeholder; refreshed from Supabase asynchronously
         return {
             types: [
                 { id: 'playbooks', name: 'Playbooks', icon: 'fas fa-book' },
                 { id: 'box-links', name: 'Box Links', icon: 'fas fa-link' },
-                { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' },
-                { id: 'reports', name: 'Reports', icon: 'fas fa-file-alt' }
+                { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' }
             ],
             categories: ['process','procedure','guide','template','checklist']
         };
     }
 
-    saveSectionConfig(cfg) {
+    async saveSectionConfig(cfg) {
         try {
-            const key = `section_config_${this.currentSection}`;
-            // Detect newly added type ids to seed default content
-            const prev = this.sectionConfig && Array.isArray(this.sectionConfig.types) ? this.sectionConfig.types : [];
-            const prevIds = new Set(prev.map(t => String(t.id || '').toLowerCase().trim()));
-            const newTypes = Array.isArray(cfg.types) ? cfg.types : [];
-            const addedIds = newTypes
-                .map(t => String(t.id || '').toLowerCase().trim())
-                .filter(id => id && !prevIds.has(id));
-
-            // Save config first
-            localStorage.setItem(key, JSON.stringify(cfg));
             this.sectionConfig = cfg;
-
-            // Persist to DB for cross-user sync (best-effort, non-blocking)
-            try {
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
-                    hubDatabase.saveSectionConfig(this.currentSection, cfg).catch(() => {});
-                }
-            } catch (_) {}
-
-            // Removed auto-seeding of default items for newly added tabs to avoid mismatched counts
-
+            if (!window.supabaseClient) return;
+            const payload = { section_id: this.currentSection, config: cfg };
+            const { error } = await window.supabaseClient.from('sections').upsert(payload, { onConflict: 'section_id' });
+            if (error) throw error;
             this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
-
-            // Persist to GitHub as source of truth for all users (admin-only)
-            try {
-                const isAdmin = this.isAdmin();
-                if (isAdmin && window.githubData && typeof githubData.saveSectionConfig === 'function') {
-                    githubData.saveSectionConfig(this.currentSection, cfg).catch(() => {});
-                }
-            } catch (_) {}
         } catch (_) {}
     }
 
     async _refreshSectionConfigFromDb() {
         try {
-            let cfg = null;
-            // Prefer GitHub as shared source
-            try {
-                if (window.githubData && typeof githubData.getSectionConfig === 'function') {
-                    cfg = await githubData.getSectionConfig(this.currentSection);
-                }
-            } catch (_) {}
-            // Then DB
-            if (!cfg) {
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
-                    cfg = await hubDatabase.getSectionConfig(this.currentSection);
-                }
-            }
-            if (cfg && typeof cfg === 'object') {
-                localStorage.setItem(`section_config_${this.currentSection}`, JSON.stringify(cfg));
+            if (!window.supabaseClient) return;
+            const { data, error } = await window.supabaseClient
+                .from('sections')
+                .select('config')
+                .eq('section_id', this.currentSection)
+                .single();
+            if (error) return;
+            const cfg = (data && data.config && typeof data.config === 'object') ? data.config : null;
+            if (cfg) {
                 this.sectionConfig = cfg;
                 this.renderDynamicUI();
                 this.renderCurrentTab();
@@ -1486,8 +1371,8 @@ class SectionManager {
         try { localStorage.setItem('hubLastChange', String(Date.now())); } catch(_) {}
     }
 
-    // Periodic auto-refresh for shared GitHub data
-    _setupGitHubAutoRefresh() {
+    // Periodic auto-refresh for Supabase-backed data
+    _setupAutoRefresh() {
         // Avoid duplicate timers
         if (this._ghRefreshTimer) try { clearInterval(this._ghRefreshTimer); } catch(_) {}
         const tick = async () => {
@@ -1506,6 +1391,25 @@ class SectionManager {
         // Clean up on unload
         window.addEventListener('beforeunload', () => { try { clearInterval(this._ghRefreshTimer); } catch(_) {} });
         document.addEventListener('visibilitychange', () => { /* opportunistic tick on return */ if (!document.hidden) setTimeout(() => tick().catch(()=>{}), 250); });
+    }
+
+    _setupRealtime() {
+        try {
+            if (!window.supabaseClient) return;
+            if (this._rtCh) { try { window.supabaseClient.removeChannel(this._rtCh); } catch(_) {} }
+            const sid = this.currentSection;
+            const ch = window.supabaseClient
+                .channel('section-' + sid)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'resources', filter: 'section_id=eq.' + sid }, async () => {
+                    try { await this.renderCurrentTab(); } catch(_) {}
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter: 'section_id=eq.' + sid }, async () => {
+                    try { await this._refreshSectionConfigFromDb(); } catch(_) {}
+                })
+                .subscribe();
+            this._rtCh = ch;
+            window.addEventListener('beforeunload', () => { try { window.supabaseClient.removeChannel(ch); } catch(_) {} }, { once: true });
+        } catch (_) {}
     }
 }
 
