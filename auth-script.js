@@ -16,6 +16,19 @@ class AuthSystem {
 
     ensureSupabaseClient() {
         try {
+            // Fallback: pull keys from localStorage or <meta> if not present on window
+            if (!window.SUPABASE_URL) {
+                try {
+                    var m1 = document.querySelector('meta[name="supabase-url"]');
+                    window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || (m1 && m1.content) || window.SUPABASE_URL;
+                } catch(_) {}
+            }
+            if (!window.SUPABASE_ANON_KEY) {
+                try {
+                    var m2 = document.querySelector('meta[name="supabase-anon-key"]');
+                    window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || (m2 && m2.content) || window.SUPABASE_ANON_KEY;
+                } catch(_) {}
+            }
             if (!window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
                 window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
             }
