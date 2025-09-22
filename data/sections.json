@@ -1,0 +1,10 @@
+[
+  {
+    "id": "finance",
+    "name": "Finance",
+    "icon": "fas fa-calculator",
+    "visible": true,
+    "intro": "",
+    "order": 2
+  }
+]
