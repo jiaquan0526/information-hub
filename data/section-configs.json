@@ -263,6 +263,11 @@
         "id": "dashboards",
         "name": "Dashboards",
         "icon": "fas fa-chart-bar"
+      },
+      {
+        "id": "reports",
+        "name": "Reports",
+        "icon": "fas fa-clipboard-list"
       }
     ],
     "categories": [
