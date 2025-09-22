@@ -246,5 +246,31 @@
       }
     ],
     "intro": ""
+  },
+  "example": {
+    "types": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks",
+        "icon": "fas fa-book"
+      },
+      {
+        "id": "box-links",
+        "name": "Box Links",
+        "icon": "fas fa-link"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards",
+        "icon": "fas fa-chart-bar"
+      }
+    ],
+    "categories": [
+      "process",
+      "procedure",
+      "guide",
+      "template",
+      "checklist"
+    ]
   }
 }
