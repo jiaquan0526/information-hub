@@ -191,17 +191,7 @@ class SectionManager {
         } catch (_) {}
 
         if (!sectionConfig) {
-            const defaults = {
-                'costing': { name: 'Costing', icon: 'fas fa-calculator', intro: 'Guides and tools for cost analysis, budgeting, and ROI planning.' },
-                'supply-planning': { name: 'Supply Planning', icon: 'fas fa-truck', intro: 'Demand forecasting, inventory optimization, and supplier planning resources.' },
-                'operations': { name: 'Operations', icon: 'fas fa-cogs', intro: 'Process improvement, SOPs, production metrics, and maintenance guidance.' },
-                'quality': { name: 'Quality Management', icon: 'fas fa-check-circle', intro: 'Quality management practices, control procedures, and compliance standards.' },
-                'hr': { name: 'Human Resources', icon: 'fas fa-users', intro: 'People operations policies, templates, onboarding, and workforce resources.' },
-                'it': { name: 'IT & Technology', icon: 'fas fa-laptop-code', intro: 'IT systems, tooling, security, and operational best practices.' },
-                'sales': { name: 'Sales & Marketing', icon: 'fas fa-chart-line', intro: 'Sales playbooks, marketing assets, and performance dashboards.' },
-                'compliance': { name: 'Compliance & Legal', icon: 'fas fa-gavel', intro: 'Policies, legal, and regulatory guidance with reusable templates.' }
-            };
-            sectionConfig = defaults[this.currentSection] || { name: this.currentSection, icon: 'fas fa-th-large', intro: '' };
+            sectionConfig = { name: this.currentSection, icon: 'fas fa-th-large', intro: '' };
         }
 
         const nameEl = document.getElementById('sectionName');

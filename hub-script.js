@@ -77,7 +77,7 @@ class InformationHub {
         this.checkAuthentication();
         this.loadData();
         this.bindEvents();
-        this.addSampleData();
+        // Start blank by default; no sample data seeding
         this.updateUserInterface();
         // Track hub page session
         this.hubSessionStartMs = Date.now();
@@ -567,18 +567,10 @@ class InformationHub {
 
     addSampleDataForSection(sectionId) {
         const section = this.sections[sectionId];
-        
-        // Sample playbooks
-        const samplePlaybooks = this.getSamplePlaybooks(sectionId);
-        section.playbooks = samplePlaybooks.map(r => ({ ...r, id: r.id || `${sectionId}:playbooks:${Date.now()}:${Math.random().toString(36).slice(2)}` }));
-
-        // Sample box links
-        const sampleBoxLinks = this.getSampleBoxLinks(sectionId);
-        section.boxLinks = sampleBoxLinks.map(r => ({ ...r, id: r.id || `${sectionId}:boxLinks:${Date.now()}:${Math.random().toString(36).slice(2)}` }));
-
-        // Sample dashboards
-        const sampleDashboards = this.getSampleDashboards(sectionId);
-        section.dashboards = sampleDashboards.map(r => ({ ...r, id: r.id || `${sectionId}:dashboards:${Date.now()}:${Math.random().toString(36).slice(2)}` }));
+        // Do not seed any sample content
+        section.playbooks = [];
+        section.boxLinks = [];
+        section.dashboards = [];
     }
 
     getSamplePlaybooks(sectionId) {
@@ -868,52 +860,21 @@ class InformationHub {
             userSelect.appendChild(option);
         });
 
-        // Load sections for export dropdown
+        // Load sections for export dropdown (GitHub first)
         try {
             let sections = [];
-            try { sections = await hubDatabase.getAllSections(); } catch (_) { sections = []; }
             try {
-                const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
-                (order || []).forEach(s => { if (s && s.id) sections.push({ id: s.id, sectionId: s.id, name: s.name || s.id }); });
-            } catch (_) {}
-            try {
-                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                Object.entries(hub).forEach(([id, s]) => { sections.push({ id, sectionId: id, name: (s && s.name) || id }); });
-            } catch (_) {}
-            // Fallback: scrape visible hub cards from DOM
-            try {
-                const cards = Array.from(document.querySelectorAll('.hub-card'));
-                cards.forEach(card => {
-                    const id = card.getAttribute('data-section-id');
-                    if (!id) return;
-                    const titleEl = card.querySelector('h3');
-                    const name = titleEl ? titleEl.textContent.trim() : id;
-                    sections.push({ id, sectionId: id, name });
-                });
-            } catch (_) {}
-            const bySid = new Map();
-            sections.forEach(s => {
-                const key = String(s.sectionId || s.id || '');
-                if (!key) return;
-                if (!bySid.has(key)) bySid.set(key, { id: key, sectionId: key, name: s.name || key });
-                else {
-                    const cur = bySid.get(key);
-                    if (!cur.name && s.name) bySid.set(key, { id: key, sectionId: key, name: s.name });
+                if (window.githubData && typeof githubData.readSections === 'function') {
+                    const remote = await githubData.readSections();
+                    sections = Array.isArray(remote.json) ? remote.json : [];
                 }
-            });
-            let list = Array.from(bySid.values()).sort((a,b) => String(a.name).localeCompare(String(b.name)));
-            if (list.length === 0) {
-                list = [
-                    { id: 'costing', sectionId: 'costing', name: 'Costing' },
-                    { id: 'supply-planning', sectionId: 'supply-planning', name: 'Supply Planning' },
-                    { id: 'operations', sectionId: 'operations', name: 'Operations' },
-                    { id: 'quality', sectionId: 'quality', name: 'Quality Management' },
-                    { id: 'hr', sectionId: 'hr', name: 'Human Resources' },
-                    { id: 'it', sectionId: 'it', name: 'IT & Technology' },
-                    { id: 'sales', sectionId: 'sales', name: 'Sales & Marketing' },
-                    { id: 'compliance', sectionId: 'compliance', name: 'Compliance & Legal' }
-                ];
+            } catch (_) { sections = []; }
+            if (!Array.isArray(sections) || sections.length === 0) {
+                try { sections = JSON.parse(localStorage.getItem('sectionOrder') || '[]'); } catch(_) { sections = []; }
             }
+            const list = (Array.isArray(sections) ? sections : [])
+                .map(s => ({ id: s.id, sectionId: s.id, name: s.name || s.id }))
+                .sort((a,b) => String(a.name).localeCompare(String(b.name)));
             const secSelect = document.getElementById('sectionExportSelect');
             if (secSelect) {
                 secSelect.innerHTML = '<option value="">Select Section</option>';
@@ -1051,28 +1012,35 @@ class InformationHub {
     // JSON Backup/Restore (raw)
     window.backupJson = async () => {
         try {
-            let raw;
+            // Admin-only hint (non-blocking)
             try {
-                if (window.hubDatabase && hubDatabase.exportRawState) {
-                    raw = await hubDatabase.exportRawState();
+                const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
+                if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
+                    this.showMessage('Tip: Admin should perform backups for completeness.', 'error');
                 }
-            } catch (_) {}
+            } catch(_) {}
 
-            if (!raw) {
-                // Fallback to localStorage-only backup
-                let local = {};
-                try {
-                    local = {
-                        sectionOrder: JSON.parse(localStorage.getItem('sectionOrder') || 'null'),
-                        hubUsers: JSON.parse(localStorage.getItem('hubUsers') || 'null'),
-                        informationHub: JSON.parse(localStorage.getItem('informationHub') || 'null'),
-                        hubActivities: JSON.parse(localStorage.getItem('hubActivities') || 'null')
-                    };
-                } catch (_) {}
-                raw = { users: [], sections: [], resources: [], activities: [], views: [], exportDate: new Date().toISOString(), localStorage: local };
+            // GitHub-first comprehensive backup
+            let users = [], sections = [], sectionConfigs = {}, resources = {}, activities = [], views = [];
+            if (window.githubData) {
+                try { const r = await githubData.readUsers(); users = Array.isArray(r.json) ? r.json : []; } catch(_) {}
+                try { const r = await githubData.readSections(); sections = Array.isArray(r.json) ? r.json : []; } catch(_) {}
+                try { const r = await githubData.readJson('data/section-configs.json'); sectionConfigs = r.json && typeof r.json==='object' ? r.json : {}; } catch(_) {}
+                try { const r = await githubData.readJson('data/audit-log.json'); activities = Array.isArray(r.json) ? r.json : []; } catch(_) {}
+                try { const r = await githubData.readJson('data/views.json'); views = Array.isArray(r.json) ? r.json : []; } catch(_) {}
+                for (const s of (sections||[])) {
+                    const sid = String(s.id||'').trim(); if (!sid) continue;
+                    try { const r = await githubData.readSectionResources(sid); resources[sid] = r.json || {}; } catch(_) { resources[sid] = {}; }
+                }
             }
-
-            const blob = new Blob([JSON.stringify(raw, null, 2)], { type: 'application/json' });
+            if ((sections||[]).length===0 && window.hubDatabase && hubDatabase.exportRawState) {
+                try {
+                    const raw = await hubDatabase.exportRawState();
+                    users = raw.users||users; sections = raw.sections||sections; activities = raw.activities||activities; views = raw.views||views;
+                } catch(_) {}
+            }
+            const payload = { exportDate: new Date().toISOString(), users, sections, sectionConfigs, resources, activities, views };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -1089,7 +1057,11 @@ class InformationHub {
 
     window.restoreJson = async () => {
         try {
-            if (!window.hubDatabase || !hubDatabase.importRawState) throw new Error('Database not ready');
+            const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
+            if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
+                this.showMessage('Only admin can restore data', 'error');
+                return;
+            }
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'application/json';
@@ -1098,8 +1070,17 @@ class InformationHub {
                 if (!file) return;
                 const text = await file.text();
                 const json = JSON.parse(text);
-                await hubDatabase.importRawState(json);
-                updateMainHubSections();
+                if (!window.githubData) throw new Error('GitHub API unavailable');
+                try { if (Array.isArray(json.users)) await githubData.writeUsers(json.users, 'Restore users'); } catch(_) {}
+                try { if (Array.isArray(json.sections)) await githubData.writeSections(json.sections, 'Restore sections'); } catch(_) {}
+                try { if (json.sectionConfigs && typeof json.sectionConfigs === 'object') await githubData.writeJson('data/section-configs.json', json.sectionConfigs, 'Restore section configs'); } catch(_) {}
+                try {
+                    const res = json.resources && typeof json.resources === 'object' ? json.resources : {};
+                    for (const sid of Object.keys(res)) await githubData.writeSectionResources(sid, res[sid] || {}, 'Restore resources');
+                } catch(_) {}
+                try { if (Array.isArray(json.activities)) await githubData.writeJson('data/audit-log.json', json.activities, 'Restore audit log'); } catch(_) {}
+                try { if (Array.isArray(json.views)) await githubData.writeJson('data/views.json', json.views, 'Restore views'); } catch(_) {}
+                try { updateMainHubSections(); } catch(_) {}
                 this.showMessage('Restore completed', 'success');
             };
             input.click();

@@ -115,7 +115,8 @@
     async function saveSectionConfig(sectionId, cfg) {
         const current = await readJson('data/section-configs.json');
         const next = current.json && typeof current.json === 'object' ? { ...current.json } : {};
-        next[sectionId] = cfg;
+        const stamped = { ...(cfg || {}), updatedAt: new Date().toISOString() };
+        next[sectionId] = stamped;
         return writeJson('data/section-configs.json', next, `Update section config: ${sectionId}`, current.sha || null);
     }
     // ---- Higher-level helpers for Hub data stored in the repo ----
@@ -240,7 +241,12 @@
     // ---- Sections (Manage Sections) ----
     // Stored in data/sections.json as an array of { id, name, icon, image, visible, order, intro }
     async function readSections() {
-        return readJson('data/sections.json');
+        const res = await readJson('data/sections.json');
+        try {
+            if (!Array.isArray(res.json)) return { json: [], sha: res.sha || null };
+            const cleaned = res.json.filter(s => s && typeof s.id === 'string' && s.id.trim());
+            return { json: cleaned, sha: res.sha || null };
+        } catch(_) { return { json: [], sha: res.sha || null }; }
     }
 
     async function writeSections(sections, message = 'Update sections', sha = null) {
@@ -254,8 +260,9 @@
         const id = String(section?.id || '').trim();
         if (!id) throw new Error('section.id required');
         const idx = list.findIndex(s => String(s?.id) === id);
-        if (idx >= 0) list[idx] = { ...list[idx], ...section };
-        else list.push(section);
+        const withTs = { ...section, updatedAt: new Date().toISOString() };
+        if (idx >= 0) list[idx] = { ...list[idx], ...withTs };
+        else list.push(withTs);
         return writeSections(list, `Upsert section: ${id}`, current.sha || null);
     }
 

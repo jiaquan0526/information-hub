@@ -68,8 +68,22 @@ class AuthSystem {
         }
     }
 
-    loadUsers() {
-        const defaultUsers = [
+    async loadUsers() {
+        // Source of truth: GitHub users.json
+        try {
+            if (window.githubData && typeof githubData.readUsers === 'function') {
+                const data = await githubData.readUsers();
+                const list = Array.isArray(data.json) ? data.json : [];
+                if (list.length > 0) {
+                    try { localStorage.setItem('hubUsers', JSON.stringify(list)); } catch(_) {}
+                    return list;
+                }
+            }
+        } catch(_) {}
+        // Fallback: local cached admin only (no demo accounts)
+        const stored = localStorage.getItem('hubUsers');
+        if (stored) return JSON.parse(stored);
+        const adminOnly = [
             {
                 id: 1,
                 username: 'admin',
@@ -85,65 +99,14 @@ class AuthSystem {
                     canManageRoles: true,
                     canAssignSections: true,
                     canManagePermissions: true,
-                    sections: ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'],
-                    editableSections: ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance']
-                },
-                createdAt: new Date().toISOString()
-            },
-            {
-                id: 2,
-                username: 'manager',
-                password: 'manager123',
-                role: 'manager',
-                name: 'Department Manager',
-                email: 'manager@company.com',
-                permissions: {
-                    canManageUsers: true,  // Managers can manage users (but only user role)
-                    canEditAllSections: false,
-                    canDeleteResources: true,
-                    canViewAuditLog: false,
-                    canManageRoles: false,  // Cannot change roles, only manage users
-                    canAssignSections: false,
-                    canManagePermissions: false,
-                    canManageUserRole: true,  // Can manage users with user role
-                    canManageManagerRole: false,  // Cannot manage other managers
-                    canManageAdminRole: false,  // Cannot manage admins
-                    sections: ['costing', 'supply-planning', 'operations', 'quality'], // 4 sections for managers
-                    editableSections: ['costing', 'supply-planning', 'operations', 'quality'] // Can edit these sections
-                },
-                createdAt: new Date().toISOString()
-            },
-            {
-                id: 3,
-                username: 'user',
-                password: 'user123',
-                role: 'user',
-                name: 'Regular User',
-                email: 'user@company.com',
-                permissions: {
-                    canManageUsers: false,
-                    canEditAllSections: false,
-                    canDeleteResources: false,
-                    canViewAuditLog: false,
-                    canManageRoles: false,
-                    canAssignSections: false,
-                    canManagePermissions: false,
-                    sections: ['costing', 'supply-planning'], // Default access to 2 sections
-                    editableSections: [] // Cannot edit anything
+                    sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'],
+                    editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance']
                 },
                 createdAt: new Date().toISOString()
             }
         ];
-
-        const stored = localStorage.getItem('hubUsers');
-        if (stored) {
-            console.log('Loading users from localStorage:', JSON.parse(stored));
-            return JSON.parse(stored);
-        } else {
-            console.log('No stored users found, creating default users');
-            localStorage.setItem('hubUsers', JSON.stringify(defaultUsers));
-            return defaultUsers;
-        }
+        try { localStorage.setItem('hubUsers', JSON.stringify(adminOnly)); } catch(_) {}
+        return adminOnly;
     }
 
     handleLogin() {
@@ -152,8 +115,8 @@ class AuthSystem {
         const lowered = identifier.toLowerCase();
         const password = (document.getElementById('password').value || '').trim();
 
-        // ALWAYS reload users from localStorage to get the latest permissions
-        this.users = this.loadUsers();
+        // Always reload users from GitHub (source of truth), with cached fallback
+        try { this.users = await this.loadUsers(); } catch(_) { this.users = await this.loadUsers(); }
         console.log('=== LOGIN PROCESS ===');
         console.log('Users loaded for login:', this.users);
         
@@ -193,23 +156,25 @@ class AuthSystem {
             this.showMessage('All fields are required', 'error');
             return;
         }
-        // Reload current users
-        this.users = this.loadUsers();
+        // Reload current users from GitHub as source of truth
+        this.users = await this.loadUsers();
         if (this.users.find(u => u.email && u.email.toLowerCase() === email)) {
             this.showMessage('Email already registered', 'error');
             return;
         }
         const nextId = (this.users.reduce((m,u) => Math.max(m, u.id || 0), 0) + 1) || Date.now();
-        // Default permissions: view-only to visible sections
+        // Default permissions: view-only to ALL current sections from GitHub (fallback: cached sectionOrder)
         let visibleSections = [];
         try {
-            const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                visibleSections = JSON.parse(savedOrder).filter(s => s.visible !== false).map(s => s.id);
+            if (window.githubData && typeof githubData.readSections === 'function') {
+                const remote = await githubData.readSections();
+                const arr = Array.isArray(remote.json) ? remote.json : [];
+                visibleSections = arr.filter(s => s && s.visible !== false).map(s => s.id);
             }
         } catch (_) {}
-        if (visibleSections.length === 0) {
-            visibleSections = ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
+        if (!Array.isArray(visibleSections) || visibleSections.length === 0) {
+            visibleSections = [];
+            try { this.showMessage('No sections available yet. Ask admin to configure sections.', 'error'); } catch(_) {}
         }
         const newUser = {
             id: nextId,
@@ -233,9 +198,16 @@ class AuthSystem {
         };
         this.users.push(newUser);
         localStorage.setItem('hubUsers', JSON.stringify(this.users));
+        // Persist to IndexedDB (best-effort)
         try {
             if (window.hubDatabase && hubDatabase.saveUser) {
                 await hubDatabase.saveUser(newUser);
+            }
+        } catch (_) {}
+        // Persist to GitHub store so signup users are part of the system immediately (role remains 'user')
+        try {
+            if (window.githubData && typeof githubData.upsertUser === 'function') {
+                await githubData.upsertUser(newUser);
             }
         } catch (_) {}
         // Auto-login the new user and redirect to hub (view-only until admin assigns)

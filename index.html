@@ -732,7 +732,7 @@
                 sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
             }
 
-            const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
+            const useDb = false; // Enforce GitHub-only reads for consistency
             const getKey = (r) => {
                 const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
                 return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
@@ -781,11 +781,11 @@
                         }
                     } catch(_) {}
 
-                    const normalizedTypes = Array.from(new Set(typesList.map(t => normType(t))));
-                    const typeMaps = new Map();
-                    normalizedTypes.forEach(t => typeMaps.set(t, new Map()));
+            const normalizedTypes = Array.from(new Set(typesList.map(t => normType(t))));
+            const typeMaps = new Map();
+            normalizedTypes.forEach(t => typeMaps.set(t, new Map()));
 
-                    const consider = (tid, r) => {
+            const consider = (tid, r) => {
                         if (!r || !typeMaps.has(tid)) return;
                         const key = getKey(r);
                         if (!key) return;
@@ -795,14 +795,14 @@
                         if (!prev || ts >= prev) m.set(key, ts);
                     };
 
-                    // DB-backed for all configured types
-                    if (useDb) {
-                        for (const tid of normalizedTypes) {
-                            try { (await hubDatabase.getResourcesByType(sectionId, tid)).forEach(r => consider(tid, r)); } catch(_) {}
-                        }
+            // GitHub-backed resources as the only source of truth
+            try {
+                if (window.githubData && typeof githubData.getResourcesByType === 'function') {
+                    for (const tid of normalizedTypes) {
+                        try { (await githubData.getResourcesByType(sectionId, tid)).forEach(r => consider(tid, r)); } catch(_) {}
                     }
-
-                    // Skip legacy main hub mirror to avoid divergence; section_<id> is source of truth
+                }
+            } catch (_) {}
 
                     // Build counts map for all known types
                     const counts = {};
@@ -3373,19 +3373,14 @@ Permissions:
         // Function to get all available sections dynamically
         function getAllAvailableSections() {
             const savedOrder = localStorage.getItem('sectionOrder');
-            console.log('getAllAvailableSections - savedOrder:', savedOrder);
-            
             if (savedOrder) {
-                const sections = JSON.parse(savedOrder);
-                console.log('getAllAvailableSections - parsed sections:', sections);
-                const visibleSections = sections.filter(section => section.visible).map(section => section.id);
-                console.log('getAllAvailableSections - visible sections:', visibleSections);
-                return visibleSections;
-            } else {
-                // Return default sections if no saved order
-                console.log('getAllAvailableSections - using default sections');
-                return ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                try {
+                    const sections = JSON.parse(savedOrder) || [];
+                    return sections.filter(s => s && s.visible !== false).map(s => s.id);
+                } catch(_) { return []; }
             }
+            // No defaults; GitHub is source of truth
+            return [];
         }
         
         // Function to get sections the CURRENT USER can assign
@@ -3481,31 +3476,21 @@ Permissions:
             console.log('Finished adding checkboxes. Total sections added:', filteredSections.length);
         }
         
-        window.loadSectionsList = function() {
+        window.loadSectionsList = async function() {
             console.log('loadSectionsList called');
-            
-            // Load section configuration from localStorage or use default
+            try {
+                if (window.githubData && typeof githubData.readSections === 'function') {
+                    const remote = await githubData.readSections();
+                    if (remote && Array.isArray(remote.json)) {
+                        sectionOrder = remote.json.slice();
+                        try { localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder)); } catch(_) {}
+                        renderSectionsList();
+                        return;
+                    }
+                }
+            } catch(_) {}
             const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                sectionOrder = JSON.parse(savedOrder);
-                console.log('Loaded saved section order from localStorage:', sectionOrder);
-            } else {
-                // Default section order
-                sectionOrder = [
-                    { id: 'costing', name: 'Costing', icon: 'fas fa-calculator', visible: true, order: 1 },
-                    { id: 'supply-planning', name: 'Supply Planning', icon: 'fas fa-truck', visible: true, order: 2 },
-                    { id: 'operations', name: 'Operations', icon: 'fas fa-cogs', visible: true, order: 3 },
-                    { id: 'quality', name: 'Quality Management', icon: 'fas fa-check-circle', visible: true, order: 4 },
-                    { id: 'hr', name: 'Human Resources', icon: 'fas fa-users', visible: true, order: 5 },
-                    { id: 'it', name: 'IT & Technology', icon: 'fas fa-laptop-code', visible: true, order: 6 },
-                    { id: 'sales', name: 'Sales & Marketing', icon: 'fas fa-chart-line', visible: true, order: 7 },
-                    { id: 'compliance', name: 'Compliance & Legal', icon: 'fas fa-gavel', visible: true, order: 8 }
-                ];
-                console.log('Using default section order:', sectionOrder);
-                // Save default to localStorage
-                localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
-            }
-            
+            sectionOrder = savedOrder ? JSON.parse(savedOrder) : [];
             renderSectionsList();
         };
         
@@ -4271,6 +4256,16 @@ Permissions:
             const sectionOrderRaw = localStorage.getItem('sectionOrder');
             let sectionOrder = [];
             try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
+            // Prefer GitHub sections as source of truth; persist to localStorage for offline use
+            try {
+                if (window.githubData && typeof githubData.readSections === 'function') {
+                    const remote = await githubData.readSections();
+                    if (remote && Array.isArray(remote.json) && remote.json.length > 0) {
+                        sectionOrder = remote.json.slice();
+                        try { localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder)); } catch(_) {}
+                    }
+                }
+            } catch (_) {}
             let visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
             // Filter by user permissions to prevent flashing of admin-only sections
             try {
