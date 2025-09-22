@@ -52,6 +52,10 @@ class SectionManager {
         this.loadSectionData();
         this.bindEvents();
         this.renderDynamicUI();
+        // Asynchronously refresh section config from DB so all users share the same tabs
+        try { this._refreshSectionConfigFromDb(); } catch (_) {}
+        // Set up periodic GitHub auto-refresh to keep resources/config in sync across users
+        try { this._setupGitHubAutoRefresh(); } catch (_) {}
         // Ensure filters are cleared on entry to avoid stale search/category narrowing results
         try {
             const searchInput = document.getElementById('searchInput');
@@ -117,6 +121,44 @@ class SectionManager {
             }
             return raw;
         } catch (_) { return possibleUrl; }
+    }
+
+    // Canonicalization and merge helpers to keep section view consistent with hub
+    canonicalizeUrlForKey(url) {
+        try {
+            let raw = String(url || '').trim();
+            if (!raw) return '';
+            if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) raw = 'https://' + raw;
+            const u = new URL(raw);
+            const host = (u.host || '').toLowerCase();
+            const path = (u.pathname || '/').replace(/\/+$/, '');
+            const norm = `${u.protocol}//${host}${path}${u.search || ''}`;
+            return norm.toLowerCase();
+        } catch (_) {
+            return String(url || '').trim().toLowerCase();
+        }
+    }
+    canonicalKeyForResource(r) {
+        const title = String(r?.title || '').trim().toLowerCase();
+        const urlKey = this.canonicalizeUrlForKey(r?.url);
+        const pair = `t:${title}|u:${urlKey}`;
+        return pair;
+    }
+    _getMergeKey(r) {
+        try {
+            const pair = this.canonicalKeyForResource(r);
+            if (pair) return `pair:${pair}`;
+            const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
+            if (id) return `id:${id}`;
+        } catch (_) {}
+        return '';
+    }
+    _pickNewerResource(a, b) {
+        try {
+            const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
+            const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
+            return tb >= ta ? b : a;
+        } catch (_) { return b || a; }
     }
 
     checkAccess() {
@@ -332,6 +374,23 @@ class SectionManager {
                         timestamp: new Date().toISOString()
                     });
                 }
+                // Hourly GitHub sync of audit log: enqueue recent activity
+                try {
+                    if (window.githubData && typeof githubData.upsertAudit === 'function') {
+                        const entry = {
+                            id: `sec-close:${this.currentSection}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+                            userId: this.currentUser.id,
+                            username: this.currentUser.username,
+                            action: 'CLOSE_SECTION',
+                            description: `Closed section ${this.currentSection}`,
+                            timestamp: new Date().toISOString()
+                        };
+                        // Debounce via local queue and periodic flusher elsewhere
+                        const q = JSON.parse(localStorage.getItem('auditQueue') || '[]');
+                        q.push(entry);
+                        localStorage.setItem('auditQueue', JSON.stringify(q.slice(-500)));
+                    }
+                } catch (_) {}
             } catch (_) {}
         };
         window.addEventListener('beforeunload', logClose);
@@ -417,100 +476,44 @@ class SectionManager {
             addBtn.style.display = this.canEditResource() ? 'inline-flex' : 'none';
         }
 
-        // Render locally first for instant feedback
-        const localResources = await this.getResourcesLocalOnly(type);
-        const localFiltered = this.getFilteredResources(localResources);
-        if (localFiltered.length === 0) {
+        // DB-only: fetch and render
+        try {
+            const resources = await this.getResources(type);
+            const filteredResources = this.getFilteredResources(resources);
+            if (filteredResources.length === 0) {
+                grid.style.display = 'none';
+                emptyState.style.display = 'block';
+                grid.innerHTML = '';
+            } else {
+                grid.style.display = 'grid';
+                emptyState.style.display = 'none';
+                grid.innerHTML = filteredResources.map(resource => this.createResourceCard(resource, type)).join('');
+            }
+        } catch (_) {
             grid.style.display = 'none';
             emptyState.style.display = 'block';
-        } else {
-            grid.style.display = 'grid';
-            emptyState.style.display = 'none';
-            grid.innerHTML = localFiltered.map(resource => this.createResourceCard(resource, type)).join('');
         }
-
-        // Then merge with DB in background and update if changed
-        setTimeout(async () => {
-            try {
-                const resources = await this.getResources(type);
-                const filteredResources = this.getFilteredResources(resources);
-                const html = filteredResources.map(resource => this.createResourceCard(resource, type)).join('');
-                if (grid.innerHTML !== html) {
-                    if (filteredResources.length === 0) {
-                        grid.style.display = 'none';
-                        emptyState.style.display = 'block';
-                    } else {
-                        grid.style.display = 'grid';
-                        emptyState.style.display = 'none';
-                        grid.innerHTML = html;
-                    }
-                }
-            } catch (_) {}
-        }, 0);
     }
 
     async getResources(type) {
         const storageType = this.mapToStorageType(type);
-        let dbResources = [];
+        // Prefer GitHub as cross-user source of truth; fallback to DB
         try {
-            if (window.hubDatabase && hubDatabase.getResourcesByType &&
-                (storageType === 'playbooks' || storageType === 'boxLinks' || storageType === 'dashboards')) {
-                dbResources = await this._safeDbFetch(
-                    hubDatabase.getResourcesByType(this.currentSection, storageType),
-                    1500,
-                    []
-                );
+            if (window.githubData && typeof githubData.getResourcesByType === 'function') {
+                const arr = await this._safeDbFetch(githubData.getResourcesByType(this.currentSection, storageType), 1500, []);
+                if (Array.isArray(arr) && arr.length >= 0) return arr;
             }
-        } catch (error) {
-            console.warn('DB not ready, using localStorage fallback');
-        }
-
-        // LocalStorage: support defaults + custom types under section_<id>.custom[storageType]
-        const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
-        const custom = sectionData.custom || {};
-        const lsArray = (sectionData[storageType] || custom[storageType] || []);
-        const lsSection = lsArray.map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
-
-        const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-        const hubSection = hubData[this.currentSection] || { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
-        const lsHubArray = (hubSection[storageType] || (hubSection.custom || {})[storageType] || []);
-        const lsHub = lsHubArray.map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
-
-        const lsResources = [...lsHub, ...lsSection];
-
-        // Merge by id, prefer the most recently updated/created item
-        const byId = new Map();
-        const consider = (candidate) => {
-            if (!candidate || candidate.id === undefined || candidate.id === null) return;
-            const key = String(candidate.id);
-            const existing = byId.get(key);
-            if (!existing) {
-                byId.set(key, candidate);
-                return;
-            }
-            const tExisting = Date.parse(existing.updatedAt || existing.createdAt || 0) || 0;
-            const tCandidate = Date.parse(candidate.updatedAt || candidate.createdAt || 0) || 0;
-            byId.set(key, tCandidate >= tExisting ? candidate : existing);
-        };
-        lsResources.forEach(consider);
-        dbResources.forEach(consider);
-        return Array.from(byId.values());
+        } catch (_) {}
+        if (!(window.hubDatabase && hubDatabase.getResourcesByType)) return [];
+        return await this._safeDbFetch(
+            hubDatabase.getResourcesByType(this.currentSection, storageType),
+            1500,
+            []
+        );
     }
 
     // Local-only fast resource fetch (no DB calls)
-    async getResourcesLocalOnly(type) {
-        const storageType = this.mapToStorageType(type);
-        const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-        const lsSection = (sectionData[storageType] || []).map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
-        const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-        const hubSection = hubData[this.currentSection] || { playbooks: [], boxLinks: [], dashboards: [] };
-        const lsHub = (hubSection[storageType] || []).map(r => ({ ...r, type: storageType, sectionId: this.currentSection }));
-        const byId = new Map();
-        [...lsHub, ...lsSection].forEach(r => {
-            if (r && r.id !== undefined && r.id !== null) byId.set(String(r.id), r);
-        });
-        return Array.from(byId.values());
-    }
+    async getResourcesLocalOnly(type) { return this.getResources(type); }
 
     async getSectionData() {
         try {
@@ -736,7 +739,11 @@ class SectionManager {
             return false;
         }
 
-        await this.addResourceToSection(type, resource);
+        const ok = await this.addResourceToSection(type, resource);
+        if (!ok) {
+            // Error already shown by callee
+            return false;
+        }
         // Log content creation
         try { this.logContentActivity('created', this.mapToStorageType(type), resource.title); } catch(_) {}
         this.renderCurrentTab();
@@ -746,49 +753,35 @@ class SectionManager {
 
     async addResourceToSection(type, resource) {
         try {
-            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
             const resourceType = this.mapToStorageType(type);
-            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
-                if (!sectionData[resourceType]) sectionData[resourceType] = [];
-                sectionData[resourceType].push(resource);
+            // Mandatory: write to GitHub first; abort on failure
+            if (window.githubData && typeof githubData.upsertResource === 'function') {
+                await githubData.upsertResource(this.currentSection, resourceType, {
+                    ...resource,
+                    sectionId: this.currentSection,
+                    type: resourceType,
+                    userId: this.currentUser?.id || 0
+                });
             } else {
-                if (!sectionData.custom) sectionData.custom = {};
-                if (!sectionData.custom[resourceType]) sectionData.custom[resourceType] = [];
-                sectionData.custom[resourceType].push(resource);
+                throw new Error('GitHub sync unavailable');
             }
-            localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            // Signal hub to refresh
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType });
-
-            // Compatibility hubData
-            const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            if (!hubData[this.currentSection]) {
-                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
-            }
-            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
-                if (!hubData[this.currentSection][resourceType]) hubData[this.currentSection][resourceType] = [];
-                hubData[this.currentSection][resourceType].push(resource);
-            } else {
-                if (!hubData[this.currentSection].custom) hubData[this.currentSection].custom = {};
-                if (!hubData[this.currentSection].custom[resourceType]) hubData[this.currentSection].custom[resourceType] = [];
-                hubData[this.currentSection].custom[resourceType].push(resource);
-            }
-            localStorage.setItem('informationHub', JSON.stringify(hubData));
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType });
-
-            if (window.hubDatabase && hubDatabase.saveResource &&
-                (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
-                this._safeDbCall(hubDatabase.saveResource({
+            // Mirror to IndexedDB (best-effort cache)
+            if (window.hubDatabase && hubDatabase.saveResource) {
+                await this._safeDbCall(hubDatabase.saveResource({
                     ...resource,
                     sectionId: this.currentSection,
                     type: resourceType,
                     userId: this.currentUser?.id || 0
                 }));
             }
+            // Signal hub to refresh
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType });
             console.log('Resource saved successfully');
+            return true;
         } catch (error) {
             console.error('Error saving resource:', error);
             this.showMessage('Error saving resource', 'error');
+            return false;
         }
     }
 
@@ -1016,69 +1009,35 @@ class SectionManager {
 
     async updateResourceInSection(type, id, updatedResource, original) {
         try {
-            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
             const resourceType = this.mapToStorageType(type);
-
-            const updateInArray = (arr) => {
-                if (!arr) return;
-                const matchById = (r) => String(r.id) === String(id);
-                let index = arr.findIndex(matchById);
-                if (index === -1 && original) {
-                    const origKey = `${original.title || ''}|${original.url || ''}`;
-                    index = arr.findIndex(r => `${r.title || ''}|${r.url || ''}` === origKey);
-                }
-                if (index !== -1) arr[index] = updatedResource; else arr.push(updatedResource);
-            };
-
-            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
-                updateInArray(sectionData[resourceType]);
+            // Mandatory: write to GitHub first
+            if (window.githubData && typeof githubData.upsertResource === 'function') {
+                await githubData.upsertResource(this.currentSection, resourceType, {
+                    ...updatedResource,
+                    sectionId: this.currentSection,
+                    type: resourceType,
+                    userId: this.currentUser?.id || 0
+                });
             } else {
-                if (!sectionData.custom) sectionData.custom = {};
-                if (!sectionData.custom[resourceType]) sectionData.custom[resourceType] = [];
-                updateInArray(sectionData.custom[resourceType]);
+                throw new Error('GitHub sync unavailable');
             }
-            localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType });
-
-            const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            if (!hubData[this.currentSection]) {
-                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
-            }
-            const updateHubArray = (arr) => {
-                if (!arr) return;
-                const matchByIdHub = (r) => String(r.id) === String(id);
-                let hubIndex = arr.findIndex(matchByIdHub);
-                if (hubIndex === -1 && original) {
-                    const origKey = `${original.title || ''}|${original.url || ''}`;
-                    hubIndex = arr.findIndex(r => `${r.title || ''}|${r.url || ''}` === origKey);
-                }
-                if (hubIndex !== -1) arr[hubIndex] = updatedResource; else arr.push(updatedResource);
-            };
-            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
-                if (!hubData[this.currentSection][resourceType]) hubData[this.currentSection][resourceType] = [];
-                updateHubArray(hubData[this.currentSection][resourceType]);
-            } else {
-                if (!hubData[this.currentSection].custom) hubData[this.currentSection].custom = {};
-                if (!hubData[this.currentSection].custom[resourceType]) hubData[this.currentSection].custom[resourceType] = [];
-                updateHubArray(hubData[this.currentSection].custom[resourceType]);
-            }
-            localStorage.setItem('informationHub', JSON.stringify(hubData));
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType });
-
-            if (window.hubDatabase && hubDatabase.saveResource &&
-                (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
-                this._safeDbCall(hubDatabase.saveResource({
+            // Mirror to IndexedDB (best-effort)
+            if (window.hubDatabase && hubDatabase.saveResource) {
+                await this._safeDbCall(hubDatabase.saveResource({
                     ...updatedResource,
                     sectionId: this.currentSection,
                     type: resourceType,
                     userId: this.currentUser?.id || 0
                 }));
             }
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType });
 
             console.log('Resource updated successfully');
+            return true;
         } catch (error) {
             console.error('Error updating resource:', error);
             this.showMessage('Error updating resource', 'error');
+            return false;
         }
     }
 
@@ -1097,7 +1056,8 @@ class SectionManager {
             return;
         }
 
-        await this.removeResourceFromSection(type, id);
+        const ok = await this.removeResourceFromSection(type, id);
+        if (!ok) return;
         // Log content deletion (use original resource title if available)
         try { this.logContentActivity('deleted', this.mapToStorageType(type), resource?.title || ''); } catch(_) {}
         this.renderCurrentTab();
@@ -1106,60 +1066,36 @@ class SectionManager {
 
     async removeResourceFromSection(type, id) {
         try {
-            const sectionData = JSON.parse(localStorage.getItem(`section_${this.currentSection}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[],"custom":{}}');
             const resourceType = this.mapToStorageType(type);
-
-            const removeFromArray = (arr) => {
-                if (!arr) return;
-                return arr.filter(r => String(r.id) !== String(id));
-            };
-
-            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
-                sectionData[resourceType] = removeFromArray(sectionData[resourceType]);
+            // Mandatory: delete on GitHub first
+            if (window.githubData && typeof githubData.deleteResource === 'function') {
+                await githubData.deleteResource(this.currentSection, id);
             } else {
-                if (!sectionData.custom) sectionData.custom = {};
-                sectionData.custom[resourceType] = removeFromArray(sectionData.custom[resourceType] || []);
+                throw new Error('GitHub sync unavailable');
             }
-            localStorage.setItem(`section_${this.currentSection}`, JSON.stringify(sectionData));
+            // Mirror delete in DB (best-effort)
+            if (window.hubDatabase && hubDatabase.deleteResource) {
+                await this._safeDbCall(hubDatabase.deleteResource(id));
+            }
             this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType });
-
-            const hubData = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            if (!hubData[this.currentSection]) {
-                hubData[this.currentSection] = { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
-            }
-            if (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards') {
-                hubData[this.currentSection][resourceType] = removeFromArray(hubData[this.currentSection][resourceType]);
-            } else {
-                if (!hubData[this.currentSection].custom) hubData[this.currentSection].custom = {};
-                hubData[this.currentSection].custom[resourceType] = removeFromArray(hubData[this.currentSection].custom[resourceType] || []);
-            }
-            localStorage.setItem('informationHub', JSON.stringify(hubData));
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType });
-
-            if (window.hubDatabase && hubDatabase.deleteResource &&
-                (resourceType === 'playbooks' || resourceType === 'boxLinks' || resourceType === 'dashboards')) {
-                await hubDatabase.deleteResource(id);
-            }
 
             console.log('Resource deleted successfully');
+            return true;
         } catch (error) {
             console.error('Error deleting resource:', error);
             this.showMessage('Error deleting resource', 'error');
+            return false;
         }
     }
 
     // Utility Functions
     mapToStorageType(type) {
-        const raw = String(type || '').toLowerCase();
-        // For default known types
-        if (raw.includes('playbook')) return 'playbooks';
-        if (raw.includes('box')) return 'boxLinks';
-        if (raw.includes('dash')) return 'dashboards';
-        if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') {
-            if (raw === 'boxlinks') return 'boxLinks';
-            return raw;
-        }
-        // For custom types, store using the id as-is under a generic bucket
+        const raw = String(type || '').toLowerCase().trim();
+        // Strict mapping for built-ins
+        if (raw === 'playbooks' || raw === 'playbook') return 'playbooks';
+        if (raw === 'box-links' || raw === 'boxlinks') return 'boxLinks';
+        if (raw === 'dashboards' || raw === 'dashboard') return 'dashboards';
+        // Custom types: use id as-is (no accidental substring mapping)
         return raw;
     }
     isValidUrl(string) {
@@ -1220,6 +1156,7 @@ class SectionManager {
         // Prefer DB-backed config for cross-user consistency, fallback to localStorage
         try {
             if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
+                // Synchronous caller path: return placeholder; async refresh below
                 const cached = localStorage.getItem(`section_config_${this.currentSection}`);
                 if (cached) return JSON.parse(cached);
             }
@@ -1242,9 +1179,29 @@ class SectionManager {
     saveSectionConfig(cfg) {
         try {
             const key = `section_config_${this.currentSection}`;
+            // Detect newly added type ids to seed default content
+            const prev = this.sectionConfig && Array.isArray(this.sectionConfig.types) ? this.sectionConfig.types : [];
+            const prevIds = new Set(prev.map(t => String(t.id || '').toLowerCase().trim()));
+            const newTypes = Array.isArray(cfg.types) ? cfg.types : [];
+            const addedIds = newTypes
+                .map(t => String(t.id || '').toLowerCase().trim())
+                .filter(id => id && !prevIds.has(id));
+
+            // Save config first
             localStorage.setItem(key, JSON.stringify(cfg));
             this.sectionConfig = cfg;
+
+            // Persist to DB for cross-user sync (best-effort, non-blocking)
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
+                    hubDatabase.saveSectionConfig(this.currentSection, cfg).catch(() => {});
+                }
+            } catch (_) {}
+
+            // Removed auto-seeding of default items for newly added tabs to avoid mismatched counts
+
             this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
+
             // Persist to GitHub as source of truth for all users (admin-only)
             try {
                 const isAdmin = this.isAdmin();
@@ -1255,57 +1212,16 @@ class SectionManager {
         } catch (_) {}
     }
 
-    renderDynamicUI() {
-        // Customize button visibility
-        const customizeBtn = document.getElementById('customizeBtn');
-        if (customizeBtn) {
-            customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
-        }
-        // Render tabs
-        const tabs = document.getElementById('navTabs');
-        if (tabs) {
-            tabs.innerHTML = this.sectionConfig.types.map((t, idx) => {
-                const active = (idx === 0 ? 'active' : '');
-                return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
-                    <i class="${this.normalizeIconClass(t.icon || '')}"></i> ${this.escapeHtml(t.name || t.id)}
-                </div>`;
-            }).join('');
-            // set default current tab to first type id
-            if (this.sectionConfig.types[0]) {
-                this.currentTab = this.sectionConfig.types[0].id;
-            }
-        }
-        // Render category filter
-        const catSel = document.getElementById('categoryFilter');
-        if (catSel) {
-            const options = ['<option value="">All Categories</option>'].concat(
-                (this.sectionConfig.categories || []).map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`) 
-            );
-            catSel.innerHTML = options.join('');
-        }
-        // Render content sections containers
-        const wrap = document.getElementById('dynamic-sections');
-        if (wrap) {
-            wrap.innerHTML = this.sectionConfig.types.map((t, idx) => {
-                const active = (idx === 0 ? 'active' : '');
-                return `<div class="content-section ${active}" id="${t.id}-section">
-                    <button class="add-resource-btn" onclick="addResource('${t.id}')" style="display: none;">
-                        <i class="fas fa-plus"></i> Add ${this.escapeHtml(t.name || t.id)}
-                    </button>
-                    <div class="resource-grid" id="${t.id}-grid"></div>
-                </div>`;
-            }).join('');
-        }
-    }
-
     async _refreshSectionConfigFromDb() {
         try {
             let cfg = null;
+            // Prefer GitHub as shared source
             try {
                 if (window.githubData && typeof githubData.getSectionConfig === 'function') {
                     cfg = await githubData.getSectionConfig(this.currentSection);
                 }
             } catch (_) {}
+            // Then DB
             if (!cfg) {
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
                     cfg = await hubDatabase.getSectionConfig(this.currentSection);
@@ -1318,6 +1234,51 @@ class SectionManager {
                 this.renderCurrentTab();
             }
         } catch (_) {}
+    }
+
+    renderDynamicUI() {
+        // Customize button visibility
+        const customizeBtn = document.getElementById('customizeBtn');
+        if (customizeBtn) {
+            customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
+        }
+            // Render tabs
+        const tabs = document.getElementById('navTabs');
+        if (tabs) {
+            tabs.innerHTML = this.sectionConfig.types.filter(t => !t.hidden).map((t, idx) => {
+                const active = (idx === 0 ? 'active' : '');
+                const iconCls = this.normalizeIconClass(t.icon || '');
+                return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
+                    <i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)}
+                </div>`;
+            }).join('');
+            // set default current tab to first type id
+                const firstVisible = (this.sectionConfig.types || []).find(t => !t.hidden);
+                if (firstVisible) {
+                    this.currentTab = firstVisible.id;
+            }
+        }
+        // Render category filter
+        const catSel = document.getElementById('categoryFilter');
+        if (catSel) {
+            const options = ['<option value="">All Categories</option>'].concat(
+                (this.sectionConfig.categories || []).map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`) 
+            );
+            catSel.innerHTML = options.join('');
+        }
+        // Render content sections containers
+        const wrap = document.getElementById('dynamic-sections');
+            if (wrap) {
+            wrap.innerHTML = this.sectionConfig.types.filter(t => !t.hidden).map((t, idx) => {
+                const active = (idx === 0 ? 'active' : '');
+                return `<div class="content-section ${active}" id="${t.id}-section">
+                    <button class="add-resource-btn" onclick="addResource('${t.id}')" style="display: none;">
+                        <i class="fas fa-plus"></i> Add ${this.escapeHtml(t.name || t.id)}
+                    </button>
+                    <div class="resource-grid" id="${t.id}-grid"></div>
+                </div>`;
+            }).join('');
+        }
     }
 
     openCustomizeModal() {
@@ -1386,6 +1347,28 @@ class SectionManager {
         // Fallback flag so hub can pick it up even without BroadcastChannel
         try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
         try { localStorage.setItem('hubLastChange', String(Date.now())); } catch(_) {}
+    }
+
+    // Periodic auto-refresh for shared GitHub data
+    _setupGitHubAutoRefresh() {
+        // Avoid duplicate timers
+        if (this._ghRefreshTimer) try { clearInterval(this._ghRefreshTimer); } catch(_) {}
+        const tick = async () => {
+            try {
+                // Skip heavy work if tab not visible
+                if (document.hidden) return;
+                // Refresh config (types/categories) and re-render tabs if changed
+                await this._refreshSectionConfigFromDb();
+                // Refresh currently visible tab resources
+                await this.renderCurrentTab();
+            } catch (_) {}
+        };
+        // First delayed run to avoid contention at load
+        setTimeout(tick, 2000);
+        this._ghRefreshTimer = setInterval(tick, 60000);
+        // Clean up on unload
+        window.addEventListener('beforeunload', () => { try { clearInterval(this._ghRefreshTimer); } catch(_) {} });
+        document.addEventListener('visibilitychange', () => { /* opportunistic tick on return */ if (!document.hidden) setTimeout(() => tick().catch(()=>{}), 250); });
     }
 }
 

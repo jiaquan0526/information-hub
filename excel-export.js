@@ -5,17 +5,48 @@ class ExcelExporter {
         this._xlsxReady = false;
     }
 
+    _downloadTextFile(fileName, content, mime = 'application/json') {
+        try {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return true;
+        } catch (_) { return false; }
+    }
+
     async ensureXlsxLoaded() {
         if (this._xlsxReady && typeof XLSX !== 'undefined') return;
         if (typeof XLSX === 'undefined') {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-                script.async = true;
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error('Failed to load XLSX library'));
-                document.head.appendChild(script);
+            const sources = [
+                'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+                'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+                'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+            ];
+            const loadWithTimeout = (src, timeoutMs = 6000) => new Promise((resolve, reject) => {
+                try {
+                    const timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.async = true;
+                    script.onload = () => { clearTimeout(timer); resolve(); };
+                    script.onerror = () => { clearTimeout(timer); reject(new Error('failed')); };
+                    document.head.appendChild(script);
+                } catch (e) { reject(e); }
             });
+            let loaded = false;
+            for (const src of sources) {
+                try {
+                    await loadWithTimeout(src);
+                    if (typeof XLSX !== 'undefined') { loaded = true; break; }
+                } catch (_) { /* try next */ }
+            }
+            if (!loaded) throw new Error('Failed to load XLSX library. Check your internet connection.');
         }
         this._xlsxReady = true;
     }
@@ -23,7 +54,23 @@ class ExcelExporter {
     // Create Excel file from hub data
     async exportToExcel() {
         try {
-            await this.ensureXlsxLoaded();
+            try {
+                await this.ensureXlsxLoaded();
+            } catch (e) {
+                // Fallback to JSON when XLSX can't be loaded
+                const payload = { sectionId, section: null, resources: [] };
+                // Try to populate from localStorage for basic export
+                try {
+                    const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                    if (hub && hub[sectionId]) {
+                        payload.section = { id: sectionId, name: hub[sectionId].name || sectionId };
+                        ['playbooks','boxLinks','dashboards'].forEach(t => (hub[sectionId][t]||[]).forEach(r => payload.resources.push({ ...r, type: t })));
+                    }
+                } catch(_) {}
+                const jsonName = `${sectionId}_Export_${new Date().toISOString().split('T')[0]}.json`;
+                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
+                return { success: true, fileName: jsonName, fallback: 'json' };
+            }
             let data;
             try {
                 if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.exportAllData) {
@@ -454,15 +501,79 @@ class ExcelExporter {
     // Export specific section data
     async exportSectionToExcel(sectionId) {
         try {
-            await this.ensureXlsxLoaded();
-            const [section, resources] = await Promise.all([
-                hubDatabase.getSection(sectionId),
-                hubDatabase.getResourcesBySection(sectionId)
-            ]);
+            try {
+                await this.ensureXlsxLoaded();
+            } catch (e) {
+                // Fallback to JSON when XLSX can't be loaded
+                const payload = { sectionId, section: null, resources: [], usersWithAccess: [] };
+                try {
+                    const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                    if (hub && hub[sectionId]) {
+                        payload.section = { id: sectionId, name: hub[sectionId].name || sectionId };
+                        ['playbooks','boxLinks','dashboards'].forEach(t => (hub[sectionId][t]||[]).forEach(r => payload.resources.push({ ...r, type: t })));
+                    }
+                } catch(_) {}
+                try {
+                    const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                    payload.usersWithAccess = (lsUsers || []).filter(u => (u.permissions?.canEditAllSections) || (u.permissions?.sections || []).includes(sectionId)).map(u => ({ id: u.id, username: u.username, role: u.role || 'user', name: u.name || '', email: u.email || '' }));
+                } catch(_) {}
+                const jsonName = `${sectionId}_Export_${new Date().toISOString().split('T')[0]}.json`;
+                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
+                return { success: true, fileName: jsonName, fallback: 'json' };
+            }
+            let section = null;
+            let resources = [];
+            try {
+                if (window.hubDatabase && hubDatabase.getSection) {
+                    section = await hubDatabase.getSection(sectionId);
+                }
+            } catch (_) {}
+            try {
+                if (window.hubDatabase && hubDatabase.getResourcesBySection) {
+                    resources = await hubDatabase.getResourcesBySection(sectionId);
+                }
+            } catch (_) { resources = []; }
+
+            // Fallback: derive section + resources from localStorage if DB is empty
+            if (!section) {
+                try {
+                    let name = sectionId;
+                    try {
+                        const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
+                        const found = (order || []).find(s => String(s.id) === String(sectionId));
+                        if (found && found.name) name = found.name;
+                    } catch (_) {}
+                    try {
+                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                        if (hub && hub[sectionId] && hub[sectionId].name) name = hub[sectionId].name;
+                        if (resources.length === 0 && hub && hub[sectionId]) {
+                            const s = hub[sectionId];
+                            ['playbooks','boxLinks','dashboards'].forEach(type => {
+                                (s[type] || []).forEach(r => resources.push({ ...r, sectionId, type }));
+                            });
+                        }
+                    } catch (_) {}
+                    section = { sectionId, id: sectionId, name, icon: '', color: '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
+                } catch (_) {}
+            }
 
             if (!section) {
                 throw new Error('Section not found');
             }
+
+            // Users with access to this section (DB + localStorage)
+            let usersWithAccess = [];
+            try {
+                let usersDb = [];
+                try { if (window.hubDatabase && hubDatabase.getAllUsers) usersDb = await hubDatabase.getAllUsers(); } catch (_) { usersDb = []; }
+                let usersLs = [];
+                try { usersLs = JSON.parse(localStorage.getItem('hubUsers') || '[]'); } catch (_) { usersLs = []; }
+                const byId = new Map((usersDb || []).map(u => [u.id, u]));
+                (usersLs || []).forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
+                const merged = Array.from(byId.values());
+                usersWithAccess = merged.filter(u => (u?.permissions?.canEditAllSections) || (u?.permissions?.sections || []).includes(sectionId))
+                    .map(u => ({ id: u.id, username: u.username, role: u.role || 'user', name: u.name || '', email: u.email || '' }));
+            } catch (_) { usersWithAccess = []; }
 
             this.workbook = XLSX.utils.book_new();
 
@@ -497,8 +608,41 @@ class ExcelExporter {
                 }
             }
 
+            // Users with access
+            try {
+                const usersWs = XLSX.utils.json_to_sheet(usersWithAccess);
+                XLSX.utils.book_append_sheet(this.workbook, usersWs, 'Users With Access');
+            } catch (_) {}
+
+            // Views for resources in this section, if available
+            try {
+                if (window.hubDatabase && hubDatabase.getAllViews) {
+                    const views = await hubDatabase.getAllViews();
+                    const idsInSection = new Set(resources.map(r => r.id));
+                    const rows = (views || []).filter(v => idsInSection.has(v.resourceId)).map(v => ({
+                        'User ID': v.userId,
+                        'Resource ID': v.resourceId,
+                        'Count': v.count,
+                        'First Viewed At': v.firstViewedAt ? new Date(v.firstViewedAt).toLocaleString() : '',
+                        'Last Viewed At': v.lastViewedAt ? new Date(v.lastViewedAt).toLocaleString() : ''
+                    }));
+                    if (rows.length > 0) {
+                        const wsViews = XLSX.utils.json_to_sheet(rows);
+                        XLSX.utils.book_append_sheet(this.workbook, wsViews, 'Views');
+                    }
+                }
+            } catch (_) {}
+
             const fileName = `${section.name.replace(/\s+/g, '_')}_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
-            XLSX.writeFile(this.workbook, fileName);
+            try {
+                XLSX.writeFile(this.workbook, fileName);
+            } catch (e) {
+                // Last-resort fallback to JSON
+                const payload = { sectionId, section: { id: section.sectionId || section.id, name: section.name }, resources };
+                const jsonName = `${section.sectionId || section.id}_Export_${new Date().toISOString().split('T')[0]}.json`;
+                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
+                return { success: true, fileName: jsonName, fallback: 'json' };
+            }
 
             return {
                 success: true,
@@ -518,15 +662,46 @@ class ExcelExporter {
     // Export user-specific data
     async exportUserDataToExcel(userId) {
         try {
-            await this.ensureXlsxLoaded();
-            const [user, activities] = await Promise.all([
-                hubDatabase.getUser(userId),
-                hubDatabase.getActivities()
-            ]);
+            try {
+                await this.ensureXlsxLoaded();
+            } catch (e) {
+                // Fallback to JSON when XLSX can't be loaded
+                const payload = { userId, user: null, activities: [], accessibleResources: [] };
+                try {
+                    const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                    payload.user = (lsUsers || []).find(u => String(u.id) === String(userId)) || null;
+                    const acts = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+                    payload.activities = (acts || []).filter(a => a.userId === userId);
+                    if (payload.user) {
+                        const perms = payload.user.permissions || {};
+                        const canAll = !!perms.canEditAllSections;
+                        const allowed = new Set(perms.sections || []);
+                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                        Object.entries(hub).forEach(([sid, s]) => {
+                            if (!canAll && !allowed.has(sid)) return;
+                            ['playbooks','boxLinks','dashboards'].forEach(type => {
+                                (s?.[type] || []).forEach(r => payload.accessibleResources.push({ ...r, sectionId: sid, type }));
+                            });
+                        });
+                    }
+                } catch(_) {}
+                const jsonName = `User_${userId}_Data_Export_${new Date().toISOString().split('T')[0]}.json`;
+                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
+                return { success: true, fileName: jsonName, fallback: 'json' };
+            }
+            let user = null;
+            let activities = [];
+            try { if (window.hubDatabase && hubDatabase.getUser) user = await hubDatabase.getUser(userId); } catch(_) {}
+            try { if (window.hubDatabase && hubDatabase.getActivities) activities = await hubDatabase.getActivities(); } catch(_) { activities = []; }
 
             if (!user) {
-                throw new Error('User not found');
+                // Fallback: find in localStorage
+                try {
+                    const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                    user = (lsUsers || []).find(u => String(u.id) === String(userId) || String(u.username) === String(userId));
+                } catch (_) {}
             }
+            if (!user) throw new Error('User not found');
 
             const userActivities = activities.filter(a => a.userId === userId);
 
@@ -565,6 +740,32 @@ class ExcelExporter {
                 XLSX.utils.book_append_sheet(this.workbook, activityWorksheet, 'Activities');
             }
 
+            // Accessible resources for this user
+            try {
+                const perms = user.permissions || {};
+                const canAll = !!perms.canEditAllSections;
+                const allowed = new Set(perms.sections || []);
+                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                const accessibleResources = [];
+                Object.entries(hub).forEach(([sid, s]) => {
+                    if (!canAll && !allowed.has(sid)) return;
+                    ['playbooks','boxLinks','dashboards'].forEach(type => {
+                        (s?.[type] || []).forEach(r => accessibleResources.push({ ...r, sectionId: sid, type }));
+                    });
+                });
+                if (accessibleResources.length > 0) {
+                    const wsRes = XLSX.utils.json_to_sheet(accessibleResources.map(r => ({
+                        'Title': r.title,
+                        'Type': r.type,
+                        'Section': r.sectionId,
+                        'URL': r.url || '',
+                        'Category': r.category || '',
+                        'Tags': Array.isArray(r.tags) ? r.tags.join(', ') : ''
+                    })));
+                    XLSX.utils.book_append_sheet(this.workbook, wsRes, 'Accessible Resources');
+                }
+            } catch (_) {}
+
             // Views detailed for the user, if available via DB views
             try {
                 if (hubDatabase && hubDatabase.getAllViews) {
@@ -585,7 +786,14 @@ class ExcelExporter {
             } catch (_) {}
 
             const fileName = `${user.username}_Data_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
-            XLSX.writeFile(this.workbook, fileName);
+            try {
+                XLSX.writeFile(this.workbook, fileName);
+            } catch (e) {
+                const payload = { userId, user, activities: userActivities };
+                const jsonName = `User_${user.username}_Data_Export_${new Date().toISOString().split('T')[0]}.json`;
+                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
+                return { success: true, fileName: jsonName, fallback: 'json' };
+            }
 
             return {
                 success: true,

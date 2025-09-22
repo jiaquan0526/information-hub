@@ -95,6 +95,8 @@ class InformationHub {
         } catch (_) {}
         this._hubSessionLogged = false;
         this.setupHubSessionLogging();
+        // Auto-refresh hub cards/users from GitHub periodically for cross-user sync
+        try { this.setupGitHubAutoRefresh(); } catch (_) {}
     }
 
     checkAuthentication() {
@@ -176,6 +178,50 @@ class InformationHub {
         window.closeModal = (modalId) => this.closeModal(modalId);
         window.switchAdminTab = (tabName) => this.switchAdminTab(tabName);
         window.addUser = () => this.addUser();
+    }
+
+    setupGitHubAutoRefresh() {
+        if (this._ghHubTimer) try { clearInterval(this._ghHubTimer); } catch(_) {}
+        const refresh = async () => {
+            try {
+                if (document.hidden) return;
+                // If admin panel export tab is open, refresh the dropdowns
+                try { if (document.getElementById('adminPanelModal')?.style.display === 'block') await this.loadExportOptions(); } catch(_) {}
+                // Optionally refresh visible hub cards if they depend on sectionOrder names (left local/local)
+                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                // Every hour: flush audit queue and DB views to GitHub with 7-day retention
+                try {
+                    const now = Date.now();
+                    const last = parseInt(localStorage.getItem('lastHourlyGitHubSync') || '0', 10) || 0;
+                    if (now - last >= 60 * 60 * 1000) {
+                        localStorage.setItem('lastHourlyGitHubSync', String(now));
+                        if (window.githubData) {
+                            // Flush audit queue
+                            try {
+                                const q = JSON.parse(localStorage.getItem('auditQueue') || '[]');
+                                if (Array.isArray(q) && q.length > 0 && typeof githubData.upsertAudit === 'function') {
+                                    await githubData.upsertAudit(q, 7);
+                                    localStorage.setItem('auditQueue', '[]');
+                                }
+                            } catch(_) {}
+                            // Flush views from IndexedDB aggregation
+                            try {
+                                if (window.hubDatabase && typeof hubDatabase.getAllViews === 'function' && typeof githubData.upsertViewsAgg === 'function') {
+                                    const views = await hubDatabase.getAllViews();
+                                    if (Array.isArray(views) && views.length > 0) {
+                                        await githubData.upsertViewsAgg(views, 7);
+                                    }
+                                }
+                            } catch(_) {}
+                        }
+                    }
+                } catch(_) {}
+            } catch (_) {}
+        };
+        setTimeout(refresh, 2000);
+        this._ghHubTimer = setInterval(refresh, 60000);
+        window.addEventListener('beforeunload', () => { try { clearInterval(this._ghHubTimer); } catch(_) {} });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => refresh().catch(()=>{}), 250); });
     }
 
     setupHubSessionLogging() {
@@ -607,6 +653,8 @@ class InformationHub {
         this.loadUsersList();
         this.loadAuditLog();
         document.getElementById('adminPanelModal').style.display = 'block';
+        // Pre-populate export dropdowns when opening the panel
+        try { this.loadExportOptions(); } catch (_) {}
     }
 
     closeModal(modalId) {
@@ -614,17 +662,21 @@ class InformationHub {
     }
 
     switchAdminTab(tabName) {
-        // Update tab appearance
+        // Update tab appearance (avoid relying on implicit event)
         document.querySelectorAll('.admin-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        event.target.classList.add('active');
+        try {
+            const tabEl = document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`);
+            if (tabEl) tabEl.classList.add('active');
+        } catch (_) {}
 
         // Show/hide content sections
         document.querySelectorAll('.admin-tab-content').forEach(content => {
             content.classList.remove('active');
         });
-        document.getElementById(`${tabName}-tab`).classList.add('active');
+        const target = document.getElementById(`${tabName}-tab`);
+        if (target) target.classList.add('active');
 
         // Load specific tab content
         if (tabName === 'users') {
@@ -702,6 +754,19 @@ class InformationHub {
             createdAt: new Date().toISOString()
         };
 
+        // Mandatory GitHub sync first
+        try {
+            if (window.githubData && typeof githubData.upsertUser === 'function') {
+                githubData.upsertUser(newUser);
+            } else {
+                this.showMessage('GitHub sync unavailable – cannot add user.', 'error');
+                return;
+            }
+        } catch (e) {
+            this.showMessage('GitHub sync failed – user not created.', 'error');
+            return;
+        }
+        // Mirror to local/DB
         const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
         users.push(newUser);
         localStorage.setItem('hubUsers', JSON.stringify(users));
@@ -784,6 +849,16 @@ class InformationHub {
             lsUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
             users = Array.from(byId.values());
         } catch (_) {}
+        // Role-based visibility: admin -> all; manager -> only users; user -> self
+        try {
+            const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
+            const role = String(me?.role || '').toLowerCase();
+            if (role === 'manager') {
+                users = users.filter(u => String(u.role || '').toLowerCase() === 'user' || u.id === me.userId || u.id === me.id);
+            } else if (role !== 'admin') {
+                users = users.filter(u => u.id === me?.userId || u.id === me?.id);
+            }
+        } catch (_) {}
         const userSelect = document.getElementById('userExportSelect');
         userSelect.innerHTML = '<option value="">Select User</option>';
         users.forEach(user => {
@@ -792,7 +867,70 @@ class InformationHub {
             option.textContent = `${user.username} (${user.role})`;
             userSelect.appendChild(option);
         });
+
+        // Load sections for export dropdown
+        try {
+            let sections = [];
+            try { sections = await hubDatabase.getAllSections(); } catch (_) { sections = []; }
+            try {
+                const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
+                (order || []).forEach(s => { if (s && s.id) sections.push({ id: s.id, sectionId: s.id, name: s.name || s.id }); });
+            } catch (_) {}
+            try {
+                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                Object.entries(hub).forEach(([id, s]) => { sections.push({ id, sectionId: id, name: (s && s.name) || id }); });
+            } catch (_) {}
+            // Fallback: scrape visible hub cards from DOM
+            try {
+                const cards = Array.from(document.querySelectorAll('.hub-card'));
+                cards.forEach(card => {
+                    const id = card.getAttribute('data-section-id');
+                    if (!id) return;
+                    const titleEl = card.querySelector('h3');
+                    const name = titleEl ? titleEl.textContent.trim() : id;
+                    sections.push({ id, sectionId: id, name });
+                });
+            } catch (_) {}
+            const bySid = new Map();
+            sections.forEach(s => {
+                const key = String(s.sectionId || s.id || '');
+                if (!key) return;
+                if (!bySid.has(key)) bySid.set(key, { id: key, sectionId: key, name: s.name || key });
+                else {
+                    const cur = bySid.get(key);
+                    if (!cur.name && s.name) bySid.set(key, { id: key, sectionId: key, name: s.name });
+                }
+            });
+            let list = Array.from(bySid.values()).sort((a,b) => String(a.name).localeCompare(String(b.name)));
+            if (list.length === 0) {
+                list = [
+                    { id: 'costing', sectionId: 'costing', name: 'Costing' },
+                    { id: 'supply-planning', sectionId: 'supply-planning', name: 'Supply Planning' },
+                    { id: 'operations', sectionId: 'operations', name: 'Operations' },
+                    { id: 'quality', sectionId: 'quality', name: 'Quality Management' },
+                    { id: 'hr', sectionId: 'hr', name: 'Human Resources' },
+                    { id: 'it', sectionId: 'it', name: 'IT & Technology' },
+                    { id: 'sales', sectionId: 'sales', name: 'Sales & Marketing' },
+                    { id: 'compliance', sectionId: 'compliance', name: 'Compliance & Legal' }
+                ];
+            }
+            const secSelect = document.getElementById('sectionExportSelect');
+            if (secSelect) {
+                secSelect.innerHTML = '<option value="">Select Section</option>';
+                list.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.sectionId || s.id;
+                    opt.textContent = s.name || s.sectionId || s.id;
+                    secSelect.appendChild(opt);
+                });
+            }
+        } catch (_) {}
     }
+
+    // Expose for index.html to call directly
+    window.loadExportOptions = async () => {
+        try { await this.loadExportOptions(); } catch (_) {}
+    };
 
     // Global export functions
     window.exportAllData = async () => {
@@ -810,24 +948,33 @@ class InformationHub {
         }
     };
 
-    window.exportSectionData = async () => {
-        const sectionId = document.getElementById('sectionExportSelect').value;
+    window.exportSectionData = async function() {
+        // Resolve section id from dropdown, or fallbacks (first option / hub cards)
+        let sectionId = '';
+        try { sectionId = document.getElementById('sectionExportSelect')?.value || ''; } catch (_) {}
         if (!sectionId) {
-            this.showMessage('Please select a section', 'error');
+            try {
+                const sel = document.getElementById('sectionExportSelect');
+                if (sel && sel.options && sel.options.length > 1) sectionId = sel.options[1].value;
+            } catch (_) {}
+        }
+        if (!sectionId) {
+            try { sectionId = document.querySelector('.hub-card')?.getAttribute('data-section-id') || ''; } catch (_) {}
+        }
+        if (!sectionId) {
+            alert('Please select a section');
             return;
         }
-
         try {
-            this.showMessage('Preparing section export...', 'success');
             const result = await excelExporter.exportSectionToExcel(sectionId);
-            if (result.success) {
-                this.showMessage(`Section export completed! File: ${result.fileName}`, 'success');
-                this.logActivity('EXPORT', `Exported section data - ${result.sectionName}`);
+            if (!result || result.success !== true) {
+                alert('Export failed: ' + (result && result.error ? result.error : 'Unknown error'));
             } else {
-                this.showMessage(`Export failed: ${result.error}`, 'error');
+                alert('Export completed: ' + result.fileName);
             }
-        } catch (error) {
-            this.showMessage(`Export failed: ${error.message}`, 'error');
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('Export failed: ' + (err && err.message ? err.message : String(err)));
         }
     };
 
@@ -839,6 +986,25 @@ class InformationHub {
         }
 
         try {
+            // Permission guard: admin -> any; manager -> only users; user -> self
+            try {
+                const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
+                const role = String(me?.role || '').toLowerCase();
+                const targetId = parseInt(userId);
+                if (role === 'manager') {
+                    const target = (JSON.parse(localStorage.getItem('hubUsers') || '[]') || []).find(u => u.id === targetId);
+                    const targetRole = String(target?.role || '').toLowerCase();
+                    if (targetRole !== 'user' && targetId !== me?.userId && targetId !== me?.id) {
+                        this.showMessage('Managers can export only their users or self', 'error');
+                        return;
+                    }
+                } else if (role !== 'admin') {
+                    if (targetId !== me?.userId && targetId !== me?.id) {
+                        this.showMessage('You can export only your own data', 'error');
+                        return;
+                    }
+                }
+            } catch (_) {}
             this.showMessage('Preparing user data export...', 'success');
             const result = await excelExporter.exportUserDataToExcel(parseInt(userId));
             if (result.success) {

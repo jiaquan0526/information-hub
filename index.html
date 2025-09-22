@@ -415,6 +415,8 @@
                     mainContent.style.display = 'block';
                     console.log('Main content shown');
                 }
+                // Ensure admin GitHub connect button is rendered immediately
+                try { renderGithubConnectButton(); } catch(_) {}
                 
                 // Ensure a minimal initial configuration if none exists
                 try {
@@ -444,11 +446,13 @@
                     setTimeout(() => {
                         console.log('Forcing interface update after fresh login...');
                         updateUserInterface();
+                        try { renderGithubConnectButton(); } catch(_) {}
                     }, 100);
                 } else {
                     console.log('Regular page load, updating interface...');
                     // Update user interface based on role
                     updateUserInterface();
+                    try { renderGithubConnectButton(); } catch(_) {}
                 }
                 
                 // FORCE UPDATE EVERY 2 SECONDS TO KEEP IN SYNC
@@ -524,6 +528,7 @@
                 console.log('Window gained focus, updating user interface...');
                 updateUserInterface(); try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
                 try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+                try { renderGithubConnectButton(); } catch(_) {}
             }
         });
 
@@ -593,6 +598,76 @@
                 updateMainHubSections();
             } catch (_) {}
         };
+
+        // Admin: GitHub connect and bootstrap helpers
+        function currentUser() {
+            try { const s = localStorage.getItem('hubSession'); return s ? JSON.parse(s) : null; } catch(_) { return null; }
+        }
+        function isCurrentUserAdmin() {
+            try {
+                const u = currentUser();
+                if (!u) return false;
+                const role = String(u.role || '').toLowerCase();
+                return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers);
+            } catch(_) { return false; }
+        }
+        window.connectGitHub = async function() {
+            if (!isCurrentUserAdmin()) return alert('Admin only');
+            try {
+                const token = prompt('Paste a GitHub personal access token (repo scope if private):', '');
+                if (!token) return;
+                const info = (window.githubData && githubData.getRepoInfo && githubData.getRepoInfo()) || {};
+                const owner = prompt('GitHub owner (username or org):', info.owner || '') || '';
+                const repo = prompt('Repo name:', info.repo || '') || '';
+                const branch = prompt('Branch (default main):', info.branch || 'main') || 'main';
+                localStorage.setItem('githubToken', JSON.stringify({ token }));
+                window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
+                alert('GitHub connection saved. Attempting to bootstrap configs...');
+                await ensureSectionConfigsFile();
+            } catch (e) {
+                alert('GitHub connect failed: ' + (e && e.message ? e.message : e));
+            }
+        };
+        async function ensureSectionConfigsFile() {
+            try {
+                if (!window.githubData) return;
+                const path = 'data/section-configs.json';
+                const cur = await githubData.readJson(path);
+                let base = cur.json && typeof cur.json === 'object' ? cur.json : {};
+                // Merge local per-section configs as seed
+                try {
+                    const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
+                    const ids = (order || []).map(s => s.id);
+                    ids.forEach(id => {
+                        const raw = localStorage.getItem('section_config_' + id);
+                        if (raw) {
+                            try { base[id] = JSON.parse(raw); } catch(_) {}
+                        }
+                    });
+                } catch(_) {}
+                await githubData.writeJson(path, base, 'Bootstrap section configs', cur.sha || null);
+                alert('Section configs synced to GitHub');
+                try { updateMainHubSections(); } catch(_) {}
+            } catch (e) {
+                console.warn('ensureSectionConfigsFile failed', e);
+            }
+        }
+        function renderGithubConnectButton() {
+            try {
+                const isAdmin = isCurrentUserAdmin();
+                let btn = document.getElementById('ghConnectBtn');
+                if (!isAdmin) { if (btn) btn.remove(); return; }
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.id = 'ghConnectBtn';
+                    btn.title = 'Connect GitHub (admin)';
+                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i>';
+                    btn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;border:none;background:#222;color:#fff;width:44px;height:44px;border-radius:22px;box-shadow:0 2px 8px rgba(0,0,0,0.25);cursor:pointer;';
+                    btn.onclick = () => (window.openGithubPanel ? window.openGithubPanel() : (window.connectGitHub && window.connectGitHub()));
+                    document.body.appendChild(btn);
+                }
+            } catch(_) {}
+        }
         
         // Helper: normalize resource type to buckets we display on cards
         function normalizeResourceType(rawType) {
@@ -668,71 +743,98 @@
                 return tb >= ta ? b : a;
             };
             const normType = (t) => {
-                const raw = String(t || '').toLowerCase();
+                const raw = String(t || '').toLowerCase().trim();
                 if (raw.includes('playbook')) return 'playbooks';
                 if (raw.includes('box')) return 'boxLinks';
                 if (raw.includes('dash')) return 'dashboards';
                 if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') return raw === 'boxlinks' ? 'boxLinks' : raw;
-                return '';
+                return raw;
             };
+            function updateCountDom(sectionId, tid, count) {
+                try {
+                    const el1 = document.getElementById(`${sectionId}-${tid}`);
+                    if (el1) el1.textContent = count;
+                    const alt = tid === 'boxLinks' ? 'boxlinks' : tid;
+                    const el2 = document.getElementById(`${sectionId}-${alt}`);
+                    if (el2) el2.textContent = count;
+                } catch(_) {}
+            }
 
             await Promise.all(sections.map(async (sectionId) => {
                 try {
-                    const idSets = {
-                        playbooks: new Map(),
-                        boxLinks: new Map(),
-                        dashboards: new Map()
-                    };
-                    const consider = (type, r) => {
-                        if (!r) return;
-                        const id = r.id;
-                        if (id === undefined || id === null || id === '') return;
+                    // Resolve configured types for this section (mirror section page tabs)
+                    let typesList = ['playbooks','box-links','dashboards'];
+                    try {
+                        let cfg = null;
+                        if (window.githubData && typeof githubData.getSectionConfig === 'function') {
+                            try { cfg = await githubData.getSectionConfig(sectionId); } catch(_) { cfg = null; }
+                        }
+                        if (!cfg && window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
+                            try { cfg = await hubDatabase.getSectionConfig(sectionId); } catch(_) { cfg = null; }
+                        }
+                        if (!cfg) {
+                            const cfgRaw = localStorage.getItem(`section_config_${sectionId}`);
+                            if (cfgRaw) cfg = JSON.parse(cfgRaw);
+                        }
+                        if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
+                            typesList = cfg.types.map(t => String(t.id || '').trim()).filter(Boolean);
+                        }
+                    } catch(_) {}
+
+                    const normalizedTypes = Array.from(new Set(typesList.map(t => normType(t))));
+                    const typeMaps = new Map();
+                    normalizedTypes.forEach(t => typeMaps.set(t, new Map()));
+
+                    const consider = (tid, r) => {
+                        if (!r || !typeMaps.has(tid)) return;
+                        const key = getKey(r);
+                        if (!key) return;
+                        const m = typeMaps.get(tid);
                         const ts = Date.parse(r?.updatedAt || r?.createdAt || 0) || 0;
-                        const prev = idSets[type].get(String(id));
-                        if (!prev || ts >= prev) idSets[type].set(String(id), ts);
+                        const prev = m.get(key);
+                        if (!prev || ts >= prev) m.set(key, ts);
                     };
 
+                    // DB-backed for all configured types
                     if (useDb) {
-                        try { (await hubDatabase.getResourcesByType(sectionId, 'playbooks')).forEach(r => consider('playbooks', r)); } catch(_) {}
-                        try { (await hubDatabase.getResourcesByType(sectionId, 'boxLinks')).forEach(r => consider('boxLinks', r)); } catch(_) {}
-                        try { (await hubDatabase.getResourcesByType(sectionId, 'dashboards')).forEach(r => consider('dashboards', r)); } catch(_) {}
+                        for (const tid of normalizedTypes) {
+                            try { (await hubDatabase.getResourcesByType(sectionId, tid)).forEach(r => consider(tid, r)); } catch(_) {}
+                        }
                     }
 
-                    // LocalStorage per-section
+                    // Skip legacy main hub mirror to avoid divergence; section_<id> is source of truth
+
+                    // Build counts map for all known types
+                    const counts = {};
+                    for (const [tid, m] of typeMaps.entries()) counts[tid] = m.size;
+                    // Update only the types currently displayed on the card to stay consistent with UI
                     try {
-                        const sectionData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-                        (sectionData.playbooks || []).forEach(r => consider('playbooks', r));
-                        (sectionData.boxLinks || []).forEach(r => consider('boxLinks', r));
-                        (sectionData.dashboards || []).forEach(r => consider('dashboards', r));
-                    } catch (_) {}
+                        const statsEl = document.getElementById(`${sectionId}-stats`);
+                        if (statsEl) {
+                            const nodes = statsEl.querySelectorAll('span > span[id^="'+sectionId+'-"]');
+                            nodes.forEach(function(node){
+                                try {
+                                    const id = String(node.id||'');
+                                    const suffix = id.slice((sectionId+'-').length);
+                                    const key = (suffix === 'boxlinks') ? 'boxLinks' : suffix;
+                                    const val = counts[key] || 0;
+                                    node.textContent = val;
+                                } catch(_) {}
+                            });
+                        } else {
+                            // Fallback: update all known types
+                            for (const [tid, val] of Object.entries(counts)) updateCountDom(sectionId, tid, val);
+                        }
+                    } catch(_) {
+                        for (const [tid, val] of Object.entries(counts)) updateCountDom(sectionId, tid, val);
+                    }
 
-                    // LocalStorage main hub format
-                    try {
-                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                        const s = hub[sectionId] || {};
-                        (s.playbooks || []).forEach(r => consider('playbooks', r));
-                        (s.boxLinks || []).forEach(r => consider('boxLinks', r));
-                        (s.dashboards || []).forEach(r => consider('dashboards', r));
-                    } catch (_) {}
-
-                    const playbooks = idSets.playbooks.size;
-                    const boxLinks = idSets.boxLinks.size;
-                    const dashboards = idSets.dashboards.size;
-
-                    const playbooksEl = document.getElementById(`${sectionId}-playbooks`);
-                    const boxLinksEl = document.getElementById(`${sectionId}-boxlinks`);
-                    const dashboardsEl = document.getElementById(`${sectionId}-dashboards`);
-                    if (playbooksEl) playbooksEl.textContent = playbooks;
-                    if (boxLinksEl) boxLinksEl.textContent = boxLinks;
-                    if (dashboardsEl) dashboardsEl.textContent = dashboards;
-
+                    // Persist latest counts snapshot (generic by type)
                     try {
                         const prevKey = `section_counts_${sectionId}`;
                         const prev = JSON.parse(localStorage.getItem(prevKey) || 'null');
-                        const current = { playbooks, boxLinks, dashboards };
-                        if (!prev || prev.playbooks !== playbooks || prev.boxLinks !== boxLinks || prev.dashboards !== dashboards) {
-                            localStorage.setItem(prevKey, JSON.stringify(current));
-                        }
+                        const changed = JSON.stringify(prev || {}) !== JSON.stringify(counts || {});
+                        if (changed) localStorage.setItem(prevKey, JSON.stringify(counts));
                     } catch(_) {}
                 } catch (_) {
                     updateSectionStatsFallback(sectionId);
@@ -2755,8 +2857,16 @@ Permissions:
                 users[userIndex].permissions.sections = newSections;
                 users[userIndex].permissions.editableSections = newEditableSections;
                 users[userIndex].updatedAt = new Date().toISOString();
+                // Mandatory GitHub sync first
+                if (window.githubData && typeof githubData.upsertUser === 'function') {
+                    await githubData.upsertUser(users[userIndex]);
+                } else {
+                    alert('GitHub sync unavailable – cannot save.');
+                    return;
+                }
+                // Mirror to local/DB
                 localStorage.setItem('hubUsers', JSON.stringify(users));
-                try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){}
+                try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){ }
                 
                 // If editing the currently logged-in user, update the session too
                 const session = localStorage.getItem('hubSession');
@@ -2801,9 +2911,17 @@ Permissions:
             try { if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.getAllUsers) { dbUsers = await hubDatabase.getAllUsers(); } } catch (_) { dbUsers = []; }
             let lsUsers = [];
             try { lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]'); } catch (_) { lsUsers = []; }
+            let ghUsers = [];
+            try {
+                if (window.githubData && typeof githubData.readUsers === 'function') {
+                    const resp = await githubData.readUsers();
+                    ghUsers = Array.isArray(resp.json) ? resp.json : [];
+                }
+            } catch (_) { ghUsers = []; }
             const byId = new Map();
             dbUsers.forEach(u => byId.set(u.id, u));
             lsUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
+            ghUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
             // Ensure current session user appears at least
             if (currentUser.userId && !byId.has(currentUser.userId)) {
                 byId.set(currentUser.userId, {
@@ -3071,8 +3189,16 @@ Permissions:
             users[userIndex].permissions.sections = selectedSections;
             
             // Save updated users
+            // Mandatory GitHub sync first
+            if (window.githubData && typeof githubData.upsertUser === 'function') {
+                await githubData.upsertUser(users[userIndex]);
+            } else {
+                alert('GitHub sync unavailable – cannot save.');
+                return;
+            }
+            // Mirror to local/DB
             localStorage.setItem('hubUsers', JSON.stringify(users));
-            try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){}
+            try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){ }
             console.log('User updated in localStorage:', users[userIndex]);
             
             // Update current session if it's the same user
@@ -3130,9 +3256,17 @@ Permissions:
             }
             
             if (confirm('Are you sure you want to delete this user?')) {
+                // Mandatory GitHub delete first
+                if (window.githubData && typeof githubData.deleteUserById === 'function') {
+                    await githubData.deleteUserById(userId);
+                } else {
+                    alert('GitHub sync unavailable – cannot delete.');
+                    return;
+                }
+                // Mirror to local/DB
                 const updatedUsers = users.filter(u => u.id !== userId);
                 localStorage.setItem('hubUsers', JSON.stringify(updatedUsers));
-                try { if (window.hubDatabase && hubDatabase.deleteUser) { await hubDatabase.deleteUser(userId); } } catch(_){}
+                try { if (window.hubDatabase && hubDatabase.deleteUser) { await hubDatabase.deleteUser(userId); } } catch(_){ }
                 loadUsersList();
                 alert('User deleted successfully');
             }
@@ -3430,12 +3564,26 @@ Permissions:
                 const isVisible = checkbox ? checkbox.checked : true;
                 const section = sectionOrder.find(s => s.id === sectionId);
                 if (!section) return;
+                // Mandatory GitHub sync for section visibility
                 section.visible = isVisible;
-                localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
-                updateMainHubSections();
-                const sessionRaw = localStorage.getItem('hubSession');
-                if (sessionRaw) {
-                    try { updateHubCardsAccess(JSON.parse(sessionRaw)); } catch (_) {}
+                if (window.githubData && typeof githubData.upsertSection === 'function') {
+                    githubData.upsertSection(section).then(() => {
+                        localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                        updateMainHubSections();
+                        const sessionRaw = localStorage.getItem('hubSession');
+                        if (sessionRaw) {
+                            try { updateHubCardsAccess(JSON.parse(sessionRaw)); } catch (_) {}
+                        }
+                    }).catch(() => {
+                        alert('GitHub sync failed – reverting visibility');
+                        section.visible = !isVisible;
+                        if (checkbox) checkbox.checked = section.visible;
+                    });
+                    return;
+                } else {
+                    alert('GitHub sync unavailable – cannot change visibility.');
+                    if (checkbox) checkbox.checked = section.visible;
+                    return;
                 }
             } catch (e) {
                 console.error('toggleSectionVisibility error', e);
@@ -3657,21 +3805,29 @@ Permissions:
             };
             sectionOrder.push(newSection);
                 }
-
-            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
-            renderSectionsList();
-            updateMainHubSections();
-                // Refresh hub cards access based on current user/session
-                try {
-                    const sessionRaw = localStorage.getItem('hubSession');
-                    if (sessionRaw) {
-                        const sessionUser = JSON.parse(sessionRaw);
-                        if (typeof updateHubCardsAccess === 'function') {
-                            updateHubCardsAccess(sessionUser);
+            // Mandatory GitHub sync for create/update section
+            const target = isEdit ? sectionOrder.find(s => s.id === section.id) : sectionOrder.find(s => s.id === idInput);
+            if (window.githubData && typeof githubData.upsertSection === 'function') {
+                githubData.upsertSection(target).then(() => {
+                    localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                    renderSectionsList();
+                    updateMainHubSections();
+                    try {
+                        const sessionRaw = localStorage.getItem('hubSession');
+                        if (sessionRaw) {
+                            const sessionUser = JSON.parse(sessionRaw);
+                            if (typeof updateHubCardsAccess === 'function') {
+                                updateHubCardsAccess(sessionUser);
+                            }
                         }
-                    }
-                } catch (e) { console.warn('Could not refresh hub cards access', e); }
-                modal.remove();
+                    } catch (e) { console.warn('Could not refresh hub cards access', e); }
+                    modal.remove();
+                }).catch(() => {
+                    alert('GitHub sync failed – changes not saved.');
+                });
+            } else {
+                alert('GitHub sync unavailable – cannot save section.');
+            }
             });
         }
 
@@ -3683,15 +3839,24 @@ Permissions:
         
         window.deleteSection = function(sectionId) {
             if (!confirm('Permanently remove this section from the hub?')) return;
-            const idx = sectionOrder.findIndex(s => s.id === sectionId);
-            if (idx === -1) return;
-            sectionOrder.splice(idx, 1);
-            sectionOrder.forEach((s, i) => { s.order = i + 1; });
-            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
-            const card = document.querySelector(`[onclick="navigateToSection('${sectionId}')"]`);
-            if (card && card.parentElement) card.parentElement.removeChild(card);
-            renderSectionsList();
-            updateMainHubSections();
+            // Mandatory GitHub delete first
+            if (window.githubData && typeof githubData.deleteSectionById === 'function') {
+                githubData.deleteSectionById(sectionId).then(() => {
+                    const idx = sectionOrder.findIndex(s => s.id === sectionId);
+                    if (idx === -1) return;
+                    sectionOrder.splice(idx, 1);
+                    sectionOrder.forEach((s, i) => { s.order = i + 1; });
+                    localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                    const card = document.querySelector(`[onclick="navigateToSection('${sectionId}')"]`);
+                    if (card && card.parentElement) card.parentElement.removeChild(card);
+                    renderSectionsList();
+                    updateMainHubSections();
+                }).catch(() => {
+                    alert('GitHub sync failed – section not deleted.');
+                });
+            } else {
+                alert('GitHub sync unavailable – cannot delete section.');
+            }
         };
         
         window.addNewSection = function() {
@@ -3700,9 +3865,19 @@ Permissions:
         
         window.saveSectionOrder = function() {
             updateSectionOrder();
-            localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
-            updateMainHubSections();
-            alert('Section order saved successfully!');
+            // Mandatory GitHub reorder
+            if (window.githubData && typeof githubData.setSectionsOrder === 'function') {
+                const orderList = sectionOrder.map(s => ({ id: s.id, order: s.order || 0 }));
+                githubData.setSectionsOrder(orderList).then(() => {
+                    localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                    updateMainHubSections();
+                    alert('Section order saved successfully!');
+                }).catch(() => {
+                    alert('GitHub sync failed – order not saved.');
+                });
+            } else {
+                alert('GitHub sync unavailable – cannot save order.');
+            }
         };
         
         window.resetSections = function() {
@@ -3933,42 +4108,8 @@ Permissions:
             } catch (_) {}
         }
         async function getOptimizedImageUrl(src, width = 1400, height = 0, quality = 0.74) {
-            try {
-                // Use cached decision if available
-                const cache = getOptimizedMapping();
-                if (cache && cache[src]) return cache[src];
-
-                // Only attempt optimization for local PNG/JPG assets
-                const m = String(src).match(/^(.*background-pic\/)([^\/]+)\.(png|jpe?g)$/i);
-                if (!m) return src;
-
-                const baseDir = m[1];
-                const name = m[2];
-                const webp = `${baseDir}opt/${name}.webp`;
-
-                // Probe WebP existence quickly; fallback to original if it fails/times out
-                const ok = await new Promise((resolve) => {
-                    try {
-                        let settled = false;
-                        const done = (v) => { if (!settled) { settled = true; resolve(v); } };
-                        const img = new Image();
-                        img.onload = () => done(true);
-                        img.onerror = () => done(false);
-                        // Cache-bust to avoid stale 404s
-                        img.src = webp + (webp.includes('?') ? '&' : '?') + 't=' + Date.now();
-                        // Timebox to keep page snappy
-                        setTimeout(() => done(false), 1000);
-                    } catch (_) { resolve(false); }
-                });
-
-                const chosen = ok ? webp : src;
-                const next = getOptimizedMapping();
-                next[src] = chosen;
-                setOptimizedMapping(next);
-                return chosen;
-            } catch (_) {
-                return src;
-            }
+            // WebP/CDN optimization disabled; always use original source
+            return src;
         }
 
         function getBackgroundImageForSection(sectionId) {
@@ -4019,13 +4160,7 @@ Permissions:
                     if (chosen) img = chosen;
                 }
                 if (!img) return;
-                try {
-                    const optimized = await getOptimizedImageUrl(img);
-                    const url = optimized || img;
-                    card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${url}')`;
-                } catch (_) {
-                    card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
-                }
+                card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';
                 card.style.backgroundPosition = 'center';
                 card.style.backgroundRepeat = 'no-repeat';
@@ -4107,6 +4242,25 @@ Permissions:
             }
         };
         
+        // Helpers for dynamic card tab rendering (mirror section page)
+        function normalizeTypeId(raw) {
+            try {
+                const t = String(raw || '').toLowerCase().trim();
+                if (t === 'playbooks' || t === 'playbook') return 'playbooks';
+                if (t === 'box-links' || t === 'boxlinks' || t === 'boxlink' || t === 'box') return 'boxLinks';
+                if (t === 'dashboards' || t === 'dashboard') return 'dashboards';
+                return t;
+            } catch (_) { return String(raw || '').toLowerCase(); }
+        }
+        function iconForType(tid) {
+            const t = normalizeTypeId(tid);
+            if (t === 'playbooks') return 'fas fa-book';
+            if (t === 'boxLinks') return 'fas fa-link';
+            if (t === 'dashboards') return 'fas fa-chart-bar';
+            if (t === 'reports') return 'fas fa-file-alt';
+            return 'fas fa-folder';
+        }
+
         async function updateMainHubSections() {
             console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
             const hubGrid = document.querySelector('.hub-grid');
@@ -4173,44 +4327,86 @@ Permissions:
             } catch (_) {}
 
             for (const section of visibleSections) {
-                // Resolve dynamic labels from per-section config if present
-                let labels = { playbooks: 'Playbooks', boxLinks: 'Box Links', dashboards: 'Dashboards' };
                 try {
-                    const cfgRaw = localStorage.getItem(`section_config_${section.id}`);
-                    if (cfgRaw) {
-                        const cfg = JSON.parse(cfgRaw);
-                        if (cfg && Array.isArray(cfg.types)) {
-                            const findName = (ids, fallback) => {
-                                const list = Array.isArray(ids) ? ids : [ids];
-                                for (const id of list) {
-                                    const found = cfg.types.find(t => String(t.id || '').toLowerCase() === String(id));
-                                    if (found && found.name) return String(found.name);
-                                }
-                                return fallback;
-                            };
-                            labels.playbooks = findName(['playbooks','playbook'], labels.playbooks);
-                            labels.boxLinks = findName(['box-links','boxlinks','box'], labels.boxLinks);
-                            labels.dashboards = findName(['dashboards','dashboard'], labels.dashboards);
+                    // Build types list to mirror the section detail tabs
+                    let typesList = [
+                        { id: 'playbooks', name: 'Playbooks' },
+                        { id: 'box-links', name: 'Box Links' },
+                        { id: 'dashboards', name: 'Dashboards' },
+                        { id: 'reports', name: 'Reports' }
+                    ];
+                    try {
+                        // Prefer GitHub-backed config, then DB, then local
+                        let cfg = null;
+                        if (window.githubData && typeof githubData.getSectionConfig === 'function') {
+                            try { cfg = await githubData.getSectionConfig(section.id); } catch(_) { cfg = null; }
                         }
-                    }
-                } catch (_) {}
+                        if (!cfg && window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
+                            try { cfg = await hubDatabase.getSectionConfig(section.id); } catch(_) { cfg = null; }
+                        }
+                        if (!cfg) {
+                            const cfgRaw = localStorage.getItem(`section_config_${section.id}`);
+                            if (cfgRaw) {
+                                cfg = JSON.parse(cfgRaw);
+                            }
+                        }
+                        if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
+                            const visibleTypes = cfg.types.filter(t => !t.hidden);
+                            typesList = visibleTypes.map(t => ({
+                                id: String(t.id || '').trim() || 'type',
+                                name: String(t.name || t.id || 'Type').trim(),
+                                icon: String(t.icon || '').trim()
+                            }));
+                        }
+                        if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
+                            const visibleTypes = cfg.types.filter(t => !t.hidden);
+                            typesList = visibleTypes.map(t => ({ id: String(t.id || '').trim() || 'type', name: String(t.name || t.id || 'Type').trim() }));
+                        }
+                    } catch (_) {}
+                // Do not auto-augment; mirror only the configured tabs (or defaults).
 
-                const cardHTML = `
-            <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
-                <div class="card-header">
-                    <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
-                    <div class="card-title">
-                        <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
-                        <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                    const statsHTML = typesList.map(t => {
+                        const nid = normalizeTypeId(t.id);
+                        const iconVal = (t.icon || '').trim();
+                        const isImg = /^(https?:|data:)|\.(svg|png|jpe?g|gif)$/i.test(iconVal);
+                        const iconHtml = iconVal && isImg
+                            ? `<img src="${iconVal}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-2px;" />`
+                            : `<i class="${iconVal ? normalizeIconClass(iconVal) : iconForType(nid)}"></i>`;
+                        return `<span>${iconHtml} <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
+                    }).join(' ');
+
+                    const cardHTML = `
+                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
+                        <div class="card-title">
+                            <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
+                            <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                        </div>
                     </div>
-                </div>
-                <div class="card-stats" id="${section.id}-stats">
-                    <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> ${escapeHtml(labels.playbooks)}</span>
-                    <span><i class="fas fa-link"></i> <span id="${section.id}-boxlinks">0</span> ${escapeHtml(labels.boxLinks)}</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> ${escapeHtml(labels.dashboards)}</span>
-                </div>
-            </div>`;
-                hubGrid.insertAdjacentHTML('beforeend', cardHTML);
+                    <div class="card-stats" id="${section.id}-stats">${statsHTML}</div>
+                </div>`;
+                    hubGrid.insertAdjacentHTML('beforeend', cardHTML);
+                } catch (e) {
+                    console.warn('Card build failed for section', section && section.id, e);
+                    // Fallback: render the classic 3 counters to avoid blank cards
+                    const fallbackHTML = `
+                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
+                        <div class="card-title">
+                            <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
+                            <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                        </div>
+                    </div>
+                    <div class="card-stats" id="${section.id}-stats">
+                        <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> Playbooks</span>
+                        <span><i class="fas fa-link"></i> <span id="${section.id}-boxLinks">0</span> Box Links</span>
+                        <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
+                    </div>
+                </div>`;
+                    hubGrid.insertAdjacentHTML('beforeend', fallbackHTML);
+                }
                 // Background will be scheduled lazily
             }
             // Stats for currently built sections
@@ -4486,46 +4682,8 @@ Permissions:
             _bgQueue.push({ section });
             _processBgQueue();
         }
-        function isLowDataConnection() {
-            try {
-                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                if (!conn) return false;
-                if (conn.saveData === true) return true;
-                const type = String(conn.effectiveType || '').toLowerCase();
-                return /(^|\b)(2g|slow-2g)\b/.test(type);
-            } catch (_) { return false; }
-        }
-        function initBackgroundLazyLoad(sections) {
-            try {
-                if (!sections || sections.length === 0) return;
-                if (backgroundsDisabled()) return;
-                const supportsIO = 'IntersectionObserver' in window;
-                if (!supportsIO) {
-                    (sections || []).forEach(s => scheduleCardBackground(s));
-                    return;
-                }
-                const options = { root: null, rootMargin: '200px', threshold: 0.01 };
-                const observer = new IntersectionObserver((entries, obs) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            try {
-                                const el = entry.target;
-                                const id = el.getAttribute('data-section-id');
-                                const section = (sections || []).find(x => String(x.id) === String(id));
-                                if (section) scheduleCardBackground(section);
-                                obs.unobserve(el);
-                            } catch (_) {}
-                        }
-                    });
-                }, options);
-                (sections || []).forEach(s => {
-                    const card = document.getElementById(`card-${s.id}`);
-                    if (card) observer.observe(card);
-                });
-            } catch (_) {
-                (sections || []).forEach(s => scheduleCardBackground(s));
-            }
-        }
+        function isLowDataConnection() { return false; }
+        function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
     </script>
     
     <style>
@@ -5239,6 +5397,155 @@ Permissions:
         .quick-actions .action-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
         .quick-actions .action-btn { padding: 4px 8px; font-size: 0.85rem; line-height: 1.1; }
     </style>
+    <script>
+        (function(){
+            function getDefaults(){
+                try { return (window.githubData && githubData.getRepoInfo && githubData.getRepoInfo()) || {}; } catch(_) { return {}; }
+            }
+            function getSavedToken(){
+                try {
+                    const raw = localStorage.getItem('githubToken');
+                    if (!raw) return '';
+                    try { const obj = JSON.parse(raw); return obj.token || obj.access_token || raw; } catch(_) { return raw; }
+                } catch(_) { return ''; }
+            }
+            function createInput(label, id, type, value, placeholder){
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin:8px 0;';
+                const lab = document.createElement('label'); lab.textContent = label; lab.htmlFor = id; lab.style.cssText = 'font-weight:600;color:#333;';
+                const inp = document.createElement('input'); inp.id = id; inp.type = type||'text'; inp.value = value||''; inp.placeholder = placeholder||''; inp.style.cssText = 'padding:10px;border:1px solid #e1e5e9;border-radius:8px;';
+                wrap.appendChild(lab); wrap.appendChild(inp);
+                return { wrap, inp };
+            }
+            function closePanel(modal){ if (modal && modal.parentNode) modal.parentNode.removeChild(modal); }
+            window.openGithubPanel = function(){
+                try {
+                    const modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.style.display = 'block';
+                    const box = document.createElement('div');
+                    box.className = 'modal-content';
+                    box.style.maxWidth = '520px';
+                    box.style.width = '92%';
+                    box.style.overflow = 'hidden';
+                    const header = document.createElement('div');
+                    header.className = 'modal-header';
+                    header.innerHTML = '<h2>GitHub Connection</h2><span class="close">&times;</span>';
+                    header.querySelector('.close').onclick = () => closePanel(modal);
+                    const body = document.createElement('div');
+                    body.className = 'modal-body';
+                    body.style.padding = '20px 24px';
+                    const info = getDefaults();
+                    const ownerRow = createInput('Owner', 'ghOwnerInput', 'text', info.owner||'', 'username or org');
+                    const repoRow = createInput('Repository', 'ghRepoInput', 'text', info.repo||'', 'repo name');
+                    const branchRow = createInput('Branch', 'ghBranchInput', 'text', info.branch||'main', 'main');
+                    const tokenRow = createInput('Personal Access Token', 'ghTokenInput', 'password', getSavedToken(), 'ghp_...');
+                    const help = document.createElement('div');
+                    help.style.cssText = 'font-size:0.85rem;color:#666;margin:6px 0 12px;';
+                    help.innerHTML = 'Token scope: repo (for private repos). For public repos, minimal scopes work.';
+                    const actions = document.createElement('div');
+                    actions.className = 'form-actions';
+                    const saveBtn = document.createElement('button');
+                    saveBtn.className = 'btn btn-primary'; saveBtn.textContent = 'Save & Connect';
+                    const testBtn = document.createElement('button');
+                    testBtn.className = 'btn btn-secondary'; testBtn.textContent = 'Test Read';
+                    const seedBtn = document.createElement('button');
+                    seedBtn.className = 'btn btn-secondary'; seedBtn.textContent = 'Bootstrap Configs';
+                    const status = document.createElement('div');
+                    status.style.cssText = 'margin-top:10px;font-size:0.9rem;color:#333;';
+                    function setStatus(msg, ok){ status.textContent = msg; status.style.color = ok ? '#155724' : '#721c24'; }
+                    saveBtn.onclick = async () => {
+                        try {
+                            const owner = ownerRow.inp.value.trim();
+                            const repo = repoRow.inp.value.trim();
+                            const branch = branchRow.inp.value.trim()||'main';
+                            const token = tokenRow.inp.value.trim();
+                            if (!owner || !repo) return setStatus('Owner and Repo are required', false);
+                            if (token) localStorage.setItem('githubToken', JSON.stringify({ token }));
+                            window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
+                            setStatus('Saved. You can now use GitHub actions.', true);
+                        } catch(e){ setStatus('Save failed: ' + e.message, false); }
+                    };
+                    testBtn.onclick = async () => {
+                        try {
+                            if (!window.githubData) return setStatus('githubData not ready', false);
+                            const r = await githubData.readJson('data/section-configs.json');
+                            setStatus(r && (r.json || r.sha) ? 'Read OK' : 'File missing (OK for first-time)', !!(r && (r.json || r.sha)));
+                        } catch(e){ setStatus('Read failed: ' + e.message, false); }
+                    };
+                    seedBtn.onclick = async () => {
+                        try {
+                            if (typeof window.ensureSectionConfigsFile !== 'function') return setStatus('Bootstrap function missing', false);
+                            await ensureSectionConfigsFile();
+                            setStatus('Bootstrap complete', true);
+                        } catch(e){ setStatus('Bootstrap failed: ' + e.message, false); }
+                    };
+                    actions.appendChild(saveBtn); actions.appendChild(testBtn); actions.appendChild(seedBtn);
+                    [ownerRow.wrap, repoRow.wrap, branchRow.wrap, tokenRow.wrap, help, actions, status].forEach(n => body.appendChild(n));
+                    box.appendChild(header); box.appendChild(body); modal.appendChild(box); document.body.appendChild(modal);
+                } catch(_) {}
+            };
+        })();
+    </script>
+    <script>
+        (function(){
+            try {
+                // Live-sync hub counts when section pages change resources/config
+                var bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('hub-sync') : null;
+                if (bc) {
+                    bc.onmessage = function(ev){
+                        try {
+                            var t = ev && ev.data && ev.data.type;
+                            if (t === 'RESOURCE_CHANGE' || t === 'NAV_BACK' || t === 'SECTION_CUSTOMIZE') {
+                                if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                                else if (typeof updateSectionStats === 'function') updateSectionStats();
+                            }
+                        } catch(_) {}
+                    };
+                }
+                window.addEventListener('storage', function(ev){
+                    try {
+                        var k = ev && ev.key || '';
+                        if (k === 'refreshHubNow' || k === 'hubLastChange' || (k && k.indexOf('section_config_') === 0)) {
+                            if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                            else if (typeof updateSectionStats === 'function') updateSectionStats();
+                        }
+                    } catch(_) {}
+                });
+            } catch(_) {}
+        })();
+    </script>
+    <script>
+        (function(){
+            if (typeof window.ensureSectionConfigsFile !== 'function') {
+                window.ensureSectionConfigsFile = async function ensureSectionConfigsFile(){
+                    if (!window.githubData) throw new Error('githubData not ready');
+                    const path = 'data/section-configs.json';
+                    const cur = await githubData.readJson(path);
+                    const base = cur.json && typeof cur.json === 'object' ? { ...cur.json } : {};
+                    try {
+                        const orderRaw = localStorage.getItem('sectionOrder');
+                        const order = orderRaw ? JSON.parse(orderRaw) : [];
+                        const ids = Array.isArray(order) ? order.map(s => s.id).filter(Boolean) : [];
+                        ids.forEach(id => {
+                            if (!base[id]) {
+                                base[id] = {
+                                    tabs: [
+                                        { id: 'playbooks', name: 'Playbooks' },
+                                        { id: 'boxLinks', name: 'Box Links' },
+                                        { id: 'dashboards', name: 'Dashboards' }
+                                    ],
+                                    intro: ''
+                                };
+                            }
+                        });
+                    } catch(_) {}
+                    await githubData.writeJson(path, base, 'Bootstrap section configs', cur.sha || null);
+                    return true;
+                };
+            }
+        })();
+    </script>
     <style>
         /* Ensure text remains visible; switch to white only when background image arrives */
         .hub-card.bg-ready h3,
@@ -5268,134 +5575,28 @@ Permissions:
                         btn.title = 'Connect GitHub (admin)';
                         btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i>';
                         btn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;border:none;background:#222;color:#fff;width:44px;height:44px;border-radius:22px;box-shadow:0 2px 8px rgba(0,0,0,0.25);cursor:pointer;';
-                        btn.onclick = function(){ if (window.openGithubPanel) return window.openGithubPanel(); if (window.connectGitHub) return window.connectGitHub(); };
+                        btn.onclick = function(){
+                            if (typeof window.connectGitHub === 'function') { return window.connectGitHub(); }
+                            if (!isAdmin()) return alert('Admin only');
+                            try {
+                                var token = prompt('Paste a GitHub personal access token (repo scope if private):', '');
+                                if (!token) return;
+                                var owner = prompt('GitHub owner (username or org):', '') || '';
+                                var repo = prompt('Repo name:', '') || '';
+                                var branch = prompt('Branch (default main):', 'main') || 'main';
+                                localStorage.setItem('githubToken', JSON.stringify({ token: token }));
+                                window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
+                                alert('GitHub connection saved. You can now use GitHub features.');
+                            } catch (e) {
+                                alert('GitHub connect failed: ' + (e && e.message ? e.message : e));
+                            }
+                        };
                         document.body.appendChild(btn);
                     }
                 } catch(_) {}
             }
             document.addEventListener('DOMContentLoaded', function(){ ensureGithubConnectButton(); });
             window.addEventListener('focus', function(){ ensureGithubConnectButton(); });
-        })();
-    </script>
-    <script>
-        (function(){
-            if (typeof window.ensureSectionConfigsFile !== 'function') {
-                window.ensureSectionConfigsFile = async function ensureSectionConfigsFile(){
-                    if (!window.githubData) throw new Error('githubData not ready');
-                    var path = 'data/section-configs.json';
-                    var cur = await githubData.readJson(path);
-                    var base = (cur.json && typeof cur.json === 'object') ? Object.assign({}, cur.json) : {};
-                    try {
-                        var orderRaw = localStorage.getItem('sectionOrder');
-                        var order = orderRaw ? JSON.parse(orderRaw) : [];
-                        var ids = Array.isArray(order) ? order.map(function(s){ return s.id; }).filter(Boolean) : [];
-                        ids.forEach(function(id){
-                            if (!base[id]) {
-                                base[id] = {
-                                    tabs: [
-                                        { id: 'playbooks', name: 'Playbooks' },
-                                        { id: 'boxLinks', name: 'Box Links' },
-                                        { id: 'dashboards', name: 'Dashboards' }
-                                    ],
-                                    intro: ''
-                                };
-                            }
-                        });
-                    } catch(_) {}
-                    await githubData.writeJson(path, base, 'Bootstrap section configs', cur.sha || null);
-                    return true;
-                };
-            }
-        })();
-    </script>
-    <script>
-        (function(){
-            function getDefaults(){
-                try { return (window.githubData && githubData.getRepoInfo && githubData.getRepoInfo()) || {}; } catch(_) { return {}; }
-            }
-            function getSavedToken(){
-                try {
-                    var raw = localStorage.getItem('githubToken');
-                    if (!raw) return '';
-                    try { var obj = JSON.parse(raw); return obj.token || obj.access_token || raw; } catch(_) { return raw; }
-                } catch(_) { return ''; }
-            }
-            function createInput(label, id, type, value, placeholder){
-                var wrap = document.createElement('div');
-                wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin:8px 0;';
-                var lab = document.createElement('label'); lab.textContent = label; lab.htmlFor = id; lab.style.cssText = 'font-weight:600;color:#333;';
-                var inp = document.createElement('input'); inp.id = id; inp.type = type||'text'; inp.value = value||''; inp.placeholder = placeholder||''; inp.style.cssText = 'padding:10px;border:1px solid #e1e5e9;border-radius:8px;';
-                wrap.appendChild(lab); wrap.appendChild(inp);
-                return { wrap: wrap, inp: inp };
-            }
-            function closePanel(modal){ if (modal && modal.parentNode) modal.parentNode.removeChild(modal); }
-            window.openGithubPanel = function(){
-                try {
-                    var modal = document.createElement('div');
-                    modal.className = 'modal';
-                    modal.style.display = 'block';
-                    var box = document.createElement('div');
-                    box.className = 'modal-content';
-                    box.style.maxWidth = '520px';
-                    box.style.width = '92%';
-                    box.style.overflow = 'hidden';
-                    var header = document.createElement('div');
-                    header.className = 'modal-header';
-                    header.innerHTML = '<h2>GitHub Connection</h2><span class="close">&times;</span>';
-                    header.querySelector('.close').onclick = function(){ closePanel(modal); };
-                    var body = document.createElement('div');
-                    body.className = 'modal-body';
-                    body.style.padding = '20px 24px';
-                    var info = getDefaults();
-                    var ownerRow = createInput('Owner', 'ghOwnerInput', 'text', info.owner||'', 'username or org');
-                    var repoRow = createInput('Repository', 'ghRepoInput', 'text', info.repo||'', 'repo name');
-                    var branchRow = createInput('Branch', 'ghBranchInput', 'text', info.branch||'main', 'main');
-                    var tokenRow = createInput('Personal Access Token', 'ghTokenInput', 'password', getSavedToken(), 'ghp_...');
-                    var help = document.createElement('div');
-                    help.style.cssText = 'font-size:0.85rem;color:#666;margin:6px 0 12px;';
-                    help.innerHTML = 'Token scope: repo (for private repos). For public repos, minimal scopes work.';
-                    var actions = document.createElement('div');
-                    actions.className = 'form-actions';
-                    var saveBtn = document.createElement('button');
-                    saveBtn.className = 'btn btn-primary'; saveBtn.textContent = 'Save & Connect';
-                    var testBtn = document.createElement('button');
-                    testBtn.className = 'btn btn-secondary'; testBtn.textContent = 'Test Read';
-                    var seedBtn = document.createElement('button');
-                    seedBtn.className = 'btn btn-secondary'; seedBtn.textContent = 'Bootstrap Configs';
-                    var status = document.createElement('div');
-                    status.style.cssText = 'margin-top:10px;font-size:0.9rem;color:#333;';
-                    function setStatus(msg, ok){ status.textContent = msg; status.style.color = ok ? '#155724' : '#721c24'; }
-                    saveBtn.onclick = async function(){
-                        try {
-                            var owner = ownerRow.inp.value.trim();
-                            var repo = repoRow.inp.value.trim();
-                            var branch = (branchRow.inp.value.trim()||'main');
-                            var token = tokenRow.inp.value.trim();
-                            if (!owner || !repo) return setStatus('Owner and Repo are required', false);
-                            if (token) localStorage.setItem('githubToken', JSON.stringify({ token: token }));
-                            window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
-                            setStatus('Saved. You can now use GitHub actions.', true);
-                        } catch(e){ setStatus('Save failed: ' + e.message, false); }
-                    };
-                    testBtn.onclick = async function(){
-                        try {
-                            if (!window.githubData) return setStatus('githubData not ready', false);
-                            var r = await githubData.readJson('data/section-configs.json');
-                            setStatus((r && (r.json || r.sha)) ? 'Read OK' : 'File missing (OK for first-time)', !!(r && (r.json || r.sha)));
-                        } catch(e){ setStatus('Read failed: ' + e.message, false); }
-                    };
-                    seedBtn.onclick = async function(){
-                        try {
-                            if (typeof window.ensureSectionConfigsFile !== 'function') return setStatus('Bootstrap function missing', false);
-                            await ensureSectionConfigsFile();
-                            setStatus('Bootstrap complete', true);
-                        } catch(e){ setStatus('Bootstrap failed: ' + e.message, false); }
-                    };
-                    actions.appendChild(saveBtn); actions.appendChild(testBtn); actions.appendChild(seedBtn);
-                    [ownerRow.wrap, repoRow.wrap, branchRow.wrap, tokenRow.wrap, help, actions, status].forEach(function(n){ body.appendChild(n); });
-                    box.appendChild(header); box.appendChild(body); modal.appendChild(box); document.body.appendChild(modal);
-                } catch(_) {}
-            };
         })();
     </script>
 </body>
