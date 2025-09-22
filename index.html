@@ -5268,28 +5268,103 @@ Permissions:
                         btn.title = 'Connect GitHub (admin)';
                         btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i>';
                         btn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;border:none;background:#222;color:#fff;width:44px;height:44px;border-radius:22px;box-shadow:0 2px 8px rgba(0,0,0,0.25);cursor:pointer;';
-                        btn.onclick = function(){
-                            if (typeof window.connectGitHub === 'function') { return window.connectGitHub(); }
-                            if (!isAdmin()) return alert('Admin only');
-                            try {
-                                var token = prompt('Paste a GitHub personal access token (repo scope if private):', '');
-                                if (!token) return;
-                                var owner = prompt('GitHub owner (username or org):', '') || '';
-                                var repo = prompt('Repo name:', '') || '';
-                                var branch = prompt('Branch (default main):', 'main') || 'main';
-                                localStorage.setItem('githubToken', JSON.stringify({ token: token }));
-                                window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
-                                alert('GitHub connection saved. You can now use GitHub features.');
-                            } catch (e) {
-                                alert('GitHub connect failed: ' + (e && e.message ? e.message : e));
-                            }
-                        };
+                        btn.onclick = function(){ if (window.openGithubPanel) return window.openGithubPanel(); if (window.connectGitHub) return window.connectGitHub(); };
                         document.body.appendChild(btn);
                     }
                 } catch(_) {}
             }
             document.addEventListener('DOMContentLoaded', function(){ ensureGithubConnectButton(); });
             window.addEventListener('focus', function(){ ensureGithubConnectButton(); });
+        })();
+    </script>
+    <script>
+        (function(){
+            function getDefaults(){
+                try { return (window.githubData && githubData.getRepoInfo && githubData.getRepoInfo()) || {}; } catch(_) { return {}; }
+            }
+            function getSavedToken(){
+                try {
+                    var raw = localStorage.getItem('githubToken');
+                    if (!raw) return '';
+                    try { var obj = JSON.parse(raw); return obj.token || obj.access_token || raw; } catch(_) { return raw; }
+                } catch(_) { return ''; }
+            }
+            function createInput(label, id, type, value, placeholder){
+                var wrap = document.createElement('div');
+                wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin:8px 0;';
+                var lab = document.createElement('label'); lab.textContent = label; lab.htmlFor = id; lab.style.cssText = 'font-weight:600;color:#333;';
+                var inp = document.createElement('input'); inp.id = id; inp.type = type||'text'; inp.value = value||''; inp.placeholder = placeholder||''; inp.style.cssText = 'padding:10px;border:1px solid #e1e5e9;border-radius:8px;';
+                wrap.appendChild(lab); wrap.appendChild(inp);
+                return { wrap: wrap, inp: inp };
+            }
+            function closePanel(modal){ if (modal && modal.parentNode) modal.parentNode.removeChild(modal); }
+            window.openGithubPanel = function(){
+                try {
+                    var modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.style.display = 'block';
+                    var box = document.createElement('div');
+                    box.className = 'modal-content';
+                    box.style.maxWidth = '520px';
+                    box.style.width = '92%';
+                    box.style.overflow = 'hidden';
+                    var header = document.createElement('div');
+                    header.className = 'modal-header';
+                    header.innerHTML = '<h2>GitHub Connection</h2><span class="close">&times;</span>';
+                    header.querySelector('.close').onclick = function(){ closePanel(modal); };
+                    var body = document.createElement('div');
+                    body.className = 'modal-body';
+                    body.style.padding = '20px 24px';
+                    var info = getDefaults();
+                    var ownerRow = createInput('Owner', 'ghOwnerInput', 'text', info.owner||'', 'username or org');
+                    var repoRow = createInput('Repository', 'ghRepoInput', 'text', info.repo||'', 'repo name');
+                    var branchRow = createInput('Branch', 'ghBranchInput', 'text', info.branch||'main', 'main');
+                    var tokenRow = createInput('Personal Access Token', 'ghTokenInput', 'password', getSavedToken(), 'ghp_...');
+                    var help = document.createElement('div');
+                    help.style.cssText = 'font-size:0.85rem;color:#666;margin:6px 0 12px;';
+                    help.innerHTML = 'Token scope: repo (for private repos). For public repos, minimal scopes work.';
+                    var actions = document.createElement('div');
+                    actions.className = 'form-actions';
+                    var saveBtn = document.createElement('button');
+                    saveBtn.className = 'btn btn-primary'; saveBtn.textContent = 'Save & Connect';
+                    var testBtn = document.createElement('button');
+                    testBtn.className = 'btn btn-secondary'; testBtn.textContent = 'Test Read';
+                    var seedBtn = document.createElement('button');
+                    seedBtn.className = 'btn btn-secondary'; seedBtn.textContent = 'Bootstrap Configs';
+                    var status = document.createElement('div');
+                    status.style.cssText = 'margin-top:10px;font-size:0.9rem;color:#333;';
+                    function setStatus(msg, ok){ status.textContent = msg; status.style.color = ok ? '#155724' : '#721c24'; }
+                    saveBtn.onclick = async function(){
+                        try {
+                            var owner = ownerRow.inp.value.trim();
+                            var repo = repoRow.inp.value.trim();
+                            var branch = (branchRow.inp.value.trim()||'main');
+                            var token = tokenRow.inp.value.trim();
+                            if (!owner || !repo) return setStatus('Owner and Repo are required', false);
+                            if (token) localStorage.setItem('githubToken', JSON.stringify({ token: token }));
+                            window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
+                            setStatus('Saved. You can now use GitHub actions.', true);
+                        } catch(e){ setStatus('Save failed: ' + e.message, false); }
+                    };
+                    testBtn.onclick = async function(){
+                        try {
+                            if (!window.githubData) return setStatus('githubData not ready', false);
+                            var r = await githubData.readJson('data/section-configs.json');
+                            setStatus((r && (r.json || r.sha)) ? 'Read OK' : 'File missing (OK for first-time)', !!(r && (r.json || r.sha)));
+                        } catch(e){ setStatus('Read failed: ' + e.message, false); }
+                    };
+                    seedBtn.onclick = async function(){
+                        try {
+                            if (typeof window.ensureSectionConfigsFile !== 'function') return setStatus('Bootstrap function missing', false);
+                            await ensureSectionConfigsFile();
+                            setStatus('Bootstrap complete', true);
+                        } catch(e){ setStatus('Bootstrap failed: ' + e.message, false); }
+                    };
+                    actions.appendChild(saveBtn); actions.appendChild(testBtn); actions.appendChild(seedBtn);
+                    [ownerRow.wrap, repoRow.wrap, branchRow.wrap, tokenRow.wrap, help, actions, status].forEach(function(n){ body.appendChild(n); });
+                    box.appendChild(header); box.appendChild(body); modal.appendChild(box); document.body.appendChild(modal);
+                } catch(_) {}
+            };
         })();
     </script>
 </body>
