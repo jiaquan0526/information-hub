@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1758527748825,
+    "username": "michael.zhang2@nike.com",
+    "password": "123456",
+    "name": "Michael Zhang",
+    "email": "michael.zhang2@nike.com",
+    "role": "manager",
+    "permissions": {
+      "canManageUsers": false,
+      "canEditAllSections": false,
+      "canDeleteResources": true,
+      "canViewAuditLog": false,
+      "canManageRoles": false,
+      "sections": [
+        "example",
+        "finance"
+      ]
+    },
+    "createdAt": "2025-09-22T07:55:48.825Z",
+    "updatedAt": "2025-09-22T07:56:09.239Z"
+  }
+]
