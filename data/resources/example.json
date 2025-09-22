@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2025-09-22T07:46:24.899Z",
+  "updatedAt": "2025-09-22T07:48:39.002Z",
   "playbooks": [
     {
       "id": "example:playbooks:mfutoj4u:14qa8622zo0rv",
@@ -15,6 +15,23 @@
       "sectionId": "example",
       "type": "playbooks",
       "updatedAt": "2025-09-22T07:46:24.899Z"
+    }
+  ],
+  "boxLinks": [
+    {
+      "id": "example:boxLinks:mfutreuz:7mu3g11hjevbt",
+      "title": "test",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/#/site/CONVERSEDATAPARKPROD/views/FY25GlobalDemandDashboard/GLOBALOVERVIEW?:iid=1",
+      "category": "process",
+      "tags": [
+        "analyisis"
+      ],
+      "createdAt": "2025-09-22T07:48:38.268Z",
+      "userId": 0,
+      "sectionId": "example",
+      "type": "boxLinks",
+      "updatedAt": "2025-09-22T07:48:39.002Z"
     }
   ]
 }
