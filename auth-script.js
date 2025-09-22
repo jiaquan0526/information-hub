@@ -7,10 +7,20 @@ class AuthSystem {
     }
 
     init() {
+        this.ensureSupabaseClient();
         this.bindEvents();
         this.checkExistingSession();
         // Show password recovery form if coming from email
         this.maybeShowRecoveryForm();
+    }
+
+    ensureSupabaseClient() {
+        try {
+            if (!window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
+                window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+            }
+        } catch (_) {}
+        return !!window.supabaseClient;
     }
 
     bindEvents() {
@@ -83,9 +93,9 @@ class AuthSystem {
 
     async handleLogin() {
         try {
+            if (!this.ensureSupabaseClient()) { this.showMessage('Supabase not initialized', 'error'); return; }
             const email = String(document.getElementById('username').value || '').trim();
             const password = String(document.getElementById('password').value || '').trim();
-            if (!window.supabaseClient) { this.showMessage('Supabase not initialized', 'error'); return; }
             const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
             if (error) { this.showMessage('Invalid email or password', 'error'); return; }
             const user = data && data.user ? data.user : null;
@@ -97,11 +107,11 @@ class AuthSystem {
 
     async handleSignup() {
         try {
+            if (!this.ensureSupabaseClient()) { this.showMessage('Supabase not initialized', 'error'); return; }
             const name = String(document.getElementById('signupName').value || '').trim();
             const email = String(document.getElementById('signupEmail').value || '').trim().toLowerCase();
             const password = String(document.getElementById('signupPassword').value || '').trim();
             if (!name || !email || !password) { this.showMessage('All fields are required', 'error'); return; }
-            if (!window.supabaseClient) { this.showMessage('Supabase not initialized', 'error'); return; }
             const { data, error } = await window.supabaseClient.auth.signUp({ email, password, options: { data: { name } } });
             if (error) { this.showMessage(error.message || 'Signup failed', 'error'); return; }
             const uid = data && data.user ? data.user.id : null;
@@ -115,9 +125,9 @@ class AuthSystem {
     // Forgot password: send email, and handle recovery token
     async startPasswordReset() {
         try {
+            if (!this.ensureSupabaseClient()) { this.showMessage('Supabase not initialized', 'error'); return; }
             const email = prompt('Enter your account email:');
             if (!email) return;
-            if (!window.supabaseClient) { this.showMessage('Supabase not initialized', 'error'); return; }
             const redirectTo = (location.origin + location.pathname).replace(/auth\.html.*/, 'auth.html');
             const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
             if (error) { this.showMessage(error.message || 'Failed to send reset email', 'error'); return; }
