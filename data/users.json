@@ -23,5 +23,32 @@
     },
     "createdAt": "2025-09-22T07:55:48.825Z",
     "updatedAt": "2025-09-22T07:56:38.345Z"
+  },
+  {
+    "id": 2,
+    "username": "manager",
+    "password": "manager123",
+    "role": "manager",
+    "name": "Department Manager",
+    "email": "manager@company.com",
+    "permissions": {
+      "canManageUsers": true,
+      "canEditAllSections": false,
+      "canDeleteResources": true,
+      "canViewAuditLog": false,
+      "canManageRoles": false,
+      "canAssignSections": false,
+      "canManagePermissions": false,
+      "canManageUserRole": true,
+      "canManageManagerRole": false,
+      "canManageAdminRole": false,
+      "sections": [
+        "example",
+        "finance"
+      ],
+      "editableSections": []
+    },
+    "createdAt": "2025-09-22T07:42:25.227Z",
+    "updatedAt": "2025-09-22T07:58:06.265Z"
   }
 ]
