@@ -154,7 +154,20 @@ class AuthSystem {
             if (error) { this.showMessage(error.message || 'Signup failed', 'error'); return; }
             const uid = data && data.user ? data.user.id : null;
             if (uid) {
-                await window.supabaseClient.from('profiles').upsert({ id: uid, email, username: email, name, role: 'viewer', permissions: {} });
+                // Assign default access to all visible sections in hub (from Supabase)
+                let sectionIds = [];
+                try {
+                    const { data: secs } = await window.supabaseClient.from('sections').select('section_id');
+                    sectionIds = Array.isArray(secs) ? secs.map(s => s.section_id).filter(Boolean) : [];
+                } catch (_) { sectionIds = []; }
+                await window.supabaseClient.from('profiles').upsert({
+                    id: uid,
+                    email,
+                    username: email,
+                    name,
+                    role: 'viewer',
+                    permissions: { sections: sectionIds, editableSections: [] }
+                });
             }
             this.showMessage('Signup successful. Please verify your email if required.', 'success');
         } catch (_) { this.showMessage('Signup failed', 'error'); }
