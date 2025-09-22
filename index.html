@@ -5279,6 +5279,37 @@ Permissions:
     </script>
     <script>
         (function(){
+            if (typeof window.ensureSectionConfigsFile !== 'function') {
+                window.ensureSectionConfigsFile = async function ensureSectionConfigsFile(){
+                    if (!window.githubData) throw new Error('githubData not ready');
+                    var path = 'data/section-configs.json';
+                    var cur = await githubData.readJson(path);
+                    var base = (cur.json && typeof cur.json === 'object') ? Object.assign({}, cur.json) : {};
+                    try {
+                        var orderRaw = localStorage.getItem('sectionOrder');
+                        var order = orderRaw ? JSON.parse(orderRaw) : [];
+                        var ids = Array.isArray(order) ? order.map(function(s){ return s.id; }).filter(Boolean) : [];
+                        ids.forEach(function(id){
+                            if (!base[id]) {
+                                base[id] = {
+                                    tabs: [
+                                        { id: 'playbooks', name: 'Playbooks' },
+                                        { id: 'boxLinks', name: 'Box Links' },
+                                        { id: 'dashboards', name: 'Dashboards' }
+                                    ],
+                                    intro: ''
+                                };
+                            }
+                        });
+                    } catch(_) {}
+                    await githubData.writeJson(path, base, 'Bootstrap section configs', cur.sha || null);
+                    return true;
+                };
+            }
+        })();
+    </script>
+    <script>
+        (function(){
             function getDefaults(){
                 try { return (window.githubData && githubData.getRepoInfo && githubData.getRepoInfo()) || {}; } catch(_) { return {}; }
             }
