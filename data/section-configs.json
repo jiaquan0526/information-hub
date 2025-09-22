@@ -1,0 +1,223 @@
+{
+  "costing": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "supply-planning": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "operations": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "quality": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "hr": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "it": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "compliance": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "chemical_lab": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "admin": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "ie_mm": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "mse_fe": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "analysis": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  },
+  "material": {
+    "tabs": [
+      {
+        "id": "playbooks",
+        "name": "Playbooks"
+      },
+      {
+        "id": "boxLinks",
+        "name": "Box Links"
+      },
+      {
+        "id": "dashboards",
+        "name": "Dashboards"
+      }
+    ],
+    "intro": ""
+  }
+}
