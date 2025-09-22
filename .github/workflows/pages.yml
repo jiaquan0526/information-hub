@@ -30,14 +30,14 @@ jobs:
         run: |
           npm ci || npm install
 
-      - name: Build site (generates WebP into dist/background-pic/opt)
+      - name: Build site (static only)
         run: |
-          npm run build
+          echo "No build required for static upload"
 
-      - name: Upload artifact
+      - name: Upload artifact (repository root)
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: .
 
   deploy:
     environment:
