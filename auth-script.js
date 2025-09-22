@@ -135,7 +135,7 @@ class AuthSystem {
             const email = String(document.getElementById('username').value || '').trim();
             const password = String(document.getElementById('password').value || '').trim();
             const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
-            if (error) { this.showMessage('Invalid email or password', 'error'); return; }
+            if (error) { this.showMessage(error.message || 'Invalid email or password', 'error'); return; }
             const user = data && data.user ? data.user : null;
             if (!user) { this.showMessage('Login failed', 'error'); return; }
             await this.createSessionFromSupabase(user);
