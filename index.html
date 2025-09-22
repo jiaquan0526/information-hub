@@ -5246,5 +5246,51 @@ Permissions:
         .hub-card.bg-ready span,
         .hub-card.bg-ready i { color: #fff !important; }
     </style>
+    <script>
+        (function(){
+            function isAdmin() {
+                try {
+                    var s = localStorage.getItem('hubSession');
+                    if (!s) return false;
+                    var u = JSON.parse(s);
+                    var role = String(u.role || '').toLowerCase();
+                    return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers === true);
+                } catch(_) { return false; }
+            }
+            function ensureGithubConnectButton(){
+                try {
+                    var admin = isAdmin();
+                    var btn = document.getElementById('ghConnectBtn');
+                    if (!admin) { if (btn) btn.remove(); return; }
+                    if (!btn) {
+                        btn = document.createElement('button');
+                        btn.id = 'ghConnectBtn';
+                        btn.title = 'Connect GitHub (admin)';
+                        btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i>';
+                        btn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;border:none;background:#222;color:#fff;width:44px;height:44px;border-radius:22px;box-shadow:0 2px 8px rgba(0,0,0,0.25);cursor:pointer;';
+                        btn.onclick = function(){
+                            if (typeof window.connectGitHub === 'function') { return window.connectGitHub(); }
+                            if (!isAdmin()) return alert('Admin only');
+                            try {
+                                var token = prompt('Paste a GitHub personal access token (repo scope if private):', '');
+                                if (!token) return;
+                                var owner = prompt('GitHub owner (username or org):', '') || '';
+                                var repo = prompt('Repo name:', '') || '';
+                                var branch = prompt('Branch (default main):', 'main') || 'main';
+                                localStorage.setItem('githubToken', JSON.stringify({ token: token }));
+                                window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
+                                alert('GitHub connection saved. You can now use GitHub features.');
+                            } catch (e) {
+                                alert('GitHub connect failed: ' + (e && e.message ? e.message : e));
+                            }
+                        };
+                        document.body.appendChild(btn);
+                    }
+                } catch(_) {}
+            }
+            document.addEventListener('DOMContentLoaded', function(){ ensureGithubConnectButton(); });
+            window.addEventListener('focus', function(){ ensureGithubConnectButton(); });
+        })();
+    </script>
 </body>
 </html>
