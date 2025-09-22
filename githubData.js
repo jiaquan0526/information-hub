@@ -1,4 +1,14 @@
 (function(){
+    function encodePathSegments(path) {
+        try {
+            return String(path)
+                .split('/')
+                .map(function(segment){ return encodeURIComponent(segment); })
+                .join('/');
+        } catch(_) {
+            return String(path || '');
+        }
+    }
     function getRepoInfo() {
         try {
             if (window.GH_OWNER && window.GH_REPO) {
@@ -45,7 +55,7 @@
         const branch = info.branch || 'main';
         const headers = getAuthHeaders();
         try {
-            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`;
+            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodePathSegments(path)}?ref=${encodeURIComponent(branch)}`;
             const resp = await fetch(url, { headers, cache: 'no-store' });
             if (resp.ok) {
                 const data = await resp.json();
@@ -56,7 +66,7 @@
             }
         } catch(_) {}
         try {
-            const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${path}`;
+            const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${encodePathSegments(path)}`;
             const resp = await fetch(rawUrl, { cache: 'no-store' });
             if (resp.ok) {
                 const text = await resp.text();
@@ -74,7 +84,7 @@
         const content = btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 2))));
         const body = { message, content, branch };
         if (sha) body.sha = sha;
-        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
+        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodePathSegments(path)}`;
         const resp = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
         if (!resp.ok) {
             const text = await resp.text().catch(() => '');
