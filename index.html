@@ -5532,6 +5532,59 @@ Permissions:
             }
             if (!(window.supabase && window.supabase.createClient)) { loadFallbacksIfNeeded(); } else { initClient(); }
 
+            // Clean stale local data artifacts to ensure Supabase-only view
+            (function clearLocalArtifacts(){
+                try {
+                    var keys = [
+                        'informationHub','sectionOrder','hubUsers','hubActivities','githubToken',
+                        'refreshHubNow','hubLastChange','dbMigrationDone'
+                    ];
+                    keys.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+                    // Remove per-section caches
+                    try {
+                        for (var i=0;i<localStorage.length;i++){
+                            var k = localStorage.key(i);
+                            if (k && (k.indexOf('section_')===0 || k.indexOf('section_config_')===0)){
+                                try { localStorage.removeItem(k); } catch(_){}
+                            }
+                        }
+                    } catch(_){}
+                    // Best-effort delete old IndexedDB
+                    try { window.indexedDB && window.indexedDB.deleteDatabase && window.indexedDB.deleteDatabase('InformationHubDB'); } catch(_){}
+                } catch(_){}
+            })();
+
+            // Helper to seed one example resource if database is empty (run manually by admin)
+            window.seedExampleIfEmpty = async function(){
+                try {
+                    if (!window.supabaseClient) return alert('Supabase not ready');
+                    // Check if any resources exist in standard hub sections
+                    var sections = ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
+                    var total = 0;
+                    for (var i=0;i<sections.length;i++){
+                        var { count, error } = await window.supabaseClient
+                            .from('resources')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('section_id', sections[i]);
+                        if (error) { console.warn(error); continue; }
+                        total += (count||0);
+                        if (total>0) break;
+                    }
+                    if (total>0) return alert('Database already has resources. Nothing to seed.');
+                    var sample = {
+                        section_id: 'costing',
+                        type: 'playbook',
+                        title: 'Getting Started',
+                        description: 'How to use the hub and add your first items',
+                        url: 'https://example.com/getting-started',
+                        tags: ['onboarding','guide']
+                    };
+                    var { error: insErr } = await window.supabaseClient.from('resources').insert(sample).select().single();
+                    if (insErr) return alert('Seed failed: ' + insErr.message + '\nTip: sign in as admin or grant edit rights.');
+                    alert('Seeded one example resource in "costing".');
+                } catch(e){ alert('Seed failed: ' + (e && e.message ? e.message : e)); }
+            };
+
                 window.fetchSections = async function(){
                     var q = window.supabaseClient
                         .from('sections')
