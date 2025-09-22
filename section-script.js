@@ -1289,21 +1289,30 @@ class SectionManager {
         const cfg = this.sectionConfig;
         const modal = document.createElement('div');
         modal.className = 'modal';
-        const typesJson = this.escapeHtml(JSON.stringify(cfg.types, null, 2));
         const cats = this.escapeHtml((cfg.categories || []).join(', '));
         modal.innerHTML = `
-            <div class="modal-content" style="max-width:720px;">
+            <div class="modal-content" style="max-width:780px; width:95%;">
                 <div class="modal-header">
-                    <h2>Customize Section</h2>
+                    <h2>Customize Tabs & Categories</h2>
                     <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 </div>
-                <div class="modal-body">
-                    <p style="margin:8px 0 6px 0;">Resource Types (JSON array of { id, name, icon }):</p>
-                    <textarea id="cfgTypes" rows="10" style="width:100%; font-family:monospace;">${typesJson}</textarea>
-                    <p style="margin:12px 0 6px 0;">Categories (comma-separated):</p>
-                    <input id="cfgCats" type="text" style="width:100%;" value="${cats}" />
+                <div class="modal-body" style="max-height:62vh; overflow:auto; padding-bottom:6px;">
+                    <div id="cfgAlert" style="position:sticky; top:0; z-index:1; display:none; background:#f6f9ff; border:1px solid #dbe7ff; color:#1b3a6b; padding:8px 10px; border-radius:6px; margin:0 0 10px 0;"></div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 8px 0;">
+                        <strong>Tabs (Types)</strong>
+                        <button type="button" class="btn btn-secondary" id="addTypeBtn"><i class="fas fa-plus"></i> Add Type</button>
+                    </div>
+                    <div class="type-header" style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:center; padding:6px 8px; border:1px solid #e6eaf0; background:#f9fafb; border-radius:8px; margin-bottom:6px; font-weight:600; color:#334155;">
+                        <div>ID</div>
+                        <div>Name</div>
+                        <div>Icon</div>
+                        <div>Actions</div>
+                    </div>
+                    <div id="typeList" style="display:flex; flex-direction:column; gap:8px; max-height:320px; overflow:auto; border:1px solid #eee; border-radius:8px; padding:8px; background:#fff;"></div>
+                    <div style="margin:12px 0 6px 0;"><strong>Categories</strong></div>
+                    <input id="cfgCats" type="text" style="width:100%;" value="${cats}" placeholder="e.g., process, procedure, guide, template, checklist" />
                 </div>
-                <div class="form-actions" style="padding:12px 16px 18px 16px;">
+                <div class="form-actions" style="padding:12px 16px 18px 16px; display:flex; gap:10px; justify-content:flex-end;">
                     <button type="button" class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
                     <button type="button" class="btn btn-primary" id="saveCfgBtn">Save</button>
                 </div>
@@ -1311,24 +1320,162 @@ class SectionManager {
         `;
         document.body.appendChild(modal);
         modal.style.display = 'block';
+
+        const typeList = modal.querySelector('#typeList');
+        const alertBox = modal.querySelector('#cfgAlert');
+        const showAlert = (msg, kind) => {
+            if (!alertBox) return;
+            alertBox.style.display = 'block';
+            alertBox.style.background = kind === 'error' ? '#fff5f5' : '#f6f9ff';
+            alertBox.style.borderColor = kind === 'error' ? '#ffd6d6' : '#dbe7ff';
+            alertBox.style.color = kind === 'error' ? '#8a1f1f' : '#1b3a6b';
+            alertBox.textContent = msg;
+            setTimeout(() => { try { alertBox.style.display = 'none'; } catch(_) {} }, 2500);
+        };
+
+        const makeRow = (t) => {
+            const row = document.createElement('div');
+            row.className = 'type-row';
+            row.style.display = 'grid';
+            row.style.gridTemplateColumns = '1fr 1fr 1fr auto';
+            row.style.gap = '8px';
+            row.style.alignItems = 'center';
+            row.style.border = '1px solid #eee';
+            row.style.borderRadius = '8px';
+            row.style.padding = '8px';
+            const iconClassInit = t.icon || 'fas fa-circle';
+            row.innerHTML = `
+                <input type=\"text\" class=\"type-id\" placeholder=\"id (e.g., playbooks)\" value=\"${this.escapeHtml(t.id || '')}\">
+                <input type=\"text\" class=\"type-name\" placeholder=\"name (e.g., Playbooks)\" value=\"${this.escapeHtml(t.name || t.id || '')}\">
+                <div class=\"icon-cell\" style=\"display:flex; align-items:center; gap:8px;\">
+                    <button type=\"button\" class=\"btn btn-secondary icon-choose\" title=\"Choose icon\" style=\"display:flex; align-items:center; gap:8px;\">
+                        <i class=\"icon-preview ${this.escapeHtml(iconClassInit)}\" style=\"font-size:18px;\"></i>
+                        <span>Choose</span>
+                    </button>
+                    <input type=\"hidden\" class=\"type-icon\" value=\"${this.escapeHtml(iconClassInit)}\">
+                </div>
+                <div style=\"display:flex; gap:6px;\">
+                    <button type=\"button\" class=\"btn btn-secondary btn-up\" title=\"Move up\"><i class=\"fas fa-arrow-up\"></i></button>
+                    <button type=\"button\" class=\"btn btn-secondary btn-down\" title=\"Move down\"><i class=\"fas fa-arrow-down\"></i></button>
+                    <button type=\"button\" class=\"btn btn-danger btn-del\" title=\"Remove\"><i class=\"fas fa-trash\"></i></button>
+                </div>
+            `;
+            // Inline icon picker panel
+            const panel = document.createElement('div');
+            panel.className = 'icon-picker-panel';
+            panel.style.display = 'none';
+            panel.style.gridColumn = '1 / -1';
+            panel.style.borderTop = '1px dashed #eee';
+            panel.style.marginTop = '8px';
+            panel.style.paddingTop = '8px';
+            panel.innerHTML = `
+                <div style=\"display:flex; gap:8px; align-items:center; margin-bottom:6px;\">
+                    <input type=\"text\" class=\"icon-search\" placeholder=\"Search icons (e.g., book, link)\" style=\"flex:1; padding:6px 8px; border:1px solid #e1e5e9; border-radius:6px;\">
+                    <button type=\"button\" class=\"btn btn-secondary icon-close\">Close</button>
+                </div>
+                <div class=\"icon-grid\" style=\"display:grid; grid-template-columns:repeat(auto-fill, minmax(44px,1fr)); gap:8px; max-height:160px; overflow:auto; border:1px solid #eee; padding:8px; border-radius:6px; background:#fff;\"></div>
+            `;
+            row.appendChild(panel);
+            row.querySelector('.btn-up').addEventListener('click', () => {
+                const prev = row.previousElementSibling;
+                if (prev) typeList.insertBefore(row, prev);
+            });
+            row.querySelector('.btn-down').addEventListener('click', () => {
+                const next = row.nextElementSibling?.nextElementSibling;
+                typeList.insertBefore(row, next || null);
+            });
+            row.querySelector('.btn-del').addEventListener('click', () => {
+                row.remove();
+            });
+            // Icon choose behavior
+            const iconBtn = row.querySelector('.icon-choose');
+            const iconPrev = row.querySelector('.icon-preview');
+            const iconInput = row.querySelector('.type-icon');
+            const iconGrid = panel.querySelector('.icon-grid');
+            const iconSearch = panel.querySelector('.icon-search');
+            const iconClose = panel.querySelector('.icon-close');
+            const faIcons = [
+                'fas fa-book','fas fa-link','fas fa-chart-bar','fas fa-file-alt','fas fa-database','fas fa-cube','fas fa-cubes','fas fa-table','fas fa-diagram-project','fas fa-clipboard-list','fas fa-sitemap','fas fa-bolt','fas fa-shield-halved','fas fa-globe','fas fa-briefcase','fas fa-pen','fas fa-user','fas fa-users','fas fa-layer-group','fas fa-gears'
+            ];
+            const renderIcons = (filter) => {
+                const term = String(filter || '').toLowerCase().trim().replace(/\s+/g,'-');
+                iconGrid.innerHTML = '';
+                faIcons.filter(cls => !term || cls.includes(term)).forEach(cls => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn';
+                    btn.style.border = '1px solid #ddd';
+                    btn.style.borderRadius = '6px';
+                    btn.style.padding = '8px';
+                    btn.style.display = 'flex';
+                    btn.style.justifyContent = 'center';
+                    btn.style.alignItems = 'center';
+                    btn.style.background = '#fff';
+                    btn.style.cursor = 'pointer';
+                    btn.innerHTML = `<i class="${cls}" style="font-size:18px;"></i>`;
+                    btn.addEventListener('click', () => {
+                        iconPrev.className = `icon-preview ${cls}`;
+                        iconInput.value = cls;
+                        panel.style.display = 'none';
+                    });
+                    iconGrid.appendChild(btn);
+                });
+            };
+            renderIcons('');
+            iconBtn.addEventListener('click', () => {
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                if (panel.style.display === 'block') {
+                    iconSearch.value = '';
+                    renderIcons('');
+                }
+            });
+            iconClose.addEventListener('click', () => { panel.style.display = 'none'; });
+            iconSearch.addEventListener('input', () => renderIcons(iconSearch.value));
+            return row;
+        };
+
+        // Seed existing types
+        (cfg.types || []).filter(t => !t.hidden).forEach(t => typeList.appendChild(makeRow(t)));
+
+        modal.querySelector('#addTypeBtn').addEventListener('click', () => {
+            typeList.appendChild(makeRow({ id: '', name: '', icon: '' }));
+            showAlert('Added a new type row', 'info');
+        });
+
         modal.querySelector('#saveCfgBtn').addEventListener('click', () => {
-            try {
-                const types = JSON.parse(modal.querySelector('#cfgTypes').value || '[]');
-                const catsRaw = modal.querySelector('#cfgCats').value || '';
-                const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
-                if (!Array.isArray(types) || types.length === 0) {
-                    this.showMessage('Provide at least one type', 'error');
+            // Collect
+            const rows = Array.from(typeList.querySelectorAll('.type-row'));
+            const types = rows.map(r => ({
+                id: String(r.querySelector('.type-id')?.value || '').trim(),
+                name: String(r.querySelector('.type-name')?.value || '').trim(),
+                icon: String(r.querySelector('.type-icon')?.value || '').trim()
+            })).filter(t => t.id);
+            if (types.length === 0) {
+                showAlert('Provide at least one type with an id', 'error');
+                return;
+            }
+            // Validate uniqueness of ids
+            const seen = new Set();
+            for (const t of types) {
+                const id = t.id.toLowerCase();
+                if (seen.has(id)) {
+                    showAlert(`Duplicate type id: ${t.id}`, 'error');
                     return;
                 }
-                const validTypes = types.map(t => ({ id: String(t.id || '').trim() || 'type', name: String(t.name || t.id || 'Type').trim(), icon: String(t.icon || '').trim() }));
-                const cfgNew = { types: validTypes, categories };
+                seen.add(id);
+            }
+            const catsRaw = modal.querySelector('#cfgCats').value || '';
+            const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
+            const validTypes = types.map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon }));
+            const cfgNew = { types: validTypes, categories };
+            try {
                 this.saveSectionConfig(cfgNew);
                 this.renderDynamicUI();
                 this.renderCurrentTab();
                 this.showMessage('Section customized', 'success');
                 modal.remove();
             } catch (e) {
-                this.showMessage('Invalid JSON for types', 'error');
+                showAlert('Failed to save configuration', 'error');
             }
         });
     }

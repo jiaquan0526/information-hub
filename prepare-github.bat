@@ -26,6 +26,10 @@ echo Copying optional files (if present)...
 if exist "CNAME" copy /Y "CNAME" "github-upload\" >nul
 if exist "sample-data.json" copy /Y "sample-data.json" "github-upload\" >nul
 
+echo Copying GitHub Actions workflow for automatic Pages deploy...
+if not exist "github-upload\.github\workflows" mkdir "github-upload\.github\workflows" >nul 2>&1
+if exist ".github\workflows\pages.yml" copy /Y ".github\workflows\pages.yml" "github-upload\.github\workflows\pages.yml" >nul
+
 echo Copying background images...
 if exist "background-pic" (
   xcopy /E /I /Y "background-pic" "github-upload\background-pic" >nul

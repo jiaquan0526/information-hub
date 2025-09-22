@@ -6,8 +6,10 @@
   "scripts": {
     "start": "python -m http.server 8000",
     "serve": "python -m http.server 8000",
-    "build": "echo 'No build process needed - static files ready for deployment'",
-    "deploy": "echo 'Ready for deployment to any static hosting service'"
+    "build": "node build.js",
+    "serve:dist": "cd dist && python -m http.server 8000",
+    "deploy": "echo 'Deploy the dist/ folder to your static host (Netlify/Vercel/GitHub Pages).'",
+    "gen:bg": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem -File -Path ./background-pic -Include *.png,*.jpg,*.jpeg,*.gif | Select-Object -ExpandProperty Name | ConvertTo-Json | Set-Content ./background-pic/manifest.json -Encoding UTF8\""
   },
   "keywords": [
     "information-management",
@@ -33,7 +35,14 @@
   "engines": {
     "node": ">=14.0.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "clean-css": "^5.3.3",
+    "fs-extra": "^11.2.0",
+    "globby": "^14.0.1",
+    "html-minifier-terser": "^7.2.0",
+    "terser": "^5.31.0",
+    "sharp": "^0.33.4"
+  },
   "dependencies": {}
 }
 

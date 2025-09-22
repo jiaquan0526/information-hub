@@ -100,8 +100,6 @@ The system comes with three pre-configured user accounts for testing:
 
 ## 🔧 Technical Implementation
 
-- See `DATA_SYNC.md` for full GitHub sync design, schemas, cadence, and setup.
-
 ### File Structure
 ```
 playbook-hub/
