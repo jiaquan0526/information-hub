@@ -371,8 +371,8 @@
     </div>
 
     <!-- Defer scripts to improve First Paint; XLSX will be loaded on demand -->
-    <script src="database.js" defer></script>
-    <script src="githubData.js" defer></script>
+    <!-- <script src="database.js" defer></script> -->
+    <!-- <script src="githubData.js" defer></script> -->
     <script src="excel-export.js" defer></script>
     <script src="auth-script.js" defer></script>
     <script src="hub-script.js" defer></script>
@@ -611,63 +611,9 @@
                 return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers);
             } catch(_) { return false; }
         }
-        window.connectGitHub = async function() {
-            if (!isCurrentUserAdmin()) return alert('Admin only');
-            try {
-                const token = prompt('Paste a GitHub personal access token (repo scope if private):', '');
-                if (!token) return;
-                const info = (window.githubData && githubData.getRepoInfo && githubData.getRepoInfo()) || {};
-                const owner = prompt('GitHub owner (username or org):', info.owner || '') || '';
-                const repo = prompt('Repo name:', info.repo || '') || '';
-                const branch = prompt('Branch (default main):', info.branch || 'main') || 'main';
-                localStorage.setItem('githubToken', JSON.stringify({ token }));
-                window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
-                alert('GitHub connection saved. Attempting to bootstrap configs...');
-                await ensureSectionConfigsFile();
-            } catch (e) {
-                alert('GitHub connect failed: ' + (e && e.message ? e.message : e));
-            }
-        };
-        async function ensureSectionConfigsFile() {
-            try {
-                if (!window.githubData) return;
-                const path = 'data/section-configs.json';
-                const cur = await githubData.readJson(path);
-                let base = cur.json && typeof cur.json === 'object' ? cur.json : {};
-                // Merge local per-section configs as seed
-                try {
-                    const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
-                    const ids = (order || []).map(s => s.id);
-                    ids.forEach(id => {
-                        const raw = localStorage.getItem('section_config_' + id);
-                        if (raw) {
-                            try { base[id] = JSON.parse(raw); } catch(_) {}
-                        }
-                    });
-                } catch(_) {}
-                await githubData.writeJson(path, base, 'Bootstrap section configs', cur.sha || null);
-                alert('Section configs synced to GitHub');
-                try { updateMainHubSections(); } catch(_) {}
-            } catch (e) {
-                console.warn('ensureSectionConfigsFile failed', e);
-            }
-        }
-        function renderGithubConnectButton() {
-            try {
-                const isAdmin = isCurrentUserAdmin();
-                let btn = document.getElementById('ghConnectBtn');
-                if (!isAdmin) { if (btn) btn.remove(); return; }
-                if (!btn) {
-                    btn = document.createElement('button');
-                    btn.id = 'ghConnectBtn';
-                    btn.title = 'Connect GitHub (admin)';
-                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i>';
-                    btn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;border:none;background:#222;color:#fff;width:44px;height:44px;border-radius:22px;box-shadow:0 2px 8px rgba(0,0,0,0.25);cursor:pointer;';
-                    btn.onclick = () => (window.openGithubPanel ? window.openGithubPanel() : (window.connectGitHub && window.connectGitHub()));
-                    document.body.appendChild(btn);
-                }
-            } catch(_) {}
-        }
+        window.connectGitHub = async function() { alert('GitHub features are disabled in Supabase-only mode.'); };
+        async function ensureSectionConfigsFile() { alert('GitHub features are disabled in Supabase-only mode.'); }
+        function renderGithubConnectButton() { try { const b = document.getElementById('ghConnectBtn'); if (b) b.remove(); } catch(_) {} }
         
         // Helper: normalize resource type to buckets we display on cards
         function normalizeResourceType(rawType) {
@@ -5547,14 +5493,44 @@ Permissions:
         window.SUPABASE_URL = 'https://pioubcszuayewepdawzt.supabase.co';
         window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k';
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
         (function(){
             if (window.supabaseClient) return;
-            var SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR-PROJECT-ref.supabase.co';
-            var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
-            try {
-                window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            function ensureKeys(){
+                try {
+                    if (!window.SUPABASE_URL) window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || window.SUPABASE_URL;
+                    if (!window.SUPABASE_ANON_KEY) window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || window.SUPABASE_ANON_KEY;
+                } catch(_) {}
+            }
+            function initClient(){
+                ensureKeys();
+                var SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR-PROJECT-ref.supabase.co';
+                var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
+                try {
+                    if (window.supabase && !window.supabaseClient) {
+                        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                    }
+                } catch(_) {}
+            }
+            function loadFallbacksIfNeeded(){
+                if (window.supabase) return initClient();
+                var tried = 0; var cdns = ['https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js'];
+                function next(){
+                    if (window.supabase) return initClient();
+                    if (tried < cdns.length){
+                        var s = document.createElement('script');
+                        s.src = cdns[tried++]; s.async = true; s.onload = initClient; s.onerror = next; document.head.appendChild(s);
+                    } else {
+                        var m = document.createElement('script'); m.type = 'module';
+                        m.textContent = "import{createClient}from 'https://esm.sh/@supabase/supabase-js@2'; window.supabase={createClient}; window.dispatchEvent(new Event('supabase-ready'));";
+                        document.head.appendChild(m);
+                        window.addEventListener('supabase-ready', initClient, { once: true });
+                    }
+                }
+                next();
+            }
+            if (!(window.supabase && window.supabase.createClient)) { loadFallbacksIfNeeded(); } else { initClient(); }
 
                 window.fetchSections = async function(){
                     var q = window.supabaseClient
@@ -5597,6 +5573,17 @@ Permissions:
                     } catch(e) { console.warn('recordView failed', e); }
                 };
 
+                // Quick password change helper (opens prompt)
+                window.changePasswordQuick = async function(){
+                    try {
+                        var p1 = prompt('Enter new password (min 6 chars):'); if (!p1 || p1.length < 6) return alert('Cancelled');
+                        var p2 = prompt('Confirm new password:'); if (p1 !== p2) return alert('Mismatch');
+                        var r = await window.supabaseClient.auth.updateUser({ password: p1 });
+                        if (r && r.error) return alert('Failed: ' + r.error.message);
+                        alert('Password updated');
+                    } catch(e){ alert('Failed: ' + (e && e.message ? e.message : e)); }
+                };
+
                 // Realtime: refresh hub stats on any resource or section change
                 try {
                     if (!window.supabaseHubChannel) {
@@ -5609,9 +5596,6 @@ Permissions:
                         try { window.addEventListener('beforeunload', function(){ try { window.supabaseClient.removeChannel(ch); } catch(_) {} }, { once: true }); } catch(_) {}
                     }
                 } catch(_) {}
-            } catch (e) {
-                console.warn('Supabase init failed', e);
-            }
         })();
     </script>
 </body>
