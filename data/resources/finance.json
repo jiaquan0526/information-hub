@@ -1,0 +1,18 @@
+{
+  "updatedAt": "2025-09-22T07:53:08.324Z",
+  "reports": [
+    {
+      "id": "finance:reports:mfutx6ky:e6myye19hsm9p",
+      "title": "test",
+      "description": "",
+      "url": "https://tableau-enterprise.nike.com/t/CONVERSEDATAPARKPROD/authoringNewWorkbook/1i186f2ua$rrea-0x-cf-zt-h5bu44/TotalGlobalBusinessView-SKULevel#1",
+      "category": "procedure",
+      "tags": [],
+      "createdAt": "2025-09-22T07:53:07.474Z",
+      "userId": 0,
+      "sectionId": "finance",
+      "type": "reports",
+      "updatedAt": "2025-09-22T07:53:08.324Z"
+    }
+  ]
+}
