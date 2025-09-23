@@ -7,11 +7,20 @@ class HubDatabase {
 
     async init() {
         try {
-            // Ensure Supabase client is available
+            // Wait for Supabase client to be available
+            let retries = 0;
+            const maxRetries = 50; // 10 seconds max wait
+            while (retries < maxRetries && !window.supabaseClient) {
+                console.log('Waiting for Supabase client...', retries + 1);
+                await new Promise(resolve => setTimeout(resolve, 200));
+                retries++;
+            }
+            
             if (!window.supabaseClient) {
-                console.error('Supabase client not initialized');
+                console.error('Supabase client not initialized after waiting');
                 return false;
             }
+            
             this.supabase = window.supabaseClient;
             console.log('Supabase database initialized successfully');
             return true;
@@ -550,20 +559,45 @@ class HubDatabase {
 
 // Initialize database
 let hubDatabase;
-document.addEventListener('DOMContentLoaded', async () => {
-    hubDatabase = new HubDatabase();
-    await hubDatabase.init();
-    
-    // Check if migration is needed
-    const migrationDone = localStorage.getItem('supabaseMigrationDone');
-    if (!migrationDone) {
-        await hubDatabase.migrateFromLocalStorage();
+
+async function initializeDatabase() {
+    try {
+        hubDatabase = new HubDatabase();
+        const success = await hubDatabase.init();
+        
+        if (success) {
+            // Check if migration is needed
+            const migrationDone = localStorage.getItem('supabaseMigrationDone');
+            if (!migrationDone) {
+                await hubDatabase.migrateFromLocalStorage();
+            }
+            
+            // Make globally accessible
+            window.hubDatabase = hubDatabase;
+            window.hubDatabaseReady = true;
+            document.dispatchEvent(new Event('hubdb-ready'));
+            console.log('Database system ready!');
+        } else {
+            console.error('Database initialization failed');
+        }
+    } catch (error) {
+        console.error('Database initialization error:', error);
     }
-    
-    // Make globally accessible
-    window.hubDatabase = hubDatabase;
-    window.hubDatabaseReady = true;
-    document.dispatchEvent(new Event('hubdb-ready'));
+}
+
+// Try to initialize immediately, then on DOM ready, then on window load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeDatabase);
+} else {
+    initializeDatabase();
+}
+
+// Also try on window load as fallback
+window.addEventListener('load', () => {
+    if (!window.hubDatabaseReady) {
+        console.log('Retrying database initialization on window load...');
+        initializeDatabase();
+    }
 });
 
 // Backward compatibility flag
