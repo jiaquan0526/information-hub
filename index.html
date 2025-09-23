@@ -420,12 +420,7 @@
                 
                 // Ensure a minimal initial configuration if none exists
                 try {
-                    if (!localStorage.getItem('sectionOrder')) {
-                        const initialSections = [
-                            { id: 'example', name: 'Example', icon: 'fas fa-th-large', visible: true, order: 1, intro: 'Your first example section. Add more from the admin panel.' }
-                        ];
-                        localStorage.setItem('sectionOrder', JSON.stringify(initialSections));
-                    }
+                    // NO localStorage initialization - use Supabase only
                 } catch (_) {}
                 // Try to load background image manifest (optional)
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
@@ -3256,33 +3251,26 @@ Permissions:
         // Section Management Functions
         let sectionOrder = [];
         
-        // Function to ensure sectionOrder is in sync with localStorage
-        function syncSectionOrder() {
-            const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                sectionOrder = JSON.parse(savedOrder);
-                console.log('Synced sectionOrder with localStorage:', sectionOrder);
-            }
-        }
+        // NO localStorage sync - use Supabase only
         
-        // Function to get all available sections dynamically
-        function getAllAvailableSections() {
-            const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                try {
-                    const sections = JSON.parse(savedOrder) || [];
-                    return sections.filter(s => s && s.visible !== false).map(s => s.id);
-                } catch(_) { return []; }
+        // Function to get all available sections dynamically - SUPABASE ONLY
+        async function getAllAvailableSections() {
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+                    const sections = await hubDatabase.getAllSections();
+                    return sections.filter(s => s && s.visible !== false).map(s => s.section_id || s.id);
+                }
+            } catch (error) {
+                console.error('Error loading sections from database:', error);
             }
-            // No defaults; GitHub is source of truth
             return [];
         }
         
-        // Function to get sections the CURRENT USER can assign
-        function getAssignableSectionsForCurrentUser() {
+        // Function to get sections the CURRENT USER can assign - SUPABASE ONLY
+        async function getAssignableSectionsForCurrentUser() {
             const session = localStorage.getItem('hubSession');
             const currentUser = session ? JSON.parse(session) : null;
-            const all = getAllAvailableSections();
+            const all = await getAllAvailableSections();
             if (!currentUser) return all;
             if (currentUser.role === 'admin') return all;
             // Managers can only assign within their own accessible sections
@@ -3290,29 +3278,21 @@ Permissions:
             return all.filter(s => ownSections.includes(s));
         }
         
-        // Function to get section display names
-        function getSectionDisplayNames() {
-            const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                const sections = JSON.parse(savedOrder);
-                const names = {};
-                sections.forEach(section => {
-                    names[section.id] = section.name;
-                });
-                return names;
-            } else {
-                // Return default names
-                return {
-                    'costing': 'Costing & Budgeting',
-                    'supply-planning': 'Supply Planning',
-                    'operations': 'Operations Management',
-                    'quality': 'Quality Management',
-                    'hr': 'Human Resources',
-                    'it': 'IT & Technology',
-                    'sales': 'Sales & Marketing',
-                    'compliance': 'Compliance & Legal'
-                };
+        // Function to get section display names - SUPABASE ONLY
+        async function getSectionDisplayNames() {
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+                    const sections = await hubDatabase.getAllSections();
+                    const names = {};
+                    sections.forEach(section => {
+                        names[section.section_id || section.id] = section.name;
+                    });
+                    return names;
+                }
+            } catch (error) {
+                console.error('Error loading section names from database:', error);
             }
+            return {};
         }
         
         // Function to refresh permission forms when sections change
@@ -4222,14 +4202,15 @@ Permissions:
                 console.error('Error loading sections from database:', error);
             }
             
-            // Only fallback to localStorage if database completely failed
+            // NO FALLBACK - Use Supabase only
             if (!databaseLoaded || visibleSections.length === 0) {
-                console.warn('Falling back to localStorage for sections');
-                const sectionOrderRaw = localStorage.getItem('sectionOrder');
-                let sectionOrder = [];
-                try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
-                visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
-                console.log('Loaded sections from localStorage:', visibleSections.length);
+                console.error('CRITICAL: Database failed to load sections. System requires Supabase database.');
+                console.error('Please check:');
+                console.error('1. Supabase connection');
+                console.error('2. Database has sections');
+                console.error('3. User permissions are set');
+                console.error('4. RLS policies allow access');
+                return; // Don't render anything if database fails
             }
             
             if (visibleSections.length === 0) {

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Only Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        .fix-section { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; }
+        pre { background: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Supabase Only Fix - Information Hub</h1>
+    
+    <div class="fix-section">
+        <h3>Critical Functions to Replace</h3>
+        <p>These functions need to be replaced in your index.html to use Supabase only:</p>
+        
+        <h4>1. updateMainHubSections() - Remove localStorage fallback</h4>
+        <pre>
+// REPLACE THIS:
+if (!databaseLoaded || visibleSections.length === 0) {
+    console.warn('Falling back to localStorage for sections');
+    const sectionOrderRaw = localStorage.getItem('sectionOrder');
+    // ... localStorage code
+}
+
+// WITH THIS:
+if (!databaseLoaded || visibleSections.length === 0) {
+    console.error('CRITICAL: Database failed to load sections. System requires Supabase database.');
+    return; // Don't render anything if database fails
+}
+        </pre>
+        
+        <h4>2. getAllAvailableSections() - Use Supabase only</h4>
+        <pre>
+// REPLACE THIS:
+function getAllAvailableSections() {
+    const savedOrder = localStorage.getItem('sectionOrder');
+    if (savedOrder) {
+        const sections = JSON.parse(savedOrder) || [];
+        return sections.filter(s => s && s.visible !== false).map(s => s.id);
+    }
+    return [];
+}
+
+// WITH THIS:
+async function getAllAvailableSections() {
+    try {
+        if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+            const sections = await hubDatabase.getAllSections();
+            return sections.filter(s => s && s.visible !== false).map(s => s.section_id || s.id);
+        }
+    } catch (error) {
+        console.error('Error loading sections from database:', error);
+    }
+    return [];
+}
+        </pre>
+        
+        <h4>3. getSectionDisplayNames() - Use Supabase only</h4>
+        <pre>
+// REPLACE THIS:
+function getSectionDisplayNames() {
+    const savedOrder = localStorage.getItem('sectionOrder');
+    if (savedOrder) {
+        const sections = JSON.parse(savedOrder);
+        const names = {};
+        sections.forEach(section => {
+            names[section.id] = section.name;
+        });
+        return names;
+    }
+    return {};
+}
+
+// WITH THIS:
+async function getSectionDisplayNames() {
+    try {
+        if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+            const sections = await hubDatabase.getAllSections();
+            const names = {};
+            sections.forEach(section => {
+                names[section.section_id || section.id] = section.name;
+            });
+            return names;
+        }
+    } catch (error) {
+        console.error('Error loading section names from database:', error);
+    }
+    return {};
+}
+        </pre>
+        
+        <h4>4. Remove localStorage initialization</h4>
+        <pre>
+// REMOVE THIS ENTIRE BLOCK:
+if (!localStorage.getItem('sectionOrder')) {
+    const initialSections = [
+        { id: 'example', name: 'Example', icon: 'fas fa-th-large', visible: true, order: 1, intro: 'Your first example section. Add more from the admin panel.' }
+    ];
+    localStorage.setItem('sectionOrder', JSON.stringify(initialSections));
+}
+
+// REPLACE WITH:
+// NO localStorage initialization - use Supabase only
+        </pre>
+        
+        <h4>5. Remove syncSectionOrder() function</h4>
+        <pre>
+// REMOVE THIS ENTIRE FUNCTION:
+function syncSectionOrder() {
+    const savedOrder = localStorage.getItem('sectionOrder');
+    if (savedOrder) {
+        sectionOrder = JSON.parse(savedOrder);
+        console.log('Synced sectionOrder with localStorage:', sectionOrder);
+    }
+}
+
+// REPLACE WITH:
+// NO localStorage sync - use Supabase only
+        </pre>
+    </div>
+    
+    <div class="fix-section">
+        <h3>Key Changes Made</h3>
+        <ul>
+            <li>✅ Removed localStorage fallback in updateMainHubSections()</li>
+            <li>✅ Made getAllAvailableSections() async and use Supabase</li>
+            <li>✅ Made getSectionDisplayNames() async and use Supabase</li>
+            <li>✅ Removed localStorage initialization</li>
+            <li>✅ Removed syncSectionOrder() function</li>
+            <li>✅ Added race condition protection</li>
+        </ul>
+    </div>
+    
+    <div class="fix-section">
+        <h3>Testing Steps</h3>
+        <ol>
+            <li>Apply these changes to your index.html</li>
+            <li>Deploy to Vercel</li>
+            <li>Check console logs for database loading</li>
+            <li>Verify all sections load from Supabase</li>
+            <li>Confirm no localStorage fallbacks are used</li>
+        </ol>
+    </div>
+    
+    <div class="fix-section">
+        <h3>Expected Console Output</h3>
+        <pre>
+=== UPDATE MAIN HUB SECTIONS (REBUILD) ===
+Loading sections from Supabase database...
+Loaded sections from database: [array of sections]
+User has admin/all access, showing all sections: X
+=== UPDATE MAIN HUB SECTIONS COMPLETE ===
+        </pre>
+    </div>
+</body>
+</html>
