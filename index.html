@@ -4202,7 +4202,7 @@ Permissions:
                 console.error('Error loading sections from database:', error);
             }
             
-            // NO FALLBACK - Use Supabase only
+            // Show error if database fails but still render something
             if (!databaseLoaded || visibleSections.length === 0) {
                 console.error('CRITICAL: Database failed to load sections. System requires Supabase database.');
                 console.error('Please check:');
@@ -4210,7 +4210,22 @@ Permissions:
                 console.error('2. Database has sections');
                 console.error('3. User permissions are set');
                 console.error('4. RLS policies allow access');
-                return; // Don't render anything if database fails
+                
+                // Show error message instead of blank page
+                hubGrid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; color: #721c24;">
+                        <h3>⚠️ Database Connection Error</h3>
+                        <p>Unable to load sections from database. Please check:</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>Supabase connection is working</li>
+                            <li>Database has sections</li>
+                            <li>User permissions are set</li>
+                            <li>RLS policies allow access</li>
+                        </ul>
+                        <p><a href="debug-database-connection.html" target="_blank">Click here to debug database connection</a></p>
+                    </div>
+                `;
+                return;
             }
             
             if (visibleSections.length === 0) {
