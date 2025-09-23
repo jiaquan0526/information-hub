@@ -4122,21 +4122,32 @@ Permissions:
         }
 
         let isUpdatingSections = false;
+        let lastUpdateTime = 0;
         
         async function updateMainHubSections() {
+            const now = Date.now();
             if (isUpdatingSections) {
                 console.log('updateMainHubSections already running, skipping...');
                 return;
             }
             
+            // Prevent too frequent updates (debounce)
+            if (now - lastUpdateTime < 1000) {
+                console.log('updateMainHubSections called too frequently, skipping...');
+                return;
+            }
+            
             isUpdatingSections = true;
+            lastUpdateTime = now;
             console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) {
                 isUpdatingSections = false;
                 return;
             }
-            hubGrid.innerHTML = '';
+            
+            // Don't clear the grid immediately - wait for new content
+            const originalContent = hubGrid.innerHTML;
             // Always re-read manifest to reflect background-pic folder changes
             try { await ensureBackgroundImagesLoaded(true); } catch (_) {}
             
@@ -4254,6 +4265,9 @@ Permissions:
             // Normalize all sections
             visibleSections = visibleSections.map(normalizeSection);
 
+            // Build new content first
+            let newContent = '';
+            
             // Pre-assign a pool of images large enough for all sections, allowing duplicates when needed
             try {
                 if (backgroundsDisabled()) {
@@ -4350,7 +4364,7 @@ Permissions:
                     </div>
                     <div class="card-stats" id="${section.id}-stats">${statsHTML}</div>
                 </div>`;
-                    hubGrid.insertAdjacentHTML('beforeend', cardHTML);
+                    newContent += cardHTML;
                 } catch (e) {
                     console.warn('Card build failed for section', section && section.id, e);
                     // Fallback: render the classic 3 counters to avoid blank cards
@@ -4369,10 +4383,14 @@ Permissions:
                         <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
                     </div>
                 </div>`;
-                    hubGrid.insertAdjacentHTML('beforeend', fallbackHTML);
+                    newContent += fallbackHTML;
                 }
                 // Background will be scheduled lazily
             }
+            
+            // Replace grid content all at once to prevent flashing
+            hubGrid.innerHTML = newContent;
+            
             // Stats for currently built sections
             updateSectionStats();
             // Initialize lazy loading for backgrounds (skip when disabled)
