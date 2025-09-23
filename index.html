@@ -19,15 +19,13 @@
     <link rel="preload" href="hub-script.js" as="script">
     
     <script>
-    // Default-disable heavy backgrounds on GitHub Pages for faster loads; user can re-enable via toggle
+    // Default-disable heavy backgrounds for better performance; user can re-enable via toggle
     try {
         (function(){
-            var host = String(location.hostname||'').toLowerCase();
-            if (host.endsWith('.github.io')) {
-                var hasPref = localStorage.getItem('disableBackgrounds');
-                if (hasPref === null || hasPref === undefined) {
-                    localStorage.setItem('disableBackgrounds','1');
-                }
+            // Default to disabled backgrounds for all users for better performance
+            var hasPref = localStorage.getItem('disableBackgrounds');
+            if (hasPref === null || hasPref === undefined) {
+                localStorage.setItem('disableBackgrounds','1');
             }
         })();
     } catch (_) {}
@@ -426,6 +424,8 @@
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                 // Rebuild hub cards dynamically from configuration
                 try { updateMainHubSections(); } catch (e) { console.warn('updateMainHubSections error', e); }
+                // Update background toggle button to show correct state
+                try { updateBackgroundToggleButton(); } catch (e) { console.warn('updateBackgroundToggleButton error', e); }
                 
                 // Check if this is a fresh login and force update
                 const freshLogin = localStorage.getItem('freshLogin');
@@ -4202,30 +4202,33 @@ Permissions:
                 console.error('Error loading sections from database:', error);
             }
             
-            // Show error if database fails but still render something
+            // Emergency fallback if database fails - show basic sections
             if (!databaseLoaded || visibleSections.length === 0) {
-                console.error('CRITICAL: Database failed to load sections. System requires Supabase database.');
+                console.error('CRITICAL: Database failed to load sections. Using emergency fallback.');
                 console.error('Please check:');
                 console.error('1. Supabase connection');
                 console.error('2. Database has sections');
                 console.error('3. User permissions are set');
                 console.error('4. RLS policies allow access');
                 
-                // Show error message instead of blank page
-                hubGrid.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; color: #721c24;">
-                        <h3>⚠️ Database Connection Error</h3>
-                        <p>Unable to load sections from database. Please check:</p>
-                        <ul style="text-align: left; display: inline-block;">
-                            <li>Supabase connection is working</li>
-                            <li>Database has sections</li>
-                            <li>User permissions are set</li>
-                            <li>RLS policies allow access</li>
-                        </ul>
-                        <p><a href="debug-database-connection.html" target="_blank">Click here to debug database connection</a></p>
-                    </div>
-                `;
-                return;
+                // Emergency fallback - show basic sections
+                visibleSections = [
+                    { id: 'example', name: 'Example Section', description: 'Database connection failed - using fallback', icon: 'fas fa-exclamation-triangle', visible: true, order: 1 },
+                    { id: 'debug', name: 'Debug Database', description: 'Click to debug database connection', icon: 'fas fa-bug', visible: true, order: 2 }
+                ];
+                console.log('Using emergency fallback sections:', visibleSections);
+                
+                // Add debug info to the page
+                setTimeout(() => {
+                    const debugInfo = document.createElement('div');
+                    debugInfo.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24; font-size: 12px; z-index: 9999; max-width: 300px;';
+                    debugInfo.innerHTML = `
+                        <strong>⚠️ Database Error</strong><br>
+                        Database connection failed. Using fallback sections.<br>
+                        <a href="debug-database-connection.html" target="_blank" style="color: #721c24;">Debug Database</a>
+                    `;
+                    document.body.appendChild(debugInfo);
+                }, 1000);
             }
             
             if (visibleSections.length === 0) {
@@ -4333,13 +4336,16 @@ Permissions:
                         return `<span>${iconHtml} <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
                     }).join(' ');
 
+                    // Special handling for debug section
+                    const onClickHandler = section.id === 'debug' ? 'window.open("debug-database-connection.html", "_blank")' : `navigateToSection('${section.id}')`;
+                    
                     const cardHTML = `
-                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
+                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="${onClickHandler}">
                     <div class="card-header">
                         <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                         <div class="card-title">
                             <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
-                            <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                            <p class="card-intro">${escapeHtml(truncate(section.intro || section.description || '', 120))}</p>
                         </div>
                     </div>
                     <div class="card-stats" id="${section.id}-stats">${statsHTML}</div>
