@@ -29,6 +29,23 @@
             }
         })();
     } catch (_) {}
+    
+    // IMMEDIATE TEST - Show something on page load
+    window.addEventListener('load', function() {
+        console.log('Page loaded, checking for hub-grid...');
+        setTimeout(function() {
+            const hubGrid = document.querySelector('.hub-grid');
+            if (hubGrid) {
+                console.log('hub-grid found on page load');
+                if (hubGrid.innerHTML.trim() === '') {
+                    console.log('hub-grid is empty, showing emergency content');
+                    hubGrid.innerHTML = '<div style="text-align: center; padding: 40px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; color: #155724;"><h3>✅ System Loading</h3><p>Please wait while sections load...</p></div>';
+                }
+            } else {
+                console.error('hub-grid not found on page load!');
+            }
+        }, 2000);
+    });
     </script>
 
 </head>
@@ -423,7 +440,18 @@
                 // Try to load background image manifest (optional)
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                 // Rebuild hub cards dynamically from configuration
-                try { updateMainHubSections(); } catch (e) { console.warn('updateMainHubSections error', e); }
+                console.log('About to call updateMainHubSections...');
+                try { 
+                    updateMainHubSections(); 
+                    console.log('updateMainHubSections called successfully');
+                } catch (e) { 
+                    console.error('updateMainHubSections error', e);
+                    // EMERGENCY: Show something if everything fails
+                    const hubGrid = document.querySelector('.hub-grid');
+                    if (hubGrid) {
+                        hubGrid.innerHTML = '<div style="text-align: center; padding: 40px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; color: #721c24;"><h3>⚠️ System Error</h3><p>Unable to load sections. Please check console for details.</p></div>';
+                    }
+                }
                 // Update background toggle button to show correct state
                 try { updateBackgroundToggleButton(); } catch (e) { console.warn('updateBackgroundToggleButton error', e); }
                 
@@ -4125,6 +4153,7 @@ Permissions:
         let lastUpdateTime = 0;
         
         async function updateMainHubSections() {
+            console.log('=== updateMainHubSections CALLED ===');
             const now = Date.now();
             if (isUpdatingSections) {
                 console.log('updateMainHubSections already running, skipping...');
@@ -4142,12 +4171,12 @@ Permissions:
             console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) {
+                console.error('hubGrid not found!');
                 isUpdatingSections = false;
                 return;
             }
             
-            // Don't clear the grid immediately - wait for new content
-            const originalContent = hubGrid.innerHTML;
+            console.log('hubGrid found, proceeding with section loading...');
             // Always re-read manifest to reflect background-pic folder changes
             try { await ensureBackgroundImagesLoaded(true); } catch (_) {}
             
@@ -4213,7 +4242,7 @@ Permissions:
                 console.error('Error loading sections from database:', error);
             }
             
-            // Emergency fallback if database fails - show basic sections
+            // ALWAYS show fallback sections - never leave page blank
             if (!databaseLoaded || visibleSections.length === 0) {
                 console.error('CRITICAL: Database failed to load sections. Using emergency fallback.');
                 console.error('Please check:');
@@ -4225,26 +4254,28 @@ Permissions:
                 // Emergency fallback - show basic sections
                 visibleSections = [
                     { id: 'example', name: 'Example Section', description: 'Database connection failed - using fallback', icon: 'fas fa-exclamation-triangle', visible: true, order: 1 },
-                    { id: 'debug', name: 'Debug Database', description: 'Click to debug database connection', icon: 'fas fa-bug', visible: true, order: 2 }
+                    { id: 'debug', name: 'Debug Database', description: 'Click to debug database connection', icon: 'fas fa-bug', visible: true, order: 2 },
+                    { id: 'test', name: 'Test Section', description: 'This is a test section to verify the system is working', icon: 'fas fa-check-circle', visible: true, order: 3 }
                 ];
                 console.log('Using emergency fallback sections:', visibleSections);
                 
-                // Add debug info to the page
-                setTimeout(() => {
-                    const debugInfo = document.createElement('div');
-                    debugInfo.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24; font-size: 12px; z-index: 9999; max-width: 300px;';
-                    debugInfo.innerHTML = `
-                        <strong>⚠️ Database Error</strong><br>
-                        Database connection failed. Using fallback sections.<br>
-                        <a href="debug-database-connection.html" target="_blank" style="color: #721c24;">Debug Database</a>
-                    `;
-                    document.body.appendChild(debugInfo);
-                }, 1000);
+                // Add debug info to the page immediately
+                const debugInfo = document.createElement('div');
+                debugInfo.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24; font-size: 12px; z-index: 9999; max-width: 300px;';
+                debugInfo.innerHTML = `
+                    <strong>⚠️ Database Error</strong><br>
+                    Database connection failed. Using fallback sections.<br>
+                    <a href="debug-database-connection.html" target="_blank" style="color: #721c24;">Debug Database</a>
+                `;
+                document.body.appendChild(debugInfo);
             }
             
             if (visibleSections.length === 0) {
-                console.warn('No visible sections configured.');
-                return;
+                console.warn('No visible sections configured - using emergency fallback');
+                // EMERGENCY FALLBACK - ALWAYS show something
+                visibleSections = [
+                    { id: 'emergency', name: 'Emergency Fallback', description: 'System is working but database failed', icon: 'fas fa-exclamation-triangle', visible: true, order: 1 }
+                ];
             }
             const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
             const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
