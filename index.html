@@ -2065,7 +2065,7 @@ Permissions:
             `).join('');
         };
         
-        window.editUser = function(userId) {
+        window.editUser = async function(userId) {
             console.log('Editing user:', userId);
             
             // Get current user session
@@ -2077,8 +2077,22 @@ Permissions:
                 return;
             }
             
-            // Get users from localStorage
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            // Load users from Supabase
+            let users = [];
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                    console.log('Loaded users for editing from Supabase:', users);
+                } else {
+                    alert('Database not ready. Please try again.');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error loading users for editing:', error);
+                alert('Failed to load users: ' + error.message);
+                return;
+            }
+            
             const user = users.find(u => u.id === userId);
             
             if (!user) {
@@ -2097,7 +2111,7 @@ Permissions:
         };
         
         // Show edit user modal
-        window.showEditUserModal = function(user) {
+        window.showEditUserModal = async function(user) {
             // Get current user session
             const session = localStorage.getItem('hubSession');
             const currentUser = session ? JSON.parse(session) : null;
@@ -2155,20 +2169,8 @@ Permissions:
                             </div>
                             <div class="section-permissions-container">
                                 <h3>Section Access Permissions</h3>
-                                <div class="section-checkboxes">
-                                    ${getAssignableSectionsForCurrentUser().map(section => {
-                                        const sectionNames = getSectionDisplayNames();
-                                        const hasAccess = user.permissions && user.permissions.sections && user.permissions.sections.includes(section);
-                                        return `
-                                            <label class="section-checkbox">
-                                                <input type="checkbox" 
-                                                       value="${section}" 
-                                                       ${hasAccess ? 'checked' : ''}
-                                                       id="editSection-${section}">
-                                                <span>${sectionNames[section] || section}</span>
-                                            </label>
-                                        `;
-                                    }).join('')}
+                                <div class="section-checkboxes" id="editUserSectionCheckboxes">
+                                    <!-- Sections will be loaded here -->
                                 </div>
                             </div>
                         </div>
@@ -2182,6 +2184,30 @@ Permissions:
             
             // Add modal to page
             document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // Load sections for the modal
+            try {
+                const sections = await getAssignableSectionsForCurrentUser();
+                const sectionNames = await getSectionDisplayNames();
+                const sectionCheckboxes = document.getElementById('editUserSectionCheckboxes');
+                
+                if (sectionCheckboxes) {
+                    sectionCheckboxes.innerHTML = sections.map(section => {
+                        const hasAccess = user.permissions && user.permissions.sections && user.permissions.sections.includes(section);
+                        return `
+                            <label class="section-checkbox">
+                                <input type="checkbox" 
+                                       value="${section}" 
+                                       ${hasAccess ? 'checked' : ''}
+                                       id="editSection-${section}">
+                                <span>${sectionNames[section] || section}</span>
+                            </label>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Error loading sections for edit modal:', error);
+            }
         };
         
         // Save user changes
@@ -2205,15 +2231,30 @@ Permissions:
             
             // Get selected sections
             const selectedSections = [];
-            getAssignableSectionsForCurrentUser().forEach(section => {
+            const assignableSections = await getAssignableSectionsForCurrentUser();
+            assignableSections.forEach(section => {
                 const checkbox = document.getElementById(`editSection-${section}`);
                 if (checkbox && checkbox.checked) {
                     selectedSections.push(section);
                 }
             });
             
-            // Get users from localStorage
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            // Load users from Supabase
+            let users = [];
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                    console.log('Loaded users for editing from Supabase:', users);
+                } else {
+                    alert('Database not ready. Please try again.');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error loading users for editing:', error);
+                alert('Failed to load users: ' + error.message);
+                return;
+            }
+            
             const userIndex = users.findIndex(u => u.id === userId);
             
             if (userIndex === -1) {
@@ -2250,17 +2291,23 @@ Permissions:
             }
             users[userIndex].permissions.sections = selectedSections;
             
-            // Save updated users
-            // Mandatory GitHub sync first
-            if (window.githubData && typeof githubData.upsertUser === 'function') {
-                await githubData.upsertUser(users[userIndex]);
-            } else {
-                alert('GitHub sync unavailable – cannot save.');
+            // Save updated user to Supabase
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    await hubDatabase.updateUser(users[userIndex]);
+                    console.log('User updated in Supabase:', users[userIndex]);
+                    
+                    // Update local storage for consistency
+                    localStorage.setItem('hubUsers', JSON.stringify(users));
+                } else {
+                    alert('Database not ready. Please try again.');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error updating user in Supabase:', error);
+                alert('Failed to save user: ' + error.message);
                 return;
             }
-            // Mirror to local/DB
-            localStorage.setItem('hubUsers', JSON.stringify(users));
-            try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){ }
             console.log('User updated in localStorage:', users[userIndex]);
             
             // Update current session if it's the same user
@@ -2893,6 +2940,7 @@ Permissions:
                     await hubDatabase.deleteSection(sectionId);
                     console.log('Section deleted from Supabase:', sectionId);
                     
+                    // Remove from local sectionOrder array
                     const idx = sectionOrder.findIndex(s => s.id === sectionId);
                     if (idx !== -1) {
                         sectionOrder.splice(idx, 1);
@@ -2900,11 +2948,20 @@ Permissions:
                         localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
                     }
                     
-                    const card = document.querySelector(`[onclick="navigateToSection('${sectionId}')"]`);
-                    if (card && card.parentElement) card.parentElement.removeChild(card);
-                    
+                    // Refresh the admin sections list
                     renderSectionsList();
-                    updateMainHubSections();
+                    
+                    // Force reload sections from Supabase and update hub page
+                    console.log('Reloading sections after deletion...');
+                    await loadSectionsList();
+                    
+                    // Clear the debounce flag to force update
+                    isUpdatingSections = false;
+                    lastUpdateTime = 0;
+                    
+                    // Update the hub page
+                    await updateMainHubSections();
+                    
                     alert('Section deleted successfully!');
                 } else {
                     alert('Database not ready. Please try again.');
