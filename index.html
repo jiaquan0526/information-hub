@@ -477,8 +477,26 @@
                     console.error('hub-grid not found!');
                 }
                 
-                // Complex version disabled for now - using simple approach
-                console.log('Using simple approach - complex version disabled');
+                // Try to load database sections after a delay
+                setTimeout(() => {
+                    console.log('Attempting to load database sections...');
+                    if (window.hubDatabase && window.hubDatabaseReady) {
+                        console.log('Database is ready, loading sections...');
+                        try { 
+                            updateMainHubSections(); 
+                            console.log('updateMainHubSections called');
+                        } catch (e) { 
+                            console.error('updateMainHubSections error', e);
+                        }
+                    } else {
+                        console.log('Database not ready yet, keeping simple sections');
+                        // Add a status indicator
+                        const statusDiv = document.createElement('div');
+                        statusDiv.style.cssText = 'position: fixed; bottom: 10px; right: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; color: #856404; font-size: 12px; z-index: 9999;';
+                        statusDiv.innerHTML = 'Database loading...';
+                        document.body.appendChild(statusDiv);
+                    }
+                }, 5000);
                 // Update background toggle button to show correct state
                 try { updateBackgroundToggleButton(); } catch (e) { console.warn('updateBackgroundToggleButton error', e); }
                 
@@ -4182,9 +4200,13 @@ Permissions:
         async function updateMainHubSections() {
             console.log('=== updateMainHubSections CALLED ===');
             
-            // TEMPORARILY DISABLED - Use simple approach instead
-            console.log('updateMainHubSections temporarily disabled - using simple approach');
-            return;
+            // Check if hubDatabase is available
+            if (!window.hubDatabase || !window.hubDatabaseReady) {
+                console.log('hubDatabase not ready, keeping simple sections');
+                return;
+            }
+            
+            console.log('hubDatabase is ready, attempting to load sections...');
             
             const now = Date.now();
             if (isUpdatingSections) {
