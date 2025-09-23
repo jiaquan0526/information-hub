@@ -20,7 +20,7 @@ class SectionManager {
         return null;
     }
 
-    init() {
+    async init() {
         if (!this.validateSession()) {
             return;
         }
@@ -28,7 +28,7 @@ class SectionManager {
         // Section session start
         this.sectionSessionStartMs = Date.now();
         // IDs are handled by Supabase; no local migrations
-        this.loadSectionData();
+        await this.loadSectionData();
         this.bindEvents();
         this.renderDynamicUI();
         // Asynchronously refresh section config from Supabase so all users share the same tabs
@@ -160,16 +160,21 @@ class SectionManager {
         }
     }
 
-    loadSectionData() {
-        // Load section information: prefer dynamic config from sectionOrder
+    async loadSectionData() {
+        // Load section information from Supabase database
         let sectionConfig = null;
+        
         try {
-            const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                const parsed = JSON.parse(savedOrder);
-                sectionConfig = parsed.find(s => s.id === this.currentSection) || null;
+            if (window.hubDatabase && window.hubDatabaseReady) {
+                const sections = await hubDatabase.getAllSections();
+                sectionConfig = sections.find(s => s.id === this.currentSection) || null;
+                console.log('Loaded section config from Supabase:', sectionConfig);
+            } else {
+                console.log('Database not ready, using fallback config');
             }
-        } catch (_) {}
+        } catch (error) {
+            console.error('Error loading section data from Supabase:', error);
+        }
 
         if (!sectionConfig) {
             // No named defaults; show section id and a generic icon
@@ -1414,6 +1419,7 @@ class SectionManager {
 }
 
 // Initialize section manager when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new SectionManager();
+document.addEventListener('DOMContentLoaded', async () => {
+    const sectionManager = new SectionManager();
+    await sectionManager.init();
 });

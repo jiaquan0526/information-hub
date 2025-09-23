@@ -2783,7 +2783,7 @@ Permissions:
                 iconSearch.addEventListener('input', () => renderIconGrid(iconSearch.value));
             }
 
-            form.addEventListener('submit', (e) => {
+            form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const idInput = modal.querySelector('#secId').value.trim().toLowerCase().replace(/\s+/g, '-');
                 const nameInput = modal.querySelector('#secName').value.trim();
@@ -2816,13 +2816,24 @@ Permissions:
             };
             sectionOrder.push(newSection);
                 }
-            // Mandatory GitHub sync for create/update section
+            // Save section to Supabase database
             const target = isEdit ? sectionOrder.find(s => s.id === section.id) : sectionOrder.find(s => s.id === idInput);
-            if (window.githubData && typeof githubData.upsertSection === 'function') {
-                githubData.upsertSection(target).then(() => {
+            
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    if (isEdit) {
+                        await hubDatabase.updateSection(target);
+                        console.log('Section updated in Supabase:', target);
+                    } else {
+                        await hubDatabase.createSection(target);
+                        console.log('Section created in Supabase:', target);
+                    }
+                    
+                    // Update local sectionOrder array
                     localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
                     renderSectionsList();
                     updateMainHubSections();
+                    
                     try {
                         const sessionRaw = localStorage.getItem('hubSession');
                         if (sessionRaw) {
@@ -2832,12 +2843,15 @@ Permissions:
                             }
                         }
                     } catch (e) { console.warn('Could not refresh hub cards access', e); }
+                    
                     modal.remove();
-                }).catch(() => {
-                    alert('GitHub sync failed – changes not saved.');
-                });
-            } else {
-                alert('GitHub sync unavailable – cannot save section.');
+                    alert('Section saved successfully!');
+                } else {
+                    alert('Database not ready. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error saving section to Supabase:', error);
+                alert('Failed to save section: ' + error.message);
             }
             });
         }
@@ -2848,25 +2862,33 @@ Permissions:
             openSectionModal('edit', section);
         };
         
-        window.deleteSection = function(sectionId) {
+        window.deleteSection = async function(sectionId) {
             if (!confirm('Permanently remove this section from the hub?')) return;
-            // Mandatory GitHub delete first
-            if (window.githubData && typeof githubData.deleteSectionById === 'function') {
-                githubData.deleteSectionById(sectionId).then(() => {
+            
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    await hubDatabase.deleteSection(sectionId);
+                    console.log('Section deleted from Supabase:', sectionId);
+                    
                     const idx = sectionOrder.findIndex(s => s.id === sectionId);
-                    if (idx === -1) return;
-                    sectionOrder.splice(idx, 1);
-                    sectionOrder.forEach((s, i) => { s.order = i + 1; });
-                    localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                    if (idx !== -1) {
+                        sectionOrder.splice(idx, 1);
+                        sectionOrder.forEach((s, i) => { s.order = i + 1; });
+                        localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                    }
+                    
                     const card = document.querySelector(`[onclick="navigateToSection('${sectionId}')"]`);
                     if (card && card.parentElement) card.parentElement.removeChild(card);
+                    
                     renderSectionsList();
                     updateMainHubSections();
-                }).catch(() => {
-                    alert('GitHub sync failed – section not deleted.');
-                });
-            } else {
-                alert('GitHub sync unavailable – cannot delete section.');
+                    alert('Section deleted successfully!');
+                } else {
+                    alert('Database not ready. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error deleting section from Supabase:', error);
+                alert('Failed to delete section: ' + error.message);
             }
         };
         
@@ -2874,20 +2896,26 @@ Permissions:
             openSectionModal('add');
         };
         
-        window.saveSectionOrder = function() {
+        window.saveSectionOrder = async function() {
             updateSectionOrder();
-            // Mandatory GitHub reorder
-            if (window.githubData && typeof githubData.setSectionsOrder === 'function') {
-                const orderList = sectionOrder.map(s => ({ id: s.id, order: s.order || 0 }));
-                githubData.setSectionsOrder(orderList).then(() => {
+            
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    // Update each section's order in Supabase
+                    for (const section of sectionOrder) {
+                        await hubDatabase.updateSection(section);
+                    }
+                    console.log('Section order saved to Supabase');
+                    
                     localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
                     updateMainHubSections();
                     alert('Section order saved successfully!');
-                }).catch(() => {
-                    alert('GitHub sync failed – order not saved.');
-                });
-            } else {
-                alert('GitHub sync unavailable – cannot save order.');
+                } else {
+                    alert('Database not ready. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error saving section order to Supabase:', error);
+                alert('Failed to save section order: ' + error.message);
             }
         };
         
