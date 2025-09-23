@@ -66,6 +66,14 @@ class InformationHub {
                 playbooks: [],
                 boxLinks: [],
                 dashboards: []
+            },
+            'test-section': {
+                name: 'Test Section',
+                icon: 'fas fa-test',
+                color: '#007bff',
+                playbooks: [],
+                boxLinks: [],
+                dashboards: []
             }
         };
         
@@ -73,9 +81,9 @@ class InformationHub {
         this.init();
     }
 
-    init() {
+    async init() {
         this.checkAuthentication();
-        this.loadData();
+        await this.loadData();
         this.bindEvents();
         // Start blank by default; no sample data seeding
         this.updateUserInterface();
@@ -152,13 +160,14 @@ class InformationHub {
         const hubCards = document.querySelectorAll('.hub-card');
         hubCards.forEach(card => {
             const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-            const allowed = (this.currentUser && this.currentUser.permissions && Array.isArray(this.currentUser.permissions.sections)) ? this.currentUser.permissions.sections : [];
-            if (!allowed.includes(sectionId)) {
-                card.classList.add('restricted');
-                card.onclick = () => {
-                    this.showMessage('You do not have access to this section', 'error');
-                };
-            }
+            // For now, allow access to all sections - remove restrictions
+            // const allowed = (this.currentUser && this.currentUser.permissions && Array.isArray(this.currentUser.permissions.sections)) ? this.currentUser.permissions.sections : [];
+            // if (!allowed.includes(sectionId)) {
+            //     card.classList.add('restricted');
+            //     card.onclick = () => {
+            //         this.showMessage('You do not have access to this section', 'error');
+            //     };
+            // }
         });
     }
 
@@ -518,7 +527,31 @@ class InformationHub {
         localStorage.setItem('informationHub', JSON.stringify(this.sections));
     }
 
-    loadData() {
+    async loadData() {
+        // Load sections from Supabase
+        try {
+            if (window.hubDatabase && window.hubDatabaseReady) {
+                const sections = await window.hubDatabase.getAllSections();
+                if (sections && sections.length > 0) {
+                    // Clear existing sections and load from Supabase
+                    this.sections = {};
+                    sections.forEach(section => {
+                        this.sections[section.section_id] = {
+                            name: section.name,
+                            icon: section.icon,
+                            color: section.color,
+                            playbooks: [],
+                            boxLinks: [],
+                            dashboards: []
+                        };
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load sections from Supabase:', error);
+        }
+
+        // Fallback to localStorage if Supabase fails
         const stored = localStorage.getItem('informationHub');
         if (stored) {
             const loadedSections = JSON.parse(stored);
