@@ -371,7 +371,7 @@
     </div>
 
     <!-- Defer scripts to improve First Paint; XLSX will be loaded on demand -->
-    <!-- <script src="database.js" defer></script> -->
+    <script src="database.js" defer></script>
     <!-- <script src="githubData.js" defer></script> -->
     <script src="excel-export.js" defer></script>
     <script src="auth-script.js" defer></script>
@@ -4148,33 +4148,71 @@ Permissions:
             hubGrid.innerHTML = '';
             // Always re-read manifest to reflect background-pic folder changes
             try { await ensureBackgroundImagesLoaded(true); } catch (_) {}
-            const sectionOrderRaw = localStorage.getItem('sectionOrder');
-            let sectionOrder = [];
-            try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
-            // Prefer GitHub sections as source of truth; persist to localStorage for offline use
+            
+            // Load sections from Supabase database
+            let visibleSections = [];
             try {
-                if (window.githubData && typeof githubData.readSections === 'function') {
-                    const remote = await githubData.readSections();
-                    if (remote && Array.isArray(remote.json) && remote.json.length > 0) {
-                        sectionOrder = remote.json.slice();
-                        try { localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder)); } catch(_) {}
-                    }
+                // Wait for database to be ready (with retry)
+                let retries = 0;
+                const maxRetries = 10;
+                while (retries < maxRetries && (!window.hubDatabase || !window.hubDatabaseReady)) {
+                    console.log('Waiting for database to be ready...', retries + 1);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries++;
                 }
-            } catch (_) {}
-            let visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
-            // Filter by user permissions to prevent flashing of admin-only sections
-            try {
-                const sessionRaw = localStorage.getItem('hubSession');
-                if (sessionRaw) {
-                    const user = JSON.parse(sessionRaw);
-                    const role = String(user.role || '').toLowerCase();
-                    const canAll = !!(user.permissions && user.permissions.canEditAllSections);
-                    if (!(role === 'admin' || canAll)) {
-                        const allowed = new Set((user.permissions && user.permissions.sections) || []);
-                        visibleSections = visibleSections.filter(s => allowed.has(s.id));
+                
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+                    console.log('Loading sections from Supabase database...');
+                    const sections = await hubDatabase.getAllSections();
+                    console.log('Loaded sections from database:', sections);
+                    
+                    // Get current user permissions
+                    const sessionRaw = localStorage.getItem('hubSession');
+                    let user = null;
+                    if (sessionRaw) {
+                        try { user = JSON.parse(sessionRaw); } catch (_) {}
                     }
+                    
+                    // Filter sections based on user permissions
+                    if (user) {
+                        const role = String(user.role || '').toLowerCase();
+                        const canAll = !!(user.permissions && user.permissions.canEditAllSections);
+                        const canViewAll = !!(user.permissions && user.permissions.canViewAllSections);
+                        
+                        if (role === 'admin' || canAll || canViewAll) {
+                            // Admin or user with all access - show all sections
+                            visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+                            console.log('User has admin/all access, showing all sections:', visibleSections.length);
+                        } else {
+                            // Regular user - filter by permissions
+                            const allowed = new Set((user.permissions && user.permissions.sections) || []);
+                            visibleSections = sections.filter(s => 
+                                s.visible !== false && allowed.has(s.section_id)
+                            ).sort((a,b) => (a.order||0)-(b.order||0));
+                            console.log('User has limited access, showing sections:', visibleSections.length, 'allowed sections:', Array.from(allowed));
+                        }
+                    } else {
+                        // No user logged in - show all sections (for public access)
+                        visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+                        console.log('No user logged in, showing all sections:', visibleSections.length);
+                    }
+                } else {
+                    console.warn('hubDatabase not available, falling back to localStorage');
+                    // Fallback to localStorage if database not available
+                    const sectionOrderRaw = localStorage.getItem('sectionOrder');
+                    let sectionOrder = [];
+                    try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
+                    visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
                 }
-            } catch (_) {}
+            } catch (error) {
+                console.error('Error loading sections:', error);
+                // Fallback to localStorage
+                const sectionOrderRaw = localStorage.getItem('sectionOrder');
+                let sectionOrder = [];
+                try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
+                visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+            }
+            
             if (visibleSections.length === 0) {
                 console.warn('No visible sections configured.');
                 return;
@@ -4182,6 +4220,21 @@ Permissions:
             const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
             const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
             const truncate = (t, n) => { const s = String(t||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
+            
+            // Normalize section data for rendering (convert database fields to expected format)
+            const normalizeSection = (section) => ({
+                id: section.section_id || section.id,
+                name: section.name,
+                description: section.description,
+                intro: section.description, // Use description as intro
+                icon: section.icon || 'fas fa-th-large',
+                image: section.image,
+                visible: section.visible !== false,
+                order: section.order || 0
+            });
+            
+            // Normalize all sections
+            visibleSections = visibleSections.map(normalizeSection);
 
             // Pre-assign a pool of images large enough for all sections, allowing duplicates when needed
             try {
