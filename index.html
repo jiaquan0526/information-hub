@@ -381,8 +381,9 @@
         // Check authentication before loading the hub
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
+            // Check if user is authenticated via Supabase
+            const { data: { user }, error } = await supabase.auth.getUser();
+            if (error || !user) {
                 window.location.href = 'auth.html';
                 return;
             }
@@ -444,21 +445,11 @@
                 // Update background toggle button to show correct state
                 try { updateBackgroundToggleButton(); } catch (e) { console.warn('updateBackgroundToggleButton error', e); }
                 
-                // Check if this is a fresh login and force update
-                const freshLogin = localStorage.getItem('freshLogin');
-                const lastLoginUser = localStorage.getItem('lastLoginUser');
-            
-                if (freshLogin === 'true') {
-                    console.log('=== FRESH LOGIN DETECTED ===');
-                    console.log('Last login user data:', lastLoginUser ? JSON.parse(lastLoginUser) : 'None');
-                    localStorage.removeItem('freshLogin');
-                    localStorage.removeItem('lastLoginUser');
-                    
-                    // Force update with fresh data
-                    setTimeout(() => {
-                        console.log('Forcing interface update after fresh login...');
-                        updateUserInterface();
-                    }, 100);
+                // Force update with fresh data from Supabase
+                setTimeout(() => {
+                    console.log('Forcing interface update...');
+                    updateUserInterface();
+                }, 100);
                 } else {
                     console.log('Regular page load, updating interface...');
                     // Update user interface based on role
@@ -499,26 +490,23 @@
             } catch (_) {}
         });
         
-        // Also update interface when page becomes visible (for when user comes back from login)
+        // Also update interface when page becomes visible
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                const session = localStorage.getItem('hubSession');
-                if (session) {
-                    console.log('Page became visible, updating user interface...');
-                    updateUserInterface(); try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
-                    try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
-                    try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
-                    try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
-                }
+                console.log('Page became visible, updating user interface...');
+                updateUserInterface(); 
+                try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+                try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+                try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
+                try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
             }
         });
         
-        // Update interface when window gains focus (for when user comes back from login)
+        // Update interface when window gains focus
         window.addEventListener('focus', () => {
-            const session = localStorage.getItem('hubSession');
-            if (session) {
-                console.log('Window gained focus, updating user interface...');
-                updateUserInterface(); try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+            console.log('Window gained focus, updating user interface...');
+            updateUserInterface(); 
+            try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
                 try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
             }
         });
@@ -562,15 +550,8 @@
 
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
-            try {
-                const flag = localStorage.getItem('disableBackgrounds');
-                if (flag === '1' || flag === 'true') return true;
-            } catch (_) {}
-            try {
-                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return true;
-            } catch (_) {}
-            return false;
+            // Default to disabled for better performance
+            return true;
         }
 
         function updateBackgroundToggleButton() {
@@ -582,21 +563,33 @@
 
         window.toggleBackgrounds = function() {
             try {
-                const off = backgroundsDisabled();
-                localStorage.setItem('disableBackgrounds', off ? '0' : '1');
+                // Backgrounds are always disabled for better performance
                 updateBackgroundToggleButton();
                 // Rebuild to apply immediately
                 updateMainHubSections();
             } catch (_) {}
         };
 
-        // Admin: GitHub connect and bootstrap helpers
-        function currentUser() {
-            try { const s = localStorage.getItem('hubSession'); return s ? JSON.parse(s) : null; } catch(_) { return null; }
-        }
-        function isCurrentUserAdmin() {
+        // Admin: Get current user from Supabase
+        async function currentUser() {
             try {
-                const u = currentUser();
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error || !user) return null;
+                
+                // Get full user profile from database
+                const { data: profile, error: profileError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                
+                if (profileError) return null;
+                return profile;
+            } catch(_) { return null; }
+        }
+        async function isCurrentUserAdmin() {
+            try {
+                const u = await currentUser();
                 if (!u) return false;
                 const role = String(u.role || '').toLowerCase();
                 return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers);
@@ -653,14 +646,15 @@
 
         // Function to update section statistics using Supabase as the single source of truth
         async function updateSectionStats() {
-            // Determine which sections are visible in the UI
+            // Get sections from database
             let sections = [];
-            const savedOrder = localStorage.getItem('sectionOrder');
-            if (savedOrder) {
-                try {
-                    const parsed = JSON.parse(savedOrder);
-                    sections = parsed.filter(s => s.visible !== false).map(s => s.id);
-                } catch (_) {}
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    const dbSections = await hubDatabase.getAllSections();
+                    sections = dbSections.filter(s => s.config?.visible !== false).map(s => s.section_id);
+                }
+            } catch (e) {
+                console.warn('Error loading sections for stats:', e);
             }
             if (sections.length === 0) {
                 sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
@@ -730,11 +724,12 @@
         
         
         // Centralized content activity logger
-        window.recordContentActivity = function({ action, section, type, title }) {
+        window.recordContentActivity = async function({ action, section, type, title }) {
             try {
-                const session = localStorage.getItem('hubSession');
-                let user = null; try { user = session ? JSON.parse(session) : null; } catch(_) {}
-                const username = user?.username || 'Unknown';
+                // Get current user from Supabase
+                const { data: { user }, error } = await supabase.auth.getUser();
+                const username = user?.user_metadata?.username || user?.email || 'Unknown';
+                
                 const entry = {
                     username,
                     action: action || 'updated',
@@ -743,11 +738,12 @@
                     title: title || '',
                     timestamp: new Date().toISOString()
                 };
-                const list = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-                list.unshift(entry);
-                // Keep at most 1000 entries
-                if (list.length > 1000) list.length = 1000;
-                localStorage.setItem('hubActivities', JSON.stringify(list));
+                
+                // Save to database
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    await hubDatabase.addActivity(entry);
+                }
+                
                 try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
             } catch(_) {}
         };
@@ -986,12 +982,16 @@
         };
         
         // Simple logout function
-        window.logout = function() {
+        window.logout = async function() {
             console.log('Logout called');
             try {
-                // Clear session
-                localStorage.removeItem('hubSession');
-                console.log('Session cleared');
+                // Sign out from Supabase
+                const { error } = await supabase.auth.signOut();
+                if (error) {
+                    console.error('Error signing out:', error);
+                } else {
+                    console.log('Signed out from Supabase');
+                }
                 
                 // Redirect to login page
                 window.location.href = 'auth.html';
@@ -1117,8 +1117,16 @@
             }
         };
         
-        window.showRecentActivity = function() {
-            const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+        window.showRecentActivity = async function() {
+            let activities = [];
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    activities = await hubDatabase.getActivities();
+                }
+            } catch (e) {
+                console.error('Error loading activities:', e);
+            }
+            
             if (activities.length === 0) {
                 alert('No recent activity found.');
                 return;
@@ -1132,21 +1140,15 @@
             alert(activityText);
         };
         
-        window.openAdminPanel = function() {
+        window.openAdminPanel = async function() {
             try {
             console.log('showAdminPanel called');
-                const sessionRaw = localStorage.getItem('hubSession');
-                let user;
-                try {
-                    user = sessionRaw ? JSON.parse(sessionRaw) : null;
-                } catch (e) {
-                    console.warn('Invalid session JSON, trying authSystem.getCurrentUser');
-                    user = (window.authSystem && typeof authSystem.getCurrentUser === 'function') ? authSystem.getCurrentUser() : null;
+                // Get current user from Supabase
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error || !user) {
+                    alert('Please log in to access admin panel.');
+                    return;
                 }
-                if (!user) {
-                alert('Please log in to access admin panel.');
-                return;
-            }
             console.log('User role:', user.role);
             
             if (user.role !== 'admin' && user.role !== 'manager') {
@@ -1390,29 +1392,41 @@
             };
         }
         
-        window.showUserProfile = function() {
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
+        window.showUserProfile = async function() {
+            // Check if user is authenticated
+            const { data: { user }, error } = await supabase.auth.getUser();
+            if (error || !user) {
                 alert('Please log in to view profile.');
                 return;
             }
             
-            const user = JSON.parse(session);
+            // Get full user profile from database
+            const { data: profile, error: profileError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+            
+            if (profileError || !profile) {
+                alert('Error loading user profile.');
+                return;
+            }
+            
             const profileText = `User Profile:
             
-Username: ${user.username}
-Role: ${user.role}
-Name: ${user.name || 'Not provided'}
-Email: ${user.email || 'Not provided'}
+Username: ${profile.username}
+Role: ${profile.role}
+Name: ${profile.name || 'Not provided'}
+Email: ${profile.email || 'Not provided'}
 
 Accessible Sections:
-${user.permissions.sections.map(s => '• ' + s.replace('-', ' ').toUpperCase()).join('\n')}
+${(profile.permissions?.sections || []).map(s => '• ' + s.replace('-', ' ').toUpperCase()).join('\n')}
 
 Permissions:
-• Manage Users: ${user.permissions.canManageUsers ? 'Yes' : 'No'}
-• Edit All Sections: ${user.permissions.canEditAllSections ? 'Yes' : 'No'}
-• Delete Resources: ${user.permissions.canDeleteResources ? 'Yes' : 'No'}
-• View Audit Log: ${user.permissions.canViewAuditLog ? 'Yes' : 'No'}`;
+• Manage Users: ${profile.permissions?.canManageUsers ? 'Yes' : 'No'}
+• Edit All Sections: ${profile.permissions?.canEditAllSections ? 'Yes' : 'No'}
+• Delete Resources: ${profile.permissions?.canDeleteResources ? 'Yes' : 'No'}
+• View Audit Log: ${profile.permissions?.canViewAuditLog ? 'Yes' : 'No'}`;
             
             alert(profileText);
         };
@@ -1504,11 +1518,23 @@ Permissions:
         };
 
         // Open Add User modal
-        window.openAddUserModal = function() {
+        window.openAddUserModal = async function() {
             try {
-                const session = localStorage.getItem('hubSession');
-                const currentUser = session ? JSON.parse(session) : null;
-                if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) {
+                // Get current user from Supabase
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error || !user) {
+                    alert('Please log in to add users.');
+                    return;
+                }
+                
+                // Get full user profile to check role
+                const { data: profile, error: profileError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                
+                if (profileError || !profile || (profile.role !== 'admin' && profile.role !== 'manager')) {
                     return alert('Only administrators and managers can add users.');
                 }
                 const modal = document.getElementById('addUserModal');
@@ -1609,24 +1635,31 @@ Permissions:
         
         // Function to update user interface based on role
         async function updateUserInterface() {
-            const session = localStorage.getItem('hubSession');
             console.log('=== UPDATE USER INTERFACE CALLED ===');
-            console.log('Session:', session);
-            
-            if (!session) {
-                console.log('No session found');
-                return;
-            }
             
             try {
-                const user = JSON.parse(session);
-                console.log('User from session:', user);
+                // Get current user from Supabase
+                const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+                if (authError || !authUser) {
+                    console.log('No authenticated user found');
+                    return;
+                }
                 
-                // Use session data directly (from Supabase)
-                console.log('Using session user data from Supabase:', user);
+                // Get full user profile from database
+                const { data: user, error: profileError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', authUser.id)
+                    .single();
                 
-                console.log('Final user permissions:', user.permissions);
-                console.log('Final user sections:', user.permissions?.sections);
+                if (profileError || !user) {
+                    console.log('User profile not found in database');
+                    return;
+                }
+                
+                console.log('User from database:', user);
+                console.log('User permissions:', user.permissions);
+                console.log('User sections:', user.permissions?.sections);
                 
                 // Update user info in header
                 const userNameEl = document.getElementById('userName');
@@ -1713,16 +1746,6 @@ Permissions:
             console.log('User permissions:', user.permissions);
             console.log('User sections:', user.permissions?.sections);
             
-            // Get fresh user data
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const freshUser = users.find(u => u.id === user.id);
-            
-            if (freshUser) {
-                console.log('Found fresh user data:', freshUser);
-                console.log('Fresh user sections:', freshUser.permissions?.sections);
-                user = freshUser; // Use fresh data
-            }
-            
             // Determine visible sections from database
             let visibleSections = [];
             try {
@@ -1731,11 +1754,8 @@ Permissions:
                     visibleSections = sections.filter(s => s.config?.visible !== false).map(s => s.section_id);
                     console.log('Loaded visible sections from database:', visibleSections);
                 } else {
-                    // Fallback to localStorage
-                const savedOrder = localStorage.getItem('sectionOrder');
-                if (savedOrder) {
-                    visibleSections = JSON.parse(savedOrder).filter(s => s.visible !== false).map(s => s.id);
-                }
+                    console.error('Database not ready');
+                    return;
                 }
             } catch (e) { 
                 console.warn('Error reading visible sections', e);
@@ -1797,9 +1817,9 @@ Permissions:
             const select = document.getElementById('permissionUserSelect');
             select.innerHTML = '<option value="">Choose a user...</option>';
             
-            // Get current user session
-            const session = localStorage.getItem('hubSession');
-            const currentUser = session ? JSON.parse(session) : null;
+            // Check if user is authenticated
+            const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+            if (error || !currentUser) return;
             
             // Load users from Supabase
             let users = [];
@@ -1986,10 +2006,12 @@ Permissions:
             const usersList = document.getElementById('usersList');
             if (!usersList) return;
             
-            // Get current user session
-            let currentUser = null;
-            try { const session = localStorage.getItem('hubSession'); currentUser = session ? JSON.parse(session) : null; } catch (_) {}
-            if (!currentUser) { usersList.innerHTML = '<div class="empty">Please log in.</div>'; return; }
+            // Check if user is authenticated
+            const { data: { user }, error } = await supabase.auth.getUser();
+            if (error || !user) { 
+                usersList.innerHTML = '<div class="empty">Please log in.</div>'; 
+                return; 
+            }
             
             // Load users from Supabase only
             let users = [];
@@ -3728,12 +3750,15 @@ Permissions:
         window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
             
-            // Get users from localStorage
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const user = users.find(u => u.id === userId);
+            // Get user from database
+            const { data: user, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', userId)
+                .single();
             
-            if (!user) {
-                console.error('User not found:', userId);
+            if (userError || !user) {
+                console.error('User not found in database:', userId, userError);
                 return;
             }
             
@@ -3756,33 +3781,22 @@ Permissions:
             
             // Save updated user to Supabase database
             try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    await hubDatabase.updateUser(user);
-                    console.log('User section access updated in Supabase:', user);
-                    
-                    // Update local storage for consistency
-            localStorage.setItem('hubUsers', JSON.stringify(users));
-            console.log('Updated user in localStorage:', user);
-            
-            // Update current session if it's the same user
-            const session = localStorage.getItem('hubSession');
-            if (session) {
-                const sessionData = JSON.parse(session);
-                if (sessionData.userId === userId) {
-                    sessionData.permissions = user.permissions;
-                    localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                    console.log('Updated current session:', sessionData);
-                    
-                    // Update UI for current user
-                            await updateUserInterface();
+                const { error: updateError } = await supabase
+                    .from('users')
+                    .update({ permissions: user.permissions })
+                    .eq('id', userId);
+                
+                if (updateError) {
+                    throw updateError;
                 }
-            }
-            
-            // Show success message
-                    alert(`Section access updated for ${user.username}. Changes saved to database.`);
-                } else {
-                    alert('Database not ready. Please try again.');
-                }
+                
+                console.log('User section access updated in Supabase:', user);
+                
+                // Update UI for current user
+                await updateUserInterface();
+                
+                // Show success message
+                alert(`Section access updated for ${user.username}. Changes saved to database.`);
             } catch (error) {
                 console.error('Error updating user section access in Supabase:', error);
                 alert('Failed to save section access: ' + error.message);
