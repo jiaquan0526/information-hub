@@ -413,8 +413,6 @@
                     mainContent.style.display = 'block';
                     console.log('Main content shown');
                 }
-                // Ensure admin GitHub connect button is rendered immediately
-                try { renderGithubConnectButton(); } catch(_) {}
                 
                 // Ensure a minimal initial configuration if none exists
                 try {
@@ -460,13 +458,11 @@
                     setTimeout(() => {
                         console.log('Forcing interface update after fresh login...');
                         updateUserInterface();
-                        try { renderGithubConnectButton(); } catch(_) {}
                     }, 100);
                 } else {
                     console.log('Regular page load, updating interface...');
                     // Update user interface based on role
                     updateUserInterface();
-                    try { renderGithubConnectButton(); } catch(_) {}
                 }
                 
                 // Initialize info bar
@@ -524,7 +520,6 @@
                 console.log('Window gained focus, updating user interface...');
                 updateUserInterface(); try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
                 try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
-                try { renderGithubConnectButton(); } catch(_) {}
             }
         });
 
@@ -607,9 +602,6 @@
                 return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers);
             } catch(_) { return false; }
         }
-        window.connectGitHub = async function() { alert('GitHub features are disabled in Supabase-only mode.'); };
-        async function ensureSectionConfigsFile() { alert('GitHub features are disabled in Supabase-only mode.'); }
-        function renderGithubConnectButton() { try { const b = document.getElementById('ghConnectBtn'); if (b) b.remove(); } catch(_) {} }
         
         // Helper: normalize resource type to buckets we display on cards
         function normalizeResourceType(rawType) {
@@ -1790,14 +1782,28 @@ Permissions:
             loadPermissionUserList();
         };
         
-        window.loadPermissionUserList = function() {
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+        window.loadPermissionUserList = async function() {
             const select = document.getElementById('permissionUserSelect');
             select.innerHTML = '<option value="">Choose a user...</option>';
             
             // Get current user session
             const session = localStorage.getItem('hubSession');
             const currentUser = session ? JSON.parse(session) : null;
+            
+            // Load users from Supabase
+            let users = [];
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                    console.log('Loaded users for permission list from Supabase:', users);
+                } else {
+                    console.log('Database not ready for permission user list');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error loading users for permission list:', error);
+                return;
+            }
             
             if (!currentUser) {
                 console.log('No current user session found');
@@ -1951,34 +1957,22 @@ Permissions:
             try { const session = localStorage.getItem('hubSession'); currentUser = session ? JSON.parse(session) : null; } catch (_) {}
             if (!currentUser) { usersList.innerHTML = '<div class="empty">Please log in.</div>'; return; }
             
-            // Load users from IndexedDB if available, merge with localStorage
-            let dbUsers = [];
-            try { if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.getAllUsers) { dbUsers = await hubDatabase.getAllUsers(); } } catch (_) { dbUsers = []; }
-            let lsUsers = [];
-            try { lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]'); } catch (_) { lsUsers = []; }
-            let ghUsers = [];
+            // Load users from Supabase only
+            let users = [];
             try {
-                if (window.githubData && typeof githubData.readUsers === 'function') {
-                    const resp = await githubData.readUsers();
-                    ghUsers = Array.isArray(resp.json) ? resp.json : [];
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                    console.log('Loaded users from Supabase:', users);
+                } else {
+                    console.log('Database not ready, showing empty list');
+                    usersList.innerHTML = '<div class="empty">Database not ready. Please try again.</div>';
+                    return;
                 }
-            } catch (_) { ghUsers = []; }
-            const byId = new Map();
-            dbUsers.forEach(u => byId.set(u.id, u));
-            lsUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
-            ghUsers.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
-            // Ensure current session user appears at least
-            if (currentUser.userId && !byId.has(currentUser.userId)) {
-                byId.set(currentUser.userId, {
-                    id: currentUser.userId,
-                    username: currentUser.username,
-                    name: currentUser.name || currentUser.username,
-                    email: currentUser.email || '',
-                    role: currentUser.role || 'user',
-                    permissions: currentUser.permissions || { sections: [], editableSections: [] }
-                });
+            } catch (error) {
+                console.error('Error loading users from Supabase:', error);
+                usersList.innerHTML = '<div class="empty">Error loading users. Please try again.</div>';
+                return;
             }
-            let users = Array.from(byId.values());
             
             // Normalize permissions
             const defaults = {
@@ -2509,19 +2503,21 @@ Permissions:
         window.loadSectionsList = async function() {
             console.log('loadSectionsList called');
             try {
-                if (window.githubData && typeof githubData.readSections === 'function') {
-                    const remote = await githubData.readSections();
-                    if (remote && Array.isArray(remote.json)) {
-                        sectionOrder = remote.json.slice();
-                        try { localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder)); } catch(_) {}
-                        renderSectionsList();
-                        return;
-                    }
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    const sections = await hubDatabase.getAllSections();
+                    console.log('Loaded sections from Supabase:', sections);
+                    sectionOrder = sections || [];
+                    renderSectionsList();
+                } else {
+                    console.log('Database not ready');
+                    sectionOrder = [];
+                    renderSectionsList();
                 }
-            } catch(_) {}
-            const savedOrder = localStorage.getItem('sectionOrder');
-            sectionOrder = savedOrder ? JSON.parse(savedOrder) : [];
-            renderSectionsList();
+            } catch (error) {
+                console.error('Error loading sections from Supabase:', error);
+                sectionOrder = [];
+                renderSectionsList();
+            }
         };
         
         function renderSectionsList() {
@@ -3481,7 +3477,7 @@ Permissions:
                             : `<i class="${iconVal ? normalizeIconClass(iconVal) : iconForType(nid)}"></i>`;
                         return `<span>${iconHtml} <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
                     }).join(' ');
-
+                    
                     const cardHTML = `
                 <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
                     <div class="card-header">
@@ -3519,8 +3515,6 @@ Permissions:
         window.loadSectionAssignments = async function() {
             console.log('Loading section assignments...');
             
-            // Get all users from localStorage
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
             const assignmentsList = document.getElementById('assignmentsList');
             
             if (!assignmentsList) {
@@ -3528,16 +3522,25 @@ Permissions:
                 return;
             }
             
-            // Get all available sections from GitHub; fallback to local cache
+            // Load users and sections from Supabase
+            let users = [];
             let allSections = [];
+            
             try {
-                if (window.githubData && typeof githubData.readSections === 'function') {
-                    const remote = await githubData.readSections();
-                    allSections = Array.isArray(remote.json) ? remote.json : [];
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                    allSections = await hubDatabase.getAllSections();
+                    console.log('Loaded users from Supabase:', users);
+                    console.log('Loaded sections from Supabase:', allSections);
+                } else {
+                    console.log('Database not ready');
+                    assignmentsList.innerHTML = '<div class="empty">Database not ready. Please try again.</div>';
+                    return;
                 }
-            } catch(_) {}
-            if (!Array.isArray(allSections) || allSections.length === 0) {
-                try { allSections = JSON.parse(localStorage.getItem('sectionOrder') || '[]'); } catch(_) { allSections = []; }
+            } catch (error) {
+                console.error('Error loading data from Supabase:', error);
+                assignmentsList.innerHTML = '<div class="empty">Error loading data. Please try again.</div>';
+                return;
             }
             
             assignmentsList.innerHTML = users.map(user => {
@@ -4585,39 +4588,6 @@ Permissions:
                     return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers === true);
                 } catch(_) { return false; }
             }
-            function ensureGithubConnectButton(){
-                try {
-                    var admin = isAdmin();
-                    var btn = document.getElementById('ghConnectBtn');
-                    if (!admin) { if (btn) btn.remove(); return; }
-                    if (!btn) {
-                        btn = document.createElement('button');
-                        btn.id = 'ghConnectBtn';
-                        btn.title = 'Connect GitHub (admin)';
-                        btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i>';
-                        btn.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;border:none;background:#222;color:#fff;width:44px;height:44px;border-radius:22px;box-shadow:0 2px 8px rgba(0,0,0,0.25);cursor:pointer;';
-                        btn.onclick = function(){
-                            if (typeof window.connectGitHub === 'function') { return window.connectGitHub(); }
-                            if (!isAdmin()) return alert('Admin only');
-                            try {
-                                var token = prompt('Paste a GitHub personal access token (repo scope if private):', '');
-                                if (!token) return;
-                                var owner = prompt('GitHub owner (username or org):', '') || '';
-                                var repo = prompt('Repo name:', '') || '';
-                                var branch = prompt('Branch (default main):', 'main') || 'main';
-                                localStorage.setItem('githubToken', JSON.stringify({ token: token }));
-                                window.GH_OWNER = owner; window.GH_REPO = repo; window.GH_BRANCH = branch;
-                                alert('GitHub connection saved. You can now use GitHub features.');
-                            } catch (e) {
-                                alert('GitHub connect failed: ' + (e && e.message ? e.message : e));
-                            }
-                        };
-                        document.body.appendChild(btn);
-                    }
-                } catch(_) {}
-            }
-            document.addEventListener('DOMContentLoaded', function(){ ensureGithubConnectButton(); });
-            window.addEventListener('focus', function(){ ensureGithubConnectButton(); });
         })();
     </script>
     <script>
