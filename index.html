@@ -1732,10 +1732,10 @@ Permissions:
                     console.log('Loaded visible sections from database:', visibleSections);
                 } else {
                     // Fallback to localStorage
-                    const savedOrder = localStorage.getItem('sectionOrder');
-                    if (savedOrder) {
-                        visibleSections = JSON.parse(savedOrder).filter(s => s.visible !== false).map(s => s.id);
-                    }
+                const savedOrder = localStorage.getItem('sectionOrder');
+                if (savedOrder) {
+                    visibleSections = JSON.parse(savedOrder).filter(s => s.visible !== false).map(s => s.id);
+                }
                 }
             } catch (e) { 
                 console.warn('Error reading visible sections', e);
@@ -1938,9 +1938,9 @@ Permissions:
                     console.log('User permissions updated in Supabase:', currentEditingUser);
                     
                     // Update local storage for consistency
-                    const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                    const userIndex = users.findIndex(u => u.id === currentEditingUser.id);
-                    if (userIndex !== -1) {
+            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            const userIndex = users.findIndex(u => u.id === currentEditingUser.id);
+            if (userIndex !== -1) {
                         users[userIndex] = currentEditingUser;
                         localStorage.setItem('hubUsers', JSON.stringify(users));
                     }
@@ -1953,26 +1953,26 @@ Permissions:
                 alert('Failed to save permissions: ' + error.message);
                 return;
             }
-            
-            // If editing the currently logged-in user, update the session too
-            const session = localStorage.getItem('hubSession');
-            if (session) {
-                const sessionData = JSON.parse(session);
-                if (sessionData.userId === currentEditingUser.id) {
-                    sessionData.permissions = {
-                        ...sessionData.permissions,
-                        sections: newSections,
-                        editableSections: newEditableSections
-                    };
-                    localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                    if (typeof updateUserInterface === 'function') {
-                        try { updateUserInterface(); } catch (e) {}
+                
+                // If editing the currently logged-in user, update the session too
+                const session = localStorage.getItem('hubSession');
+                if (session) {
+                    const sessionData = JSON.parse(session);
+                    if (sessionData.userId === currentEditingUser.id) {
+                        sessionData.permissions = {
+                            ...sessionData.permissions,
+                            sections: newSections,
+                            editableSections: newEditableSections
+                        };
+                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                        if (typeof updateUserInterface === 'function') {
+                            try { updateUserInterface(); } catch (e) {}
+                        }
                     }
                 }
-            }
-            
-            alert('User permissions updated successfully!');
-            loadUsersList();
+                
+                alert('User permissions updated successfully!');
+                loadUsersList();
         };
         
         window.resetUserPermissions = function() {
@@ -2310,10 +2310,10 @@ Permissions:
                     
                     // Update local storage for consistency
                     localStorage.setItem('hubUsers', JSON.stringify(users));
-                } else {
+            } else {
                     alert('Database not ready. Please try again.');
-                    return;
-                }
+                return;
+            }
             } catch (error) {
                 console.error('Error updating user in Supabase:', error);
                 alert('Failed to save user: ' + error.message);
@@ -2603,7 +2603,7 @@ Permissions:
                     }));
                     
                     console.log('Mapped sections for UI:', sectionOrder);
-                    renderSectionsList();
+                        renderSectionsList();
                 } else {
                     console.log('Database not ready');
                     sectionOrder = [];
@@ -2612,7 +2612,7 @@ Permissions:
             } catch (error) {
                 console.error('Error loading sections from Supabase:', error);
                 sectionOrder = [];
-                renderSectionsList();
+            renderSectionsList();
             }
         };
         
@@ -2693,7 +2693,7 @@ Permissions:
                         }
                         
                         console.log('Section visibility toggled successfully');
-                    } else {
+                } else {
                         alert('Database not ready. Please try again.');
                         if (checkbox) checkbox.checked = !isVisible; // Revert checkbox
                     }
@@ -2952,7 +2952,7 @@ Permissions:
                     
                     modal.remove();
                     alert('Section saved successfully!');
-                } else {
+            } else {
                     alert('Database not ready. Please try again.');
                 }
             } catch (error) {
@@ -2979,9 +2979,9 @@ Permissions:
                     // Remove from local sectionOrder array
                     const idx = sectionOrder.findIndex(s => s.id === sectionId);
                     if (idx !== -1) {
-                        sectionOrder.splice(idx, 1);
-                        sectionOrder.forEach((s, i) => { s.order = i + 1; });
-                        localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                    sectionOrder.splice(idx, 1);
+                    sectionOrder.forEach((s, i) => { s.order = i + 1; });
+                    localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
                     }
                     
                     // Refresh the admin sections list
@@ -2999,7 +2999,7 @@ Permissions:
                     await updateMainHubSections();
                     
                     alert('Section deleted successfully!');
-                } else {
+            } else {
                     alert('Database not ready. Please try again.');
                 }
             } catch (error) {
@@ -3026,7 +3026,7 @@ Permissions:
                     localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
                     updateMainHubSections();
                     alert('Section order saved successfully!');
-                } else {
+            } else {
                     alert('Database not ready. Please try again.');
                 }
             } catch (error) {
@@ -3725,7 +3725,7 @@ Permissions:
         };
         
         // Update user section access
-        window.updateUserSectionAccess = function(userId, sectionId, hasAccess) {
+        window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
             
             // Get users from localStorage
@@ -3754,7 +3754,13 @@ Permissions:
                 user.permissions.sections = user.permissions.sections.filter(s => s !== sectionId);
             }
             
-            // Save updated users
+            // Save updated user to Supabase database
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    await hubDatabase.updateUser(user);
+                    console.log('User section access updated in Supabase:', user);
+                    
+                    // Update local storage for consistency
             localStorage.setItem('hubUsers', JSON.stringify(users));
             console.log('Updated user in localStorage:', user);
             
@@ -3768,38 +3774,45 @@ Permissions:
                     console.log('Updated current session:', sessionData);
                     
                     // Update UI for current user
-                    updateUserInterface();
+                            await updateUserInterface();
                 }
             }
             
             // Show success message
-            alert(`Section access updated for ${user.username}. Changes will take effect on next login.`);
+                    alert(`Section access updated for ${user.username}. Changes saved to database.`);
+                } else {
+                    alert('Database not ready. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error updating user section access in Supabase:', error);
+                alert('Failed to save section access: ' + error.message);
+            }
             
             console.log('Section access updated for user', user.username, ':', user.permissions.sections);
         };
         
         // Select all sections for a user
-        window.selectAllSections = function(userId) {
+        window.selectAllSections = async function(userId) {
             const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
-            allSections.forEach(sectionId => {
+            for (const sectionId of allSections) {
                 const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
                 if (checkbox && !checkbox.checked) {
                     checkbox.checked = true;
-                    updateUserSectionAccess(userId, sectionId, true);
+                    await updateUserSectionAccess(userId, sectionId, true);
                 }
-            });
+            }
         };
         
         // Clear all sections for a user
-        window.clearAllSections = function(userId) {
+        window.clearAllSections = async function(userId) {
             const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
-            allSections.forEach(sectionId => {
+            for (const sectionId of allSections) {
                 const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
                 if (checkbox && checkbox.checked) {
                     checkbox.checked = false;
-                    updateUserSectionAccess(userId, sectionId, false);
+                    await updateUserSectionAccess(userId, sectionId, false);
                 }
-            });
+            }
         };
 
         // Ensure selected image actually loads; if not, remap to another available image
