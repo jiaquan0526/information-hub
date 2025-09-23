@@ -9,7 +9,7 @@ class HubDatabase {
         try {
             // Wait for Supabase client to be available
             let retries = 0;
-            const maxRetries = 50; // 10 seconds max wait
+            const maxRetries = 100; // 20 seconds max wait
             while (retries < maxRetries && !window.supabaseClient) {
                 console.log('Waiting for Supabase client...', retries + 1);
                 await new Promise(resolve => setTimeout(resolve, 200));
@@ -18,6 +18,7 @@ class HubDatabase {
             
             if (!window.supabaseClient) {
                 console.error('Supabase client not initialized after waiting');
+                console.error('Available window objects:', Object.keys(window).filter(k => k.includes('supabase')));
                 return false;
             }
             
@@ -599,6 +600,25 @@ window.addEventListener('load', () => {
         initializeDatabase();
     }
 });
+
+// Additional fallback - try every 2 seconds for 30 seconds
+let fallbackAttempts = 0;
+const fallbackInterval = setInterval(() => {
+    if (window.hubDatabaseReady) {
+        clearInterval(fallbackInterval);
+        return;
+    }
+    
+    fallbackAttempts++;
+    if (fallbackAttempts > 15) { // 30 seconds
+        clearInterval(fallbackInterval);
+        console.error('Database initialization failed after 30 seconds');
+        return;
+    }
+    
+    console.log('Fallback database initialization attempt', fallbackAttempts);
+    initializeDatabase();
+}, 2000);
 
 // Backward compatibility flag
 window.hubDatabaseReady = false;

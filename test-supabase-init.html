@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Supabase Initialization</title>
+    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
+    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        .test-section { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; }
+        pre { background: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test Supabase Initialization</h1>
+    
+    <div class="test-section">
+        <h3>Step 1: Check Supabase Script Loading</h3>
+        <div id="scriptResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Step 2: Check Supabase Client Creation</h3>
+        <div id="clientResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Step 3: Test Database Connection</h3>
+        <div id="connectionResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Step 4: Check Database.js Loading</h3>
+        <div id="databaseResult"></div>
+    </div>
+    
+    <script>
+        // Test Supabase script loading
+        function testSupabaseScript() {
+            const resultDiv = document.getElementById('scriptResult');
+            
+            if (typeof window.supabase !== 'undefined') {
+                resultDiv.innerHTML = '<div class="success">✅ Supabase script loaded successfully</div>';
+                resultDiv.innerHTML += '<div class="info">supabase object available: ' + typeof window.supabase + '</div>';
+                resultDiv.innerHTML += '<div class="info">createClient method: ' + typeof window.supabase.createClient + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ Supabase script not loaded</div>';
+            }
+        }
+        
+        // Test Supabase client creation
+        function testSupabaseClient() {
+            const resultDiv = document.getElementById('clientResult');
+            
+            if (window.supabaseClient) {
+                resultDiv.innerHTML = '<div class="success">✅ Supabase client created successfully</div>';
+                resultDiv.innerHTML += '<div class="info">Client type: ' + typeof window.supabaseClient + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ Supabase client not created</div>';
+                resultDiv.innerHTML += '<div class="info">Available window objects: ' + Object.keys(window).filter(k => k.includes('supabase')).join(', ') + '</div>';
+            }
+        }
+        
+        // Test database connection
+        async function testDatabaseConnection() {
+            const resultDiv = document.getElementById('connectionResult');
+            
+            if (!window.supabaseClient) {
+                resultDiv.innerHTML = '<div class="error">❌ No Supabase client available</div>';
+                return;
+            }
+            
+            try {
+                const { data, error } = await window.supabaseClient
+                    .from('profiles')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    resultDiv.innerHTML = '<div class="error">❌ Database connection error: ' + error.message + '</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="success">✅ Database connection successful</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Connection error: ' + error.message + '</div>';
+            }
+        }
+        
+        // Test database.js loading
+        function testDatabaseJs() {
+            const resultDiv = document.getElementById('databaseResult');
+            
+            if (window.hubDatabase) {
+                resultDiv.innerHTML = '<div class="success">✅ hubDatabase loaded successfully</div>';
+                resultDiv.innerHTML += '<div class="info">hubDatabase type: ' + typeof window.hubDatabase + '</div>';
+                resultDiv.innerHTML += '<div class="info">hubDatabaseReady: ' + window.hubDatabaseReady + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ hubDatabase not loaded</div>';
+                resultDiv.innerHTML += '<div class="info">hubDatabaseReady: ' + window.hubDatabaseReady + '</div>';
+            }
+        }
+        
+        // Run tests
+        function runTests() {
+            testSupabaseScript();
+            testSupabaseClient();
+            testDatabaseConnection();
+            testDatabaseJs();
+        }
+        
+        // Run tests immediately and on various events
+        runTests();
+        
+        // Run tests on DOM ready
+        document.addEventListener('DOMContentLoaded', runTests);
+        
+        // Run tests on window load
+        window.addEventListener('load', runTests);
+        
+        // Run tests every 2 seconds for debugging
+        let testCount = 0;
+        const testInterval = setInterval(() => {
+            testCount++;
+            if (testCount > 10) {
+                clearInterval(testInterval);
+                return;
+            }
+            console.log('Running tests...', testCount);
+            runTests();
+        }, 2000);
+    </script>
+    
+    <!-- Load the same Supabase script as index.html -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+        // Same initialization as index.html
+        (function(){
+            if (window.supabaseClient) return;
+            function ensureKeys(){
+                try {
+                    if (!window.SUPABASE_URL) window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || window.SUPABASE_URL;
+                    if (!window.SUPABASE_ANON_KEY) window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || window.SUPABASE_ANON_KEY;
+                } catch(_) {}
+            }
+            function initClient(){
+                ensureKeys();
+                var SUPABASE_URL = window.SUPABASE_URL || 'https://pioubcszuayewepdawzt.supabase.co';
+                var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k';
+                try {
+                    if (window.supabase && !window.supabaseClient) {
+                        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                        console.log('Supabase client created in test page');
+                    }
+                } catch(_) {}
+            }
+            if (!(window.supabase && window.supabase.createClient)) { 
+                console.log('Waiting for Supabase script...');
+                setTimeout(initClient, 1000);
+            } else { 
+                initClient(); 
+            }
+        })();
+    </script>
+    
+    <!-- Load database.js -->
+    <script src="database.js"></script>
+</body>
+</html>
