@@ -6,9 +6,9 @@
   "scripts": {
     "start": "python -m http.server 8000",
     "serve": "python -m http.server 8000",
-    "build": "node build.js",
-    "serve:dist": "cd dist && python -m http.server 8000",
-    "deploy": "echo 'Deploy the dist/ folder to your static host (Netlify/Vercel/GitHub Pages).'",
+    "build": "echo 'No build needed for Vercel deployment'",
+    "serve:dist": "python -m http.server 8000",
+    "deploy": "vercel --prod",
     "gen:bg": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem -File -Path ./background-pic -Include *.png,*.jpg,*.jpeg,*.gif | Select-Object -ExpandProperty Name | ConvertTo-Json | Set-Content ./background-pic/manifest.json -Encoding UTF8\""
   },
   "keywords": [
