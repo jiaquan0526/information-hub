@@ -1,39 +1,17 @@
 {
   "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "*.html",
-      "use": "@vercel/static"
+      "source": "/auth",
+      "destination": "/auth.html"
     },
     {
-      "src": "*.js",
-      "use": "@vercel/static"
+      "source": "/section",
+      "destination": "/section.html"
     },
     {
-      "src": "*.css",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.svg",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/auth",
-      "dest": "/auth.html"
-    },
-    {
-      "src": "/section",
-      "dest": "/section.html"
-    },
-    {
-      "src": "/test-rls",
-      "dest": "/test-rls.html"
+      "source": "/test-rls",
+      "destination": "/test-rls.html"
     }
   ],
   "headers": [
@@ -54,5 +32,7 @@
         }
       ]
     }
-  ]
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false
 }
