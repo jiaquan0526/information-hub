@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Login - Information Hub</title>
+    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
+    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
+</head>
+<body>
+    <h1>Debug Login Status</h1>
+    <div id="debugInfo"></div>
+    
+    <script>
+        window.SUPABASE_URL = 'https://pioubcszuayewepdawzt.supabase.co';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k';
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+        async function debugLogin() {
+            const debugDiv = document.getElementById('debugInfo');
+            
+            try {
+                // Initialize Supabase
+                const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+                
+                // Check auth status
+                const { data: { user }, error: authError } = await supabase.auth.getUser();
+                
+                let debugInfo = '<h2>Authentication Status:</h2>';
+                
+                if (authError) {
+                    debugInfo += `<p style="color: red;">Auth Error: ${authError.message}</p>`;
+                } else if (user) {
+                    debugInfo += `<p style="color: green;">✅ User is authenticated</p>`;
+                    debugInfo += `<p><strong>User ID:</strong> ${user.id}</p>`;
+                    debugInfo += `<p><strong>Email:</strong> ${user.email}</p>`;
+                    debugInfo += `<p><strong>Created:</strong> ${user.created_at}</p>`;
+                    
+                    // Check if profile exists
+                    debugInfo += '<h2>Profile Status:</h2>';
+                    try {
+                        const { data: profile, error: profileError } = await supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', user.id)
+                            .single();
+                        
+                        if (profileError) {
+                            debugInfo += `<p style="color: red;">❌ Profile Error: ${profileError.message}</p>`;
+                            debugInfo += `<p><strong>Error Code:</strong> ${profileError.code}</p>`;
+                        } else if (profile) {
+                            debugInfo += `<p style="color: green;">✅ Profile exists</p>`;
+                            debugInfo += `<pre>${JSON.stringify(profile, null, 2)}</pre>`;
+                        } else {
+                            debugInfo += `<p style="color: orange;">⚠️ No profile found</p>`;
+                        }
+                    } catch (err) {
+                        debugInfo += `<p style="color: red;">❌ Profile check failed: ${err.message}</p>`;
+                    }
+                    
+                    // Check what tables exist
+                    debugInfo += '<h2>Database Status:</h2>';
+                    try {
+                        const { data: tables, error: tablesError } = await supabase
+                            .from('information_schema.tables')
+                            .select('table_name')
+                            .eq('table_schema', 'public');
+                        
+                        if (tablesError) {
+                            debugInfo += `<p style="color: red;">❌ Tables check failed: ${tablesError.message}</p>`;
+                        } else {
+                            debugInfo += `<p><strong>Available tables:</strong></p>`;
+                            debugInfo += `<ul>`;
+                            tables.forEach(table => {
+                                debugInfo += `<li>${table.table_name}</li>`;
+                            });
+                            debugInfo += `</ul>`;
+                        }
+                    } catch (err) {
+                        debugInfo += `<p style="color: red;">❌ Database check failed: ${err.message}</p>`;
+                    }
+                    
+                } else {
+                    debugInfo += `<p style="color: orange;">⚠️ No user authenticated</p>`;
+                    debugInfo += `<p><a href="auth.html">Go to Login</a></p>`;
+                }
+                
+                debugDiv.innerHTML = debugInfo;
+                
+            } catch (error) {
+                debugDiv.innerHTML = `<p style="color: red;">Debug failed: ${error.message}</p>`;
+            }
+        }
+        
+        // Run debug on page load
+        document.addEventListener('DOMContentLoaded', debugLogin);
+    </script>
+</body>
+</html>
