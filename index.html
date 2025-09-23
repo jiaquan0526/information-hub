@@ -494,23 +494,6 @@
                     try { renderGithubConnectButton(); } catch(_) {}
                 }
                 
-                // FORCE UPDATE EVERY 2 SECONDS TO KEEP IN SYNC
-                setInterval(() => {
-                    const currentSession = localStorage.getItem('hubSession');
-                    if (currentSession) {
-                        console.log('Auto-updating interface...');
-                        updateUserInterface();
-                        try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
-                        try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
-                        try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
-                        try {
-                            if (localStorage.getItem('refreshHubNow') === '1') {
-                                localStorage.removeItem('refreshHubNow');
-                                updateSectionStats();
-                            }
-                        } catch(_) {}
-                    }
-                }, 2000);
                 // Initialize info bar
                 try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
                 try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
@@ -1055,23 +1038,6 @@
         
         
         // Force refresh user data
-        window.refreshUserData = function() {
-            console.log('Forcing refresh of user data...');
-            
-            // Reload users from localStorage
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            console.log('Current users in localStorage:', users);
-            
-            // Show user data in alert
-            let userInfo = 'Current User Data:\n\n';
-            users.forEach(user => {
-                userInfo += `${user.username} (${user.role}):\n`;
-                userInfo += `  Sections: ${user.permissions?.sections?.join(', ') || 'None'}\n`;
-                userInfo += `  Editable: ${user.permissions?.editableSections?.join(', ') || 'None'}\n\n`;
-            });
-            
-            alert(userInfo);
-        };
         
         
         
@@ -1689,19 +1655,8 @@ Permissions:
                 const user = JSON.parse(session);
                 console.log('User from session:', user);
                 
-                // ALWAYS get fresh user data from localStorage
-                const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                const freshUser = users.find(u => u.id === user.userId);
-                
-                if (freshUser) {
-                    console.log('=== USING FRESH USER DATA ===');
-                    console.log('Fresh user:', freshUser);
-                    console.log('Fresh user sections:', freshUser.permissions?.sections);
-                    user.permissions = freshUser.permissions; // Update with fresh permissions
-                } else {
-                    console.log('=== WARNING: FRESH USER NOT FOUND ===');
-                    console.log('Using session user data:', user);
-                }
+                // Use session data directly (from Supabase)
+                console.log('Using session user data from Supabase:', user);
                 
                 console.log('Final user permissions:', user.permissions);
                 console.log('Final user sections:', user.permissions?.sections);
