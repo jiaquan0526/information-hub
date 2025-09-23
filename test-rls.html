@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RLS Policy Testing - Information Hub</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
+    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .test-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .test-results {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .test-pass {
+            color: green;
+            font-weight: bold;
+        }
+        .test-fail {
+            color: red;
+            font-weight: bold;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-connected {
+            background: #28a745;
+        }
+        .status-disconnected {
+            background: #dc3545;
+        }
+        .status-loading {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>RLS Policy Testing Dashboard</h1>
+        
+        <div class="test-section">
+            <h2>Connection Status</h2>
+            <div id="connectionStatus">
+                <span class="status-indicator status-loading"></span>
+                <span>Connecting to Supabase...</span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Authentication</h2>
+            <p>Please sign in to test RLS policies with your user context.</p>
+            <button class="test-button" onclick="window.location.href='auth.html'">
+                Go to Login
+            </button>
+        </div>
+
+        <div class="test-section">
+            <h2>RLS Policy Tests</h2>
+            <p>Run comprehensive tests on all Row Level Security policies.</p>
+            <button class="test-button" id="runTestsBtn" onclick="runRLSTests()">
+                Run All RLS Tests
+            </button>
+            <button class="test-button" id="cleanupBtn" onclick="cleanupTestData()">
+                Cleanup Test Data
+            </button>
+            <div id="testResults" class="test-results" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Individual Policy Tests</h2>
+            <button class="test-button" onclick="testProfilesRLS()">Test Profiles RLS</button>
+            <button class="test-button" onclick="testSectionsRLS()">Test Sections RLS</button>
+            <button class="test-button" onclick="testResourcesRLS()">Test Resources RLS</button>
+            <button class="test-button" onclick="testActivitiesRLS()">Test Activities RLS</button>
+            <button class="test-button" onclick="testViewsRLS()">Test Views RLS</button>
+            <button class="test-button" onclick="testPermissionFunctions()">Test Permission Functions</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Database Operations</h2>
+            <button class="test-button" onclick="testDatabaseOperations()">Test Database Operations</button>
+            <button class="test-button" onclick="testDataMigration()">Test Data Migration</button>
+            <button class="test-button" onclick="testExportImport()">Test Export/Import</button>
+        </div>
+    </div>
+
+    <script>
+        window.SUPABASE_URL = 'https://pioubcszuayewepdawzt.supabase.co';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k';
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="test-rls-policies.js"></script>
+    <script src="database.js"></script>
+    <script>
+        let rlsTester;
+        let supabaseClient;
+
+        // Initialize Supabase client
+        async function initSupabase() {
+            try {
+                if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+                    supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+                    window.supabaseClient = supabaseClient;
+                    
+                    // Test connection
+                    const { data, error } = await supabaseClient.from('profiles').select('count').limit(1);
+                    if (error) throw error;
+                    
+                    updateConnectionStatus(true);
+                    return true;
+                } else {
+                    throw new Error('Supabase not available');
+                }
+            } catch (error) {
+                console.error('Failed to initialize Supabase:', error);
+                updateConnectionStatus(false, error.message);
+                return false;
+            }
+        }
+
+        function updateConnectionStatus(connected, error = null) {
+            const statusEl = document.getElementById('connectionStatus');
+            const indicator = statusEl.querySelector('.status-indicator');
+            const text = statusEl.querySelector('span:last-child');
+            
+            if (connected) {
+                indicator.className = 'status-indicator status-connected';
+                text.textContent = 'Connected to Supabase';
+            } else {
+                indicator.className = 'status-indicator status-disconnected';
+                text.textContent = error ? `Connection failed: ${error}` : 'Disconnected from Supabase';
+            }
+        }
+
+        // Initialize RLS Tester
+        async function initRLSTester() {
+            rlsTester = new RLSTester();
+            await rlsTester.init();
+        }
+
+        // Run all RLS tests
+        async function runRLSTests() {
+            const btn = document.getElementById('runTestsBtn');
+            const results = document.getElementById('testResults');
+            
+            btn.disabled = true;
+            btn.textContent = 'Running Tests...';
+            results.style.display = 'block';
+            results.textContent = 'Running comprehensive RLS policy tests...\n';
+            
+            try {
+                const tests = await rlsTester.runAllTests();
+                displayTestResults(tests);
+            } catch (error) {
+                results.textContent += `\nError running tests: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run All RLS Tests';
+            }
+        }
+
+        // Display test results
+        function displayTestResults(tests) {
+            const results = document.getElementById('testResults');
+            const passed = tests.filter(t => t.passed).length;
+            const total = tests.length;
+            
+            let output = `RLS Policy Test Results\n`;
+            output += `========================\n\n`;
+            output += `Overall: ${passed}/${total} tests passed\n\n`;
+            
+            tests.forEach(test => {
+                const status = test.passed ? '✅ PASS' : '❌ FAIL';
+                output += `${status} ${test.name}\n`;
+                if (test.error) {
+                    output += `   Error: ${test.error}\n`;
+                }
+            });
+            
+            results.textContent = output;
+        }
+
+        // Individual test functions
+        async function testProfilesRLS() {
+            const tests = await rlsTester.testProfilesRLS();
+            displayTestResults(tests);
+        }
+
+        async function testSectionsRLS() {
+            const tests = await rlsTester.testSectionsRLS();
+            displayTestResults(tests);
+        }
+
+        async function testResourcesRLS() {
+            const tests = await rlsTester.testResourcesRLS();
+            displayTestResults(tests);
+        }
+
+        async function testActivitiesRLS() {
+            const tests = await rlsTester.testActivitiesRLS();
+            displayTestResults(tests);
+        }
+
+        async function testViewsRLS() {
+            const tests = await rlsTester.testViewsRLS();
+            displayTestResults(tests);
+        }
+
+        async function testPermissionFunctions() {
+            const tests = await rlsTester.testPermissionFunctions();
+            displayTestResults(tests);
+        }
+
+        // Database operation tests
+        async function testDatabaseOperations() {
+            const results = document.getElementById('testResults');
+            results.style.display = 'block';
+            results.textContent = 'Testing database operations...\n';
+            
+            try {
+                // Test basic operations
+                const users = await window.hubDatabase.getAllUsers();
+                results.textContent += `✓ Got ${users.length} users\n`;
+                
+                const sections = await window.hubDatabase.getAllSections();
+                results.textContent += `✓ Got ${sections.length} sections\n`;
+                
+                const resources = await window.hubDatabase.getAllResources();
+                results.textContent += `✓ Got ${resources.length} resources\n`;
+                
+                results.textContent += '\nDatabase operations test completed successfully!';
+            } catch (error) {
+                results.textContent += `\nError: ${error.message}`;
+            }
+        }
+
+        // Data migration test
+        async function testDataMigration() {
+            const results = document.getElementById('testResults');
+            results.style.display = 'block';
+            results.textContent = 'Testing data migration...\n';
+            
+            try {
+                const success = await window.hubDatabase.migrateFromLocalStorage();
+                if (success) {
+                    results.textContent += '✓ Data migration completed successfully!';
+                } else {
+                    results.textContent += '✗ Data migration failed';
+                }
+            } catch (error) {
+                results.textContent += `\nError: ${error.message}`;
+            }
+        }
+
+        // Export/Import test
+        async function testExportImport() {
+            const results = document.getElementById('testResults');
+            results.style.display = 'block';
+            results.textContent = 'Testing export/import...\n';
+            
+            try {
+                // Test export
+                const exportData = await window.hubDatabase.exportAllData();
+                results.textContent += `✓ Export completed: ${exportData.totalRecords.users} users, ${exportData.totalRecords.sections} sections, ${exportData.totalRecords.resources} resources\n`;
+                
+                // Test import (with same data)
+                await window.hubDatabase.importRawState(exportData);
+                results.textContent += '✓ Import completed successfully!';
+            } catch (error) {
+                results.textContent += `\nError: ${error.message}`;
+            }
+        }
+
+        // Cleanup test data
+        async function cleanupTestData() {
+            const btn = document.getElementById('cleanupBtn');
+            btn.disabled = true;
+            btn.textContent = 'Cleaning...';
+            
+            try {
+                await rlsTester.cleanup();
+                const results = document.getElementById('testResults');
+                results.style.display = 'block';
+                results.textContent = 'Test data cleaned up successfully!';
+            } catch (error) {
+                console.error('Cleanup failed:', error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Cleanup Test Data';
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initSupabase();
+            await initRLSTester();
+        });
+    </script>
+</body>
+</html>

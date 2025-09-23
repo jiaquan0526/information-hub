@@ -1,269 +1,369 @@
-// Database System for Information Hub
+// Database System for Information Hub - Supabase Implementation
 class HubDatabase {
     constructor() {
-        this.dbName = 'InformationHubDB';
-        this.dbVersion = 2;
-        this.db = null;
+        this.supabase = null;
         this.init();
     }
 
     async init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, this.dbVersion);
-
-            request.onerror = () => {
-                console.error('Database failed to open');
-                reject(request.error);
-            };
-
-            request.onsuccess = () => {
-                this.db = request.result;
-                console.log('Database opened successfully');
-                resolve(this.db);
-            };
-
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                this.createObjectStores(db);
-            };
-        });
+        try {
+            // Ensure Supabase client is available
+            if (!window.supabaseClient) {
+                console.error('Supabase client not initialized');
+                return false;
+            }
+            this.supabase = window.supabaseClient;
+            console.log('Supabase database initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize Supabase database:', error);
+            return false;
+        }
     }
 
-    createObjectStores(db) {
-        // Users store
-        if (!db.objectStoreNames.contains('users')) {
-            const usersStore = db.createObjectStore('users', { keyPath: 'id' });
-            usersStore.createIndex('username', 'username', { unique: true });
-            usersStore.createIndex('role', 'role', { unique: false });
+    // Helper method to get current user ID
+    getCurrentUserId() {
+        const session = localStorage.getItem('hubSession');
+        if (session) {
+            const sessionData = JSON.parse(session);
+            return sessionData.userId;
         }
-
-        // Sections store
-        if (!db.objectStoreNames.contains('sections')) {
-            const sectionsStore = db.createObjectStore('sections', { keyPath: 'id' });
-            sectionsStore.createIndex('sectionId', 'sectionId', { unique: true });
-        }
-
-        // Resources store (playbooks, box links, dashboards)
-        if (!db.objectStoreNames.contains('resources')) {
-            const resourcesStore = db.createObjectStore('resources', { keyPath: 'id' });
-            resourcesStore.createIndex('sectionId', 'sectionId', { unique: false });
-            resourcesStore.createIndex('type', 'type', { unique: false });
-            resourcesStore.createIndex('userId', 'userId', { unique: false });
-            resourcesStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-        // Add a composite unique index to ensure per-section+type+url uniqueness when present
-        try {
-            const resStore = db.transaction(['resources'], 'versionchange').objectStore('resources');
-            if (resStore && !resStore.indexNames.contains('sec_type_url')) {
-                resStore.createIndex('sec_type_url', ['sectionId','type','url'], { unique: false });
-            }
-        } catch (_) {}
-
-        // Activities store (audit log)
-        if (!db.objectStoreNames.contains('activities')) {
-            const activitiesStore = db.createObjectStore('activities', { keyPath: 'id' });
-            activitiesStore.createIndex('userId', 'userId', { unique: false });
-            activitiesStore.createIndex('action', 'action', { unique: false });
-            activitiesStore.createIndex('timestamp', 'timestamp', { unique: false });
-        }
-
-        // Views store (aggregated per user/resource usage)
-        if (!db.objectStoreNames.contains('views')) {
-            const viewsStore = db.createObjectStore('views', { keyPath: 'id' });
-            viewsStore.createIndex('userId', 'userId', { unique: false });
-            viewsStore.createIndex('resourceId', 'resourceId', { unique: false });
-            viewsStore.createIndex('lastViewedAt', 'lastViewedAt', { unique: false });
-        }
+        return null;
     }
 
     // User Management
     async saveUser(user) {
-        const transaction = this.db.transaction(['users'], 'readwrite');
-        const store = transaction.objectStore('users');
-        return new Promise((resolve, reject) => {
-            const request = store.put(user);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .upsert({
+                    id: user.id,
+                    username: user.username,
+                    role: user.role || 'viewer',
+                    name: user.name,
+                    email: user.email,
+                    permissions: user.permissions || {}
+                });
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving user:', error);
+            throw error;
+        }
     }
 
     async getUser(id) {
-        const transaction = this.db.transaction(['users'], 'readonly');
-        const store = transaction.objectStore('users');
-        return new Promise((resolve, reject) => {
-            const request = store.get(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', id)
+                .single();
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting user:', error);
+            return null;
+        }
     }
 
     async getAllUsers() {
-        const transaction = this.db.transaction(['users'], 'readonly');
-        const store = transaction.objectStore('users');
-        return new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting all users:', error);
+            return [];
+        }
     }
 
     async deleteUser(id) {
-        const transaction = this.db.transaction(['users'], 'readwrite');
-        const store = transaction.objectStore('users');
-        return new Promise((resolve, reject) => {
-            const request = store.delete(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { error } = await this.supabase
+                .from('profiles')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            throw error;
+        }
     }
 
     // Section Management
     async saveSection(section) {
-        const transaction = this.db.transaction(['sections'], 'readwrite');
-        const store = transaction.objectStore('sections');
-        return new Promise((resolve, reject) => {
-            const request = store.put(section);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .upsert({
+                    section_id: section.sectionId || section.id,
+                    name: section.name,
+                    icon: section.icon,
+                    color: section.color,
+                    config: section.config || {},
+                    data: section.data || {}
+                });
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving section:', error);
+            throw error;
+        }
     }
 
     async getSection(sectionId) {
-        const transaction = this.db.transaction(['sections'], 'readonly');
-        const store = transaction.objectStore('sections');
-        return new Promise((resolve, reject) => {
-            const request = store.get(sectionId);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .select('*')
+                .eq('section_id', sectionId)
+                .single();
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting section:', error);
+            return null;
+        }
     }
 
     async getAllSections() {
-        const transaction = this.db.transaction(['sections'], 'readonly');
-        const store = transaction.objectStore('sections');
-        return new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting all sections:', error);
+            return [];
+        }
     }
 
-    // Section configuration (tabs/categories) helpers
+    // Section configuration helpers
     async saveSectionConfig(sectionId, config) {
-        if (!sectionId) throw new Error('sectionId required');
-        const existing = await this.getSection(sectionId).catch(() => null);
-        const record = existing ? { ...existing } : { id: sectionId, sectionId };
-        record.config = config || {};
-        const transaction = this.db.transaction(['sections'], 'readwrite');
-        const store = transaction.objectStore('sections');
-        return new Promise((resolve, reject) => {
-            const request = store.put(record);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .update({ config: config || {} })
+                .eq('section_id', sectionId);
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving section config:', error);
+            throw error;
+        }
     }
 
     async getSectionConfig(sectionId) {
-        const rec = await this.getSection(sectionId).catch(() => null);
-        return rec && rec.config ? rec.config : null;
+        try {
+            const section = await this.getSection(sectionId);
+            return section ? section.config : null;
+        } catch (error) {
+            console.error('Error getting section config:', error);
+            return null;
+        }
     }
 
     // Resource Management
     async saveResource(resource) {
-        const transaction = this.db.transaction(['resources'], 'readwrite');
-        const store = transaction.objectStore('resources');
-        return new Promise((resolve, reject) => {
-            const request = store.put(resource);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('resources')
+                .upsert({
+                    id: resource.id,
+                    section_id: resource.sectionId,
+                    type: resource.type,
+                    title: resource.title,
+                    url: resource.url,
+                    description: resource.description,
+                    tags: resource.tags || [],
+                    extra: resource.extra || {},
+                    created_by: resource.userId || this.getCurrentUserId()
+                });
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving resource:', error);
+            throw error;
+        }
     }
 
     async getResource(id) {
-        const transaction = this.db.transaction(['resources'], 'readonly');
-        const store = transaction.objectStore('resources');
-        return new Promise((resolve, reject) => {
-            const request = store.get(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('resources')
+                .select('*')
+                .eq('id', id)
+                .single();
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting resource:', error);
+            return null;
+        }
     }
 
     async getResourcesBySection(sectionId) {
-        const transaction = this.db.transaction(['resources'], 'readonly');
-        const store = transaction.objectStore('resources');
-        const index = store.index('sectionId');
-        return new Promise((resolve, reject) => {
-            const request = index.getAll(sectionId);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('resources')
+                .select('*')
+                .eq('section_id', sectionId)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting resources by section:', error);
+            return [];
+        }
     }
 
     async getResourcesByType(sectionId, type) {
-        const transaction = this.db.transaction(['resources'], 'readonly');
-        const store = transaction.objectStore('resources');
-        const index = store.index('sectionId');
-        return new Promise((resolve, reject) => {
-            const request = index.getAll(sectionId);
-            request.onsuccess = () => {
-                const results = request.result.filter(resource => resource.type === type);
-                resolve(results);
-            };
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('resources')
+                .select('*')
+                .eq('section_id', sectionId)
+                .eq('type', type)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting resources by type:', error);
+            return [];
+        }
     }
 
     async deleteResource(id) {
-        const transaction = this.db.transaction(['resources'], 'readwrite');
-        const store = transaction.objectStore('resources');
-        return new Promise((resolve, reject) => {
-            const request = store.delete(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { error } = await this.supabase
+                .from('resources')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting resource:', error);
+            throw error;
+        }
     }
 
     async getAllResources() {
-        const transaction = this.db.transaction(['resources'], 'readonly');
-        const store = transaction.objectStore('resources');
-        return new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('resources')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting all resources:', error);
+            return [];
+        }
     }
 
     // Activity Management
     async saveActivity(activity) {
-        const transaction = this.db.transaction(['activities'], 'readwrite');
-        const store = transaction.objectStore('activities');
-        return new Promise((resolve, reject) => {
-            const request = store.put(activity);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('activities')
+                .insert({
+                    user_id: activity.userId || this.getCurrentUserId(),
+                    action: activity.action,
+                    resource_id: activity.resourceId,
+                    section_id: activity.sectionId,
+                    metadata: activity.metadata || {}
+                });
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving activity:', error);
+            throw error;
+        }
     }
 
     async getActivities(limit = 1000) {
-        const transaction = this.db.transaction(['activities'], 'readonly');
-        const store = transaction.objectStore('activities');
-        const index = store.index('timestamp');
-        return new Promise((resolve, reject) => {
-            const request = index.getAll();
-            request.onsuccess = () => {
-                const results = request.result
-                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                    .slice(0, limit);
-                resolve(results);
-            };
-            request.onerror = () => reject(request.error);
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('activities')
+                .select('*')
+                .order('timestamp', { ascending: false })
+                .limit(limit);
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting activities:', error);
+            return [];
+        }
     }
 
-    // Data Migration from localStorage
+    // Views Management
+    async recordView(userId, resourceId) {
+        try {
+            // Use the RPC function for safe increment
+            const { error } = await this.supabase
+                .rpc('increment_view', {
+                    p_user_id: userId,
+                    p_resource_id: resourceId
+                });
+            
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error recording view:', error);
+            throw error;
+        }
+    }
+
+    async getAllViews() {
+        try {
+            const { data, error } = await this.supabase
+                .from('views')
+                .select('*')
+                .order('last_viewed_at', { ascending: false });
+            
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting all views:', error);
+            return [];
+        }
+    }
+
+    // Data Migration from IndexedDB
     async migrateFromLocalStorage() {
         try {
+            console.log('Starting migration from localStorage to Supabase...');
+            
+            // Check if migration already completed
+            const migrationDone = localStorage.getItem('supabaseMigrationDone');
+            if (migrationDone) {
+                console.log('Migration already completed');
+                return true;
+            }
+
             // Migrate users
             const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
             for (const user of users) {
@@ -274,7 +374,6 @@ class HubDatabase {
             const sections = JSON.parse(localStorage.getItem('informationHub') || '{}');
             for (const [sectionId, sectionData] of Object.entries(sections)) {
                 await this.saveSection({
-                    id: sectionId,
                     sectionId: sectionId,
                     name: sectionData.name,
                     icon: sectionData.icon,
@@ -306,10 +405,12 @@ class HubDatabase {
                 await this.saveActivity(activity);
             }
 
-            console.log('Data migration completed successfully');
+            // Mark migration as complete
+            localStorage.setItem('supabaseMigrationDone', 'true');
+            console.log('Migration completed successfully');
             return true;
         } catch (error) {
-            console.error('Data migration failed:', error);
+            console.error('Migration failed:', error);
             return false;
         }
     }
@@ -325,30 +426,15 @@ class HubDatabase {
                 this.getAllViews()
             ]);
 
-            // Merge in any users that exist only in localStorage (fallback)
-            let mergedUsers = Array.isArray(users) ? [...users] : [];
-            try {
-                const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                const byId = new Map(mergedUsers.map(u => [u.id, u]));
-                lsUsers.forEach(u => {
-                    if (!byId.has(u.id)) {
-                        byId.set(u.id, u);
-                        // Best-effort: persist into DB for future consistency
-                        try { this.saveUser(u); } catch(_) {}
-                    }
-                });
-                mergedUsers = Array.from(byId.values());
-            } catch (_) {}
-
             return {
-                users: mergedUsers,
+                users,
                 sections,
                 resources,
                 activities,
                 views,
                 exportDate: new Date().toISOString(),
                 totalRecords: {
-                    users: mergedUsers.length,
+                    users: users.length,
                     sections: sections.length,
                     resources: resources.length,
                     activities: activities.length,
@@ -361,66 +447,34 @@ class HubDatabase {
         }
     }
 
-    // Clear all data
+    // Clear all data (admin only)
     async clearAllData() {
-        const stores = ['users', 'sections', 'resources', 'activities'];
-        if (this.db.objectStoreNames.contains('views')) stores.push('views');
-        const promises = stores.map(storeName => {
-            const transaction = this.db.transaction([storeName], 'readwrite');
-            const store = transaction.objectStore(storeName);
-            return new Promise((resolve, reject) => {
-                const request = store.clear();
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            });
-        });
+        try {
+            const userId = this.getCurrentUserId();
+            if (!userId) throw new Error('Not authenticated');
 
-        await Promise.all(promises);
-        console.log('All data cleared successfully');
+            // Check if user is admin
+            const user = await this.getUser(userId);
+            if (!user || user.role !== 'admin') {
+                throw new Error('Only admins can clear all data');
+            }
+
+            // Delete in reverse order of dependencies
+            await this.supabase.from('views').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            await this.supabase.from('activities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            await this.supabase.from('resources').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            await this.supabase.from('sections').delete().neq('section_id', '');
+            // Note: Don't delete profiles as they're linked to auth.users
+
+            console.log('All data cleared successfully');
+            return true;
+        } catch (error) {
+            console.error('Error clearing data:', error);
+            throw error;
+        }
     }
 
-    // Views (usage) aggregation
-    async recordView(userId, resourceId) {
-        const id = `${userId || 'anon'}:${resourceId}`;
-        const now = new Date().toISOString();
-        const transaction = this.db.transaction(['views'], 'readwrite');
-        const store = transaction.objectStore('views');
-        return new Promise((resolve, reject) => {
-            const getReq = store.get(id);
-            getReq.onsuccess = () => {
-                const existing = getReq.result;
-                const updated = existing ? {
-                    ...existing,
-                    count: (existing.count || 0) + 1,
-                    lastViewedAt: now
-                } : {
-                    id,
-                    userId: userId || null,
-                    resourceId,
-                    count: 1,
-                    firstViewedAt: now,
-                    lastViewedAt: now
-                };
-                const putReq = store.put(updated);
-                putReq.onsuccess = () => resolve(updated);
-                putReq.onerror = () => reject(putReq.error);
-            };
-            getReq.onerror = () => reject(getReq.error);
-        });
-    }
-
-    async getAllViews() {
-        if (!this.db.objectStoreNames.contains('views')) return [];
-        const transaction = this.db.transaction(['views'], 'readonly');
-        const store = transaction.objectStore('views');
-        return new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // Export raw JSON including localStorage config (backup)
+    // Raw state export (for backup)
     async exportRawState() {
         const data = await this.exportAllData();
         let local = {};
@@ -435,36 +489,62 @@ class HubDatabase {
         return { ...data, localStorage: local };
     }
 
+    // Import raw state (for restore)
     async importRawState(json) {
-        // Clear DB stores
-        await this.clearAllData();
-        // Restore DB stores
-        const users = json.users || [];
-        for (const u of users) await this.saveUser(u);
-        const sections = json.sections || [];
-        for (const s of sections) await this.saveSection(s);
-        const resources = json.resources || [];
-        for (const r of resources) await this.saveResource(r);
-        const activities = json.activities || [];
-        for (const a of activities) await this.saveActivity(a);
-        const views = json.views || [];
-        if (this.db.objectStoreNames.contains('views')) {
-            const tx = this.db.transaction(['views'], 'readwrite');
-            const store = tx.objectStore('views');
-            await Promise.all(views.map(v => new Promise((resolve, reject) => {
-                const req = store.put(v);
-                req.onsuccess = () => resolve();
-                req.onerror = () => reject(req.error);
-            })));
+        try {
+            // Clear existing data
+            await this.clearAllData();
+
+            // Restore data
+            if (json.users && Array.isArray(json.users)) {
+                for (const user of json.users) {
+                    await this.saveUser(user);
+                }
+            }
+
+            if (json.sections && Array.isArray(json.sections)) {
+                for (const section of json.sections) {
+                    await this.saveSection(section);
+                }
+            }
+
+            if (json.resources && Array.isArray(json.resources)) {
+                for (const resource of json.resources) {
+                    await this.saveResource(resource);
+                }
+            }
+
+            if (json.activities && Array.isArray(json.activities)) {
+                for (const activity of json.activities) {
+                    await this.saveActivity(activity);
+                }
+            }
+
+            // Restore localStorage config
+            if (json.localStorage) {
+                try { 
+                    if (json.localStorage.sectionOrder) 
+                        localStorage.setItem('sectionOrder', JSON.stringify(json.localStorage.sectionOrder)); 
+                } catch(_){}
+                try { 
+                    if (json.localStorage.hubUsers) 
+                        localStorage.setItem('hubUsers', JSON.stringify(json.localStorage.hubUsers)); 
+                } catch(_){}
+                try { 
+                    if (json.localStorage.informationHub) 
+                        localStorage.setItem('informationHub', JSON.stringify(json.localStorage.informationHub)); 
+                } catch(_){}
+                try { 
+                    if (json.localStorage.hubActivities) 
+                        localStorage.setItem('hubActivities', JSON.stringify(json.localStorage.hubActivities)); 
+                } catch(_){}
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Import failed:', error);
+            throw error;
         }
-        // Restore localStorage config
-        if (json.localStorage) {
-            try { if (json.localStorage.sectionOrder) localStorage.setItem('sectionOrder', JSON.stringify(json.localStorage.sectionOrder)); } catch(_){}
-            try { if (json.localStorage.hubUsers) localStorage.setItem('hubUsers', JSON.stringify(json.localStorage.hubUsers)); } catch(_){}
-            try { if (json.localStorage.informationHub) localStorage.setItem('informationHub', JSON.stringify(json.localStorage.informationHub)); } catch(_){}
-            try { if (json.localStorage.hubActivities) localStorage.setItem('hubActivities', JSON.stringify(json.localStorage.hubActivities)); } catch(_){}
-        }
-        return true;
     }
 }
 
@@ -475,13 +555,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await hubDatabase.init();
     
     // Check if migration is needed
-    const migrationDone = localStorage.getItem('dbMigrationDone');
+    const migrationDone = localStorage.getItem('supabaseMigrationDone');
     if (!migrationDone) {
         await hubDatabase.migrateFromLocalStorage();
-        localStorage.setItem('dbMigrationDone', 'true');
     }
     
-    // Make globally accessible AFTER init + migration
+    // Make globally accessible
     window.hubDatabase = hubDatabase;
     window.hubDatabaseReady = true;
     document.dispatchEvent(new Event('hubdb-ready'));
@@ -489,4 +568,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Backward compatibility flag
 window.hubDatabaseReady = false;
-
