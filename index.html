@@ -4141,23 +4141,36 @@ Permissions:
             return 'fas fa-folder';
         }
 
+        let isUpdatingSections = false;
+        
         async function updateMainHubSections() {
+            if (isUpdatingSections) {
+                console.log('updateMainHubSections already running, skipping...');
+                return;
+            }
+            
+            isUpdatingSections = true;
             console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
             const hubGrid = document.querySelector('.hub-grid');
-            if (!hubGrid) return;
+            if (!hubGrid) {
+                isUpdatingSections = false;
+                return;
+            }
             hubGrid.innerHTML = '';
             // Always re-read manifest to reflect background-pic folder changes
             try { await ensureBackgroundImagesLoaded(true); } catch (_) {}
             
             // Load sections from Supabase database
             let visibleSections = [];
+            let databaseLoaded = false;
+            
             try {
                 // Wait for database to be ready (with retry)
                 let retries = 0;
-                const maxRetries = 10;
+                const maxRetries = 20; // Increased retries
                 while (retries < maxRetries && (!window.hubDatabase || !window.hubDatabaseReady)) {
                     console.log('Waiting for database to be ready...', retries + 1);
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay
                     retries++;
                 }
                 
@@ -4166,51 +4179,57 @@ Permissions:
                     const sections = await hubDatabase.getAllSections();
                     console.log('Loaded sections from database:', sections);
                     
-                    // Get current user permissions
-                    const sessionRaw = localStorage.getItem('hubSession');
-                    let user = null;
-                    if (sessionRaw) {
-                        try { user = JSON.parse(sessionRaw); } catch (_) {}
-                    }
-                    
-                    // Filter sections based on user permissions
-                    if (user) {
-                        const role = String(user.role || '').toLowerCase();
-                        const canAll = !!(user.permissions && user.permissions.canEditAllSections);
-                        const canViewAll = !!(user.permissions && user.permissions.canViewAllSections);
+                    if (sections && sections.length > 0) {
+                        databaseLoaded = true;
                         
-                        if (role === 'admin' || canAll || canViewAll) {
-                            // Admin or user with all access - show all sections
-                            visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
-                            console.log('User has admin/all access, showing all sections:', visibleSections.length);
+                        // Get current user permissions
+                        const sessionRaw = localStorage.getItem('hubSession');
+                        let user = null;
+                        if (sessionRaw) {
+                            try { user = JSON.parse(sessionRaw); } catch (_) {}
+                        }
+                        
+                        // Filter sections based on user permissions
+                        if (user) {
+                            const role = String(user.role || '').toLowerCase();
+                            const canAll = !!(user.permissions && user.permissions.canEditAllSections);
+                            const canViewAll = !!(user.permissions && user.permissions.canViewAllSections);
+                            
+                            if (role === 'admin' || canAll || canViewAll) {
+                                // Admin or user with all access - show all sections
+                                visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+                                console.log('User has admin/all access, showing all sections:', visibleSections.length);
+                            } else {
+                                // Regular user - filter by permissions
+                                const allowed = new Set((user.permissions && user.permissions.sections) || []);
+                                visibleSections = sections.filter(s => 
+                                    s.visible !== false && allowed.has(s.section_id)
+                                ).sort((a,b) => (a.order||0)-(b.order||0));
+                                console.log('User has limited access, showing sections:', visibleSections.length, 'allowed sections:', Array.from(allowed));
+                            }
                         } else {
-                            // Regular user - filter by permissions
-                            const allowed = new Set((user.permissions && user.permissions.sections) || []);
-                            visibleSections = sections.filter(s => 
-                                s.visible !== false && allowed.has(s.section_id)
-                            ).sort((a,b) => (a.order||0)-(b.order||0));
-                            console.log('User has limited access, showing sections:', visibleSections.length, 'allowed sections:', Array.from(allowed));
+                            // No user logged in - show all sections (for public access)
+                            visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+                            console.log('No user logged in, showing all sections:', visibleSections.length);
                         }
                     } else {
-                        // No user logged in - show all sections (for public access)
-                        visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
-                        console.log('No user logged in, showing all sections:', visibleSections.length);
+                        console.warn('Database returned no sections');
                     }
                 } else {
-                    console.warn('hubDatabase not available, falling back to localStorage');
-                    // Fallback to localStorage if database not available
-                    const sectionOrderRaw = localStorage.getItem('sectionOrder');
-                    let sectionOrder = [];
-                    try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
-                    visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+                    console.warn('hubDatabase not available after retries');
                 }
             } catch (error) {
-                console.error('Error loading sections:', error);
-                // Fallback to localStorage
+                console.error('Error loading sections from database:', error);
+            }
+            
+            // Only fallback to localStorage if database completely failed
+            if (!databaseLoaded || visibleSections.length === 0) {
+                console.warn('Falling back to localStorage for sections');
                 const sectionOrderRaw = localStorage.getItem('sectionOrder');
                 let sectionOrder = [];
                 try { sectionOrder = sectionOrderRaw ? JSON.parse(sectionOrderRaw) : []; } catch (_) { sectionOrder = []; }
                 visibleSections = sectionOrder.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
+                console.log('Loaded sections from localStorage:', visibleSections.length);
             }
             
             if (visibleSections.length === 0) {
@@ -4358,6 +4377,9 @@ Permissions:
             if (!backgroundsDisabled()) initBackgroundLazyLoad(visibleSections);
             updateBackgroundToggleButton();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
+            
+            // Reset the flag
+            isUpdatingSections = false;
         }
         
         // Debug function to check sections
@@ -5450,6 +5472,7 @@ Permissions:
                     try {
                         var k = ev && ev.key || '';
                         if (k === 'refreshHubNow' || k === 'hubLastChange' || (k && k.indexOf('section_config_') === 0)) {
+                            console.log('Storage event triggered updateMainHubSections:', k);
                             if (typeof updateMainHubSections === 'function') updateMainHubSections();
                             else if (typeof updateSectionStats === 'function') updateSectionStats();
                         }
