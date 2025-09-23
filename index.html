@@ -1826,14 +1826,28 @@ Permissions:
             });
         };
         
-        window.loadUserPermissions = function() {
+        window.loadUserPermissions = async function() {
             const userId = document.getElementById('permissionUserSelect').value;
             if (!userId) {
                 document.getElementById('userPermissionForm').style.display = 'none';
                 return;
             }
             
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+            // Load users from Supabase
+            let users = [];
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                    console.log('Loaded users for permissions from Supabase:', users);
+                } else {
+                    console.log('Database not ready for permissions');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error loading users for permissions:', error);
+                return;
+            }
+            
             const user = users.find(u => u.id == userId);
             if (!user) return;
             
@@ -1842,8 +1856,8 @@ Permissions:
             document.getElementById('userPermissionForm').style.display = 'block';
             
             // Load current permissions using dynamic sections (filtered by current user's rights)
-            const sections = getAssignableSectionsForCurrentUser();
-            const sectionNames = getSectionDisplayNames();
+            const sections = await getAssignableSectionsForCurrentUser();
+            const sectionNames = await getSectionDisplayNames();
             
             // Update the permission form HTML to include all available sections
             updatePermissionFormHTML(sections, sectionNames);
@@ -1884,7 +1898,7 @@ Permissions:
         window.saveUserPermissions = async function() {
             if (!currentEditingUser) return;
             
-            const sections = getAssignableSectionsForCurrentUser();
+            const sections = await getAssignableSectionsForCurrentUser();
             const newSections = [];
             const newEditableSections = [];
             
@@ -1900,45 +1914,54 @@ Permissions:
                 }
             });
             
-            // Update user permissions
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const userIndex = users.findIndex(u => u.id === currentEditingUser.id);
-            
-            if (userIndex !== -1) {
-                users[userIndex].permissions.sections = newSections;
-                users[userIndex].permissions.editableSections = newEditableSections;
-                users[userIndex].updatedAt = new Date().toISOString();
-                // Mandatory GitHub sync first
-                if (window.githubData && typeof githubData.upsertUser === 'function') {
-                    await githubData.upsertUser(users[userIndex]);
+            // Update user permissions in Supabase
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    // Update the user's permissions
+                    currentEditingUser.permissions.sections = newSections;
+                    currentEditingUser.permissions.editableSections = newEditableSections;
+                    currentEditingUser.updatedAt = new Date().toISOString();
+                    
+                    // Save to Supabase
+                    await hubDatabase.updateUser(currentEditingUser);
+                    console.log('User permissions updated in Supabase:', currentEditingUser);
+                    
+                    // Update local storage for consistency
+                    const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                    const userIndex = users.findIndex(u => u.id === currentEditingUser.id);
+                    if (userIndex !== -1) {
+                        users[userIndex] = currentEditingUser;
+                        localStorage.setItem('hubUsers', JSON.stringify(users));
+                    }
                 } else {
-                    alert('GitHub sync unavailable – cannot save.');
+                    alert('Database not ready. Please try again.');
                     return;
                 }
-                // Mirror to local/DB
-                localStorage.setItem('hubUsers', JSON.stringify(users));
-                try { if (window.hubDatabase && hubDatabase.saveUser) { await hubDatabase.saveUser(users[userIndex]); } } catch(_){ }
-                
-                // If editing the currently logged-in user, update the session too
-                const session = localStorage.getItem('hubSession');
-                if (session) {
-                    const sessionData = JSON.parse(session);
-                    if (sessionData.userId === currentEditingUser.id) {
-                        sessionData.permissions = {
-                            ...sessionData.permissions,
-                            sections: newSections,
-                            editableSections: newEditableSections
-                        };
-                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                        if (typeof updateUserInterface === 'function') {
-                            try { updateUserInterface(); } catch (e) {}
-                        }
+            } catch (error) {
+                console.error('Error updating user permissions in Supabase:', error);
+                alert('Failed to save permissions: ' + error.message);
+                return;
+            }
+            
+            // If editing the currently logged-in user, update the session too
+            const session = localStorage.getItem('hubSession');
+            if (session) {
+                const sessionData = JSON.parse(session);
+                if (sessionData.userId === currentEditingUser.id) {
+                    sessionData.permissions = {
+                        ...sessionData.permissions,
+                        sections: newSections,
+                        editableSections: newEditableSections
+                    };
+                    localStorage.setItem('hubSession', JSON.stringify(sessionData));
+                    if (typeof updateUserInterface === 'function') {
+                        try { updateUserInterface(); } catch (e) {}
                     }
                 }
-                
-                alert('User permissions updated successfully!');
-                loadUsersList();
             }
+            
+            alert('User permissions updated successfully!');
+            loadUsersList();
         };
         
         window.resetUserPermissions = function() {

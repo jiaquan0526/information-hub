@@ -94,6 +94,27 @@ class HubDatabase {
         }
     }
 
+    async updateUser(user) {
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .update({
+                    username: user.username,
+                    role: user.role || 'viewer',
+                    name: user.name,
+                    email: user.email,
+                    permissions: user.permissions || {}
+                })
+                .eq('id', user.id);
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error updating user:', error);
+            throw error;
+        }
+    }
+
     async deleteUser(id) {
         try {
             const { error } = await this.supabase
@@ -159,6 +180,69 @@ class HubDatabase {
         } catch (error) {
             console.error('Error getting all sections:', error);
             return [];
+        }
+    }
+
+    async createSection(section) {
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .insert({
+                    section_id: section.sectionId || section.id,
+                    name: section.name,
+                    icon: section.icon,
+                    color: section.color,
+                    config: section.config || {},
+                    data: section.data || {},
+                    visible: section.visible !== false,
+                    intro: section.intro || '',
+                    order: section.order || 0
+                });
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error creating section:', error);
+            throw error;
+        }
+    }
+
+    async updateSection(section) {
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .update({
+                    name: section.name,
+                    icon: section.icon,
+                    color: section.color,
+                    config: section.config || {},
+                    data: section.data || {},
+                    visible: section.visible !== false,
+                    intro: section.intro || '',
+                    order: section.order || 0
+                })
+                .eq('section_id', section.sectionId || section.id);
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error updating section:', error);
+            throw error;
+        }
+    }
+
+    async deleteSection(sectionId) {
+        try {
+            const { error } = await this.supabase
+                .from('sections')
+                .delete()
+                .eq('section_id', sectionId);
+            
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting section:', error);
+            throw error;
         }
     }
 
