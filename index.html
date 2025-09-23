@@ -30,22 +30,6 @@
         })();
     } catch (_) {}
     
-    // IMMEDIATE TEST - Show something on page load
-    window.addEventListener('load', function() {
-        console.log('Page loaded, checking for hub-grid...');
-        setTimeout(function() {
-            const hubGrid = document.querySelector('.hub-grid');
-            if (hubGrid) {
-                console.log('hub-grid found on page load');
-                if (hubGrid.innerHTML.trim() === '') {
-                    console.log('hub-grid is empty, showing emergency content');
-                    hubGrid.innerHTML = '<div style="text-align: center; padding: 40px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; color: #155724;"><h3>✅ System Loading</h3><p>Please wait while sections load...</p></div>';
-                }
-            } else {
-                console.error('hub-grid not found on page load!');
-            }
-        }, 2000);
-    });
     </script>
 
 </head>
@@ -392,7 +376,6 @@
     <script src="auth-script.js" defer></script>
     <script src="hub-script.js" defer></script>
     <script>
-        // Debug: Check if navigateToSection function exists
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
         // Check authentication before loading the hub
@@ -457,18 +440,6 @@
                                 <span><i class="fas fa-book"></i> <span>0</span> Playbooks</span>
                                 <span><i class="fas fa-link"></i> <span>0</span> Box Links</span>
                                 <span><i class="fas fa-chart-bar"></i> <span>0</span> Dashboards</span>
-                            </div>
-                        </div>
-                        <div class="hub-card" onclick="window.open('debug-database-connection.html', '_blank')">
-                            <div class="card-header">
-                                <div class="card-icon"><i class="fas fa-bug"></i></div>
-                                <div class="card-title">
-                                    <h3>Debug Database</h3>
-                                    <p class="card-intro">Click to debug database connection</p>
-                                </div>
-                            </div>
-                            <div class="card-stats">
-                                <span><i class="fas fa-tools"></i> <span>Debug</span> Tools</span>
                             </div>
                         </div>
                     `;
@@ -560,7 +531,6 @@
                 }
             }
             
-            // Debug: Check again after DOM is loaded
             console.log('After DOM loaded - navigateToSection function exists:', typeof window.navigateToSection);
         });
         
@@ -805,153 +775,9 @@
             }));
         }
 
-        // Debug helper: Inspect resources contributing to counts
-        window.debugSectionResources = async function(sectionId = 'costing', type = 'playbooks') {
-            const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
-            const getKey = (r) => {
-                const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
-                return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
-            };
-            const newer = (a, b) => {
-                const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
-                const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
-                return tb >= ta ? b : a;
-            };
-            const normType = (t) => {
-                const raw = String(t || '').toLowerCase();
-                if (raw.includes('playbook')) return 'playbooks';
-                if (raw.includes('box')) return 'boxLinks';
-                if (raw.includes('dash')) return 'dashboards';
-                if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') return raw === 'boxlinks' ? 'boxLinks' : raw;
-                return '';
-            };
 
-            const byKey = new Map();
-            const consider = (r, forcedType, origin) => {
-                if (!r) return;
-                const t = forcedType || normType(r.type || r.resourceType || r.category);
-                if (t !== type) return;
-                const key = getKey(r);
-                if (!key) return;
-                const withMeta = { ...r, type: t, __origin: origin };
-                if (!byKey.has(key)) byKey.set(key, withMeta); else byKey.set(key, newer(byKey.get(key), withMeta));
-            };
 
-            if (useDb) {
-                try {
-                    const dbResources = await hubDatabase.getResourcesBySection(sectionId);
-                    (dbResources || []).forEach(r => consider(r, null, 'db'));
-                } catch (_) {}
-            }
-
-            try {
-                const sData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-                (sData.playbooks || []).forEach(r => consider(r, 'playbooks', 'ls:section'));
-                (sData.boxLinks || []).forEach(r => consider(r, 'boxLinks', 'ls:section'));
-                (sData.dashboards || []).forEach(r => consider(r, 'dashboards', 'ls:section'));
-            } catch (_) {}
-
-            try {
-                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                const s = hub[sectionId] || {};
-                (s.playbooks || []).forEach(r => consider(r, 'playbooks', 'ls:hub'));
-                (s.boxLinks || []).forEach(r => consider(r, 'boxLinks', 'ls:hub'));
-                (s.dashboards || []).forEach(r => consider(r, 'dashboards', 'ls:hub'));
-            } catch (_) {}
-
-            const list = Array.from(byKey.values());
-            console.log(`[debugSectionResources] ${sectionId} ${type} →`, list.length, list);
-            alert(`${sectionId} ${type} unique count: ${list.length}`);
-            return list;
-        };
-
-        // Repair helper: unify section data across stores, assign IDs if missing, and persist
-        window.repairSectionData = async function(sectionId = 'costing') {
-            const useDb = !!(window.hubDatabase && window.hubDatabaseReady);
-            const ensureId = (r, t) => {
-                if (r.id !== undefined && r.id !== null && r.id !== '') return r;
-                const ts = Date.now().toString(36);
-                const rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-                return { ...r, id: `${sectionId}:${t}:${ts}:${rand}` };
-            };
-            const types = ['playbooks','boxLinks','dashboards'];
-            let hub = {}; try { hub = JSON.parse(localStorage.getItem('informationHub') || '{}'); } catch(_) { hub = {}; }
-            let sec = {}; try { sec = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{}'); } catch(_) { sec = {}; }
-            hub[sectionId] = hub[sectionId] || { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
-            const out = { playbooks: [], boxLinks: [], dashboards: [] };
-            const byKey = new Map();
-            const keyOf = (r) => {
-                const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
-                return id ? `id:${id}` : `pair:${canonicalKeyForResource(r)}`;
-            };
-            const newer = (a, b) => {
-                const ta = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
-                const tb = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
-                return tb >= ta ? b : a;
-            };
-            const addAll = (arr, t) => (arr || []).forEach(r => {
-                const withId = ensureId(r, t);
-                const k = keyOf(withId);
-                if (!k) return;
-                if (!byKey.has(k)) byKey.set(k, { ...withId, type: t }); else byKey.set(k, newer(byKey.get(k), { ...withId, type: t }));
-            });
-            types.forEach(t => { addAll(hub[sectionId][t], t); addAll(sec[t], t); });
-            if (useDb) {
-                try { (await hubDatabase.getResourcesBySection(sectionId)).forEach(r => addAll([r], r.type)); } catch(_) {}
-            }
-            byKey.forEach(r => { if (r.type && out[r.type]) out[r.type].push(r); });
-            localStorage.setItem(`section_${sectionId}`, JSON.stringify(out));
-            hub[sectionId] = { ...(hub[sectionId] || {}), ...out };
-            localStorage.setItem('informationHub', JSON.stringify(hub));
-            if (useDb) {
-                try { for (const t of types) { for (const r of out[t]) { await hubDatabase.saveResource({ ...r, sectionId, type: t }); } } } catch(_) {}
-            }
-            updateSectionStats();
-            alert(`Repaired section '${sectionId}'. Counts recalculated.`);
-        };
-
-        function updateSectionStatsFallback(section) {
-            // LocalStorage-only union using unique ids per type (latest timestamp kept)
-            try {
-                const idSets = {
-                    playbooks: new Map(),
-                    boxLinks: new Map(),
-                    dashboards: new Map()
-                };
-                const consider = (type, r) => {
-                    if (!r) return;
-                    const id = r.id;
-                    if (id === undefined || id === null || id === '') return;
-                    const ts = Date.parse(r?.updatedAt || r?.createdAt || 0) || 0;
-                    const prev = idSets[type].get(String(id));
-                    if (!prev || ts >= prev) idSets[type].set(String(id), ts);
-                };
-                const data = JSON.parse(localStorage.getItem(`section_${section}`) || '{"playbooks":[],"boxLinks":[],"dashboards":[]}');
-                (data.playbooks || []).forEach(r => consider('playbooks', r));
-                (data.boxLinks || []).forEach(r => consider('boxLinks', r));
-                (data.dashboards || []).forEach(r => consider('dashboards', r));
-                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                const s = hub[section] || {};
-                (s.playbooks || []).forEach(r => consider('playbooks', r));
-                (s.boxLinks || []).forEach(r => consider('boxLinks', r));
-                (s.dashboards || []).forEach(r => consider('dashboards', r));
-                const playbooks = idSets.playbooks.size;
-                const boxLinks = idSets.boxLinks.size;
-                const dashboards = idSets.dashboards.size;
-                const playbooksEl = document.getElementById(`${section}-playbooks`);
-                const boxLinksEl = document.getElementById(`${section}-boxlinks`);
-                const dashboardsEl = document.getElementById(`${section}-dashboards`);
-                if (playbooksEl) playbooksEl.textContent = playbooks;
-                if (boxLinksEl) boxLinksEl.textContent = boxLinks;
-                if (dashboardsEl) dashboardsEl.textContent = dashboards;
-            } catch (_) {}
-        }
         
-        // Simple test function
-        window.testNavigation = function() {
-            console.log('Test navigation called');
-            alert('Navigation test - this should work!');
-        };
         
         // Centralized content activity logger
         window.recordContentActivity = function({ action, section, type, title }) {
@@ -1185,105 +1011,8 @@
             };
         }
         
-        // Debug function to check admin panel
-        window.testAdminPanel = function() {
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
-                alert('No session found');
-                return;
-            }
-            
-            const user = JSON.parse(session);
-            alert(`User: ${user.username}, Role: ${user.role}`);
-            
-            const adminBtn = document.getElementById('adminPanelBtn');
-            if (adminBtn) {
-                alert(`Admin button found. Display: ${adminBtn.style.display}`);
-                adminBtn.style.display = 'inline-flex';
-                alert('Admin button should now be visible!');
-            } else {
-                alert('Admin button not found!');
-            }
-        };
         
-        // Force show admin button for testing
-        window.forceShowAdmin = function() {
-            const adminBtn = document.getElementById('adminPanelBtn');
-            const adminQuickAccess = document.getElementById('adminQuickAccess');
-            const debugSection = document.getElementById('debugSection');
-            
-            if (adminBtn) {
-                adminBtn.style.display = 'inline-flex';
-                adminBtn.style.background = '#ff6b6b';
-                adminBtn.innerHTML = '<i class="fas fa-cog"></i> FORCED Admin Panel';
-                console.log('Admin button forced to show!');
-            }
-            
-            if (adminQuickAccess) {
-                adminQuickAccess.style.display = 'block';
-                console.log('Admin quick access forced to show!');
-            }
-            
-            if (debugSection) {
-                debugSection.style.display = 'block';
-                console.log('Debug section shown!');
-            }
-            
-            alert('All admin controls forced to show! Check the page now.');
-        };
         
-        // Test admin functions
-        window.testAdminFunctions = function() {
-            console.log('Testing admin functions...');
-            alert('Testing admin functions - check console for details');
-            
-            // Test if functions exist
-            console.log('showAdminPanel exists:', typeof window.showAdminPanel);
-            console.log('resetSections exists:', typeof window.resetSections);
-            
-            // Test section order
-            console.log('sectionOrder:', sectionOrder);
-            
-            // Test admin controls visibility
-            const adminBtn = document.getElementById('adminPanelBtn');
-            const adminQuickAccess = document.getElementById('adminQuickAccess');
-            console.log('Admin button found:', !!adminBtn);
-            console.log('Admin quick access found:', !!adminQuickAccess);
-            console.log('Admin button display:', adminBtn ? adminBtn.style.display : 'not found');
-            console.log('Admin quick access display:', adminQuickAccess ? adminQuickAccess.style.display : 'not found');
-        };
-        
-        // Run debug tests
-        window.runDebugTests = function() {
-            const debugInfo = document.getElementById('debugInfo');
-            if (!debugInfo) return;
-            
-            let info = '<h4>Debug Test Results:</h4>';
-            
-            // Check session
-            const session = localStorage.getItem('hubSession');
-            info += `<p><strong>Session:</strong> ${session ? 'Found' : 'Not found'}</p>`;
-            
-            if (session) {
-                const user = JSON.parse(session);
-                info += `<p><strong>User:</strong> ${user.username} (${user.role})</p>`;
-            }
-            
-            // Check admin elements
-            const adminBtn = document.getElementById('adminPanelBtn');
-            const adminQuickAccess = document.getElementById('adminQuickAccess');
-            info += `<p><strong>Admin Button:</strong> ${adminBtn ? 'Found' : 'Not found'}</p>`;
-            info += `<p><strong>Admin Quick Access:</strong> ${adminQuickAccess ? 'Found' : 'Not found'}</p>`;
-            
-            // Check functions
-            info += `<p><strong>showAdminPanel:</strong> ${typeof window.showAdminPanel}</p>`;
-            info += `<p><strong>resetSections:</strong> ${typeof window.resetSections}</p>`;
-            
-            // Check section order
-            info += `<p><strong>sectionOrder length:</strong> ${sectionOrder ? sectionOrder.length : 'Not defined'}</p>`;
-            
-            debugInfo.innerHTML = info;
-        };
         
         // Show section manager directly
         window.showSectionManager = function() {
@@ -1324,24 +1053,6 @@
             }
         };
         
-        // Test user login function
-        window.testUserLogin = function() {
-            console.log('Testing user login...');
-            // Create a test user session
-            const testUser = {
-                userId: 3,
-                username: 'user',
-                role: 'user',
-                name: 'Regular User',
-                email: 'user@company.com'
-            };
-            
-            localStorage.setItem('hubSession', JSON.stringify(testUser));
-            console.log('Test user session created');
-            
-            // Reload the page to apply the new session
-            location.reload();
-        };
         
         // Force refresh user data
         window.refreshUserData = function() {
@@ -1362,515 +1073,13 @@
             alert(userInfo);
         };
         
-        // Force update current user session with fresh data
-        window.forceUpdateSession = function() {
-            console.log('Force updating current session...');
-            
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
-                alert('No active session found');
-                return;
-            }
-            
-            const sessionData = JSON.parse(session);
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const user = users.find(u => u.id === sessionData.userId);
-            
-            if (!user) {
-                alert('User not found in database');
-                return;
-            }
-            
-            // Update session with fresh user data
-            const updatedSession = {
-                userId: user.id,
-                username: user.username,
-                role: user.role,
-                name: user.name,
-                email: user.email,
-                loginTime: sessionData.loginTime,
-                permissions: user.permissions
-            };
-            
-            localStorage.setItem('hubSession', JSON.stringify(updatedSession));
-            console.log('Session updated with fresh data:', updatedSession);
-            
-            // Update UI
-            updateUserInterface();
-            
-            alert('Session updated! Check the page for changes.');
-        };
         
-        // Force refresh the entire page to ensure all updates are applied
-        window.forceRefresh = function() {
-            console.log('Force refreshing page...');
-            location.reload();
-        };
         
-        // Comprehensive permission test
-        window.testPermissionFlow = function() {
-            console.log('=== TESTING PERMISSION FLOW ===');
-            
-            // 1. Check current session
-            const session = localStorage.getItem('hubSession');
-            console.log('1. Current session:', session ? JSON.parse(session) : 'None');
-            
-            // 2. Check stored users
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            console.log('2. Stored users:', users);
-            
-            // 3. Find current user in stored data
-            if (session) {
-                const sessionData = JSON.parse(session);
-                const currentUser = users.find(u => u.id === sessionData.userId);
-                console.log('3. Current user in stored data:', currentUser);
-                
-                if (currentUser) {
-                    console.log('4. User permissions:', currentUser.permissions);
-                    console.log('5. User sections:', currentUser.permissions?.sections);
-                    
-                    // 6. Check if session matches stored data
-                    const sessionMatches = JSON.stringify(sessionData.permissions) === JSON.stringify(currentUser.permissions);
-                    console.log('6. Session matches stored data:', sessionMatches);
-                    
-                    if (!sessionMatches) {
-                        console.log('7. UPDATING SESSION WITH FRESH DATA...');
-                        sessionData.permissions = currentUser.permissions;
-                        sessionData.name = currentUser.name;
-                        sessionData.email = currentUser.email;
-                        sessionData.role = currentUser.role;
-                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                        updateUserInterface();
-                        console.log('7. Session updated!');
-                    }
-                }
-            }
-            
-            // 7. Show test results
-            let testResults = 'PERMISSION FLOW TEST RESULTS:\n\n';
-            testResults += `Session exists: ${!!session}\n`;
-            testResults += `Users in storage: ${users.length}\n`;
-            
-            if (session) {
-                const sessionData = JSON.parse(session);
-                const currentUser = users.find(u => u.id === sessionData.userId);
-                testResults += `Current user found: ${!!currentUser}\n`;
-                if (currentUser) {
-                    testResults += `User sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
-                    testResults += `Session sections: ${sessionData.permissions?.sections?.join(', ') || 'None'}\n`;
-                    testResults += `Sections match: ${JSON.stringify(sessionData.permissions) === JSON.stringify(currentUser.permissions)}\n`;
-                }
-            }
-            
-            alert(testResults);
-            console.log('=== PERMISSION FLOW TEST COMPLETE ===');
-        };
         
-        // Direct fix for user permissions
-        window.fixUserPermissions = function() {
-            console.log('=== FIXING USER PERMISSIONS ===');
-            
-            // Get current session
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
-                alert('No active session found');
-                return;
-            }
-            
-            const sessionData = JSON.parse(session);
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const currentUser = users.find(u => u.id === sessionData.userId);
-            
-            if (!currentUser) {
-                alert('Current user not found in stored data');
-                return;
-            }
-            
-            console.log('Current user before fix:', currentUser);
-            console.log('Current session before fix:', sessionData);
-            
-            // Force update session with fresh user data
-            const updatedSession = {
-                userId: currentUser.id,
-                username: currentUser.username,
-                role: currentUser.role,
-                name: currentUser.name,
-                email: currentUser.email,
-                loginTime: sessionData.loginTime,
-                permissions: currentUser.permissions
-            };
-            
-            localStorage.setItem('hubSession', JSON.stringify(updatedSession));
-            console.log('Session updated with fresh data:', updatedSession);
-            
-            // Force update UI
-            updateUserInterface();
-            
-            // Show what was fixed
-            let fixResults = 'USER PERMISSIONS FIXED:\n\n';
-            fixResults += `User: ${currentUser.username} (${currentUser.role})\n`;
-            fixResults += `Sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
-            fixResults += `Editable: ${currentUser.permissions?.editableSections?.join(', ') || 'None'}\n\n`;
-            fixResults += 'Session has been updated with fresh data.\n';
-            fixResults += 'The page should now show the correct sections.';
-            
-            alert(fixResults);
-            console.log('=== USER PERMISSIONS FIXED ===');
-        };
         
-        // Super simple test function
-        window.simpleTest = function() {
-            console.log('=== SIMPLE TEST ===');
-            
-            // 1. Check what's in localStorage
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            console.log('1. Users in localStorage:', users);
-            
-            // 2. Check current session
-            const session = localStorage.getItem('hubSession');
-            console.log('2. Current session:', session ? JSON.parse(session) : 'None');
-            
-            // 3. Find current user
-            if (session) {
-                const sessionData = JSON.parse(session);
-                const currentUser = users.find(u => u.id === sessionData.userId);
-                console.log('3. Current user found:', currentUser);
-                
-                if (currentUser) {
-                    console.log('4. User sections:', currentUser.permissions?.sections);
-                    
-                    // 4. Show all sections on page
-                    const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
-                    console.log('5. All available sections:', allSections);
-                    
-                    // 5. Force show all sections for testing
-                    const hubCards = document.querySelectorAll('.hub-card');
-                    console.log('6. Found hub cards:', hubCards.length);
-                    
-                    hubCards.forEach(card => {
-                        try {
-                            const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-                            console.log('7. Processing section:', sectionId);
-                            card.style.display = 'block'; // Force show all
-                        } catch (error) {
-                            console.error('Error processing card:', error);
-                        }
-                    });
-                    
-                    alert(`SIMPLE TEST RESULTS:\n\nUser: ${currentUser.username}\nSections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n\nAll sections should now be visible for testing.`);
-                }
-            }
-            
-            console.log('=== SIMPLE TEST COMPLETE ===');
-        };
         
-        // Ultra simple fix - just show sections based on what's in localStorage
-        window.ultraSimpleFix = function() {
-            console.log('=== ULTRA SIMPLE FIX ===');
-            
-            // Get current session
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
-                alert('No active session found');
-                return;
-            }
-            
-            const sessionData = JSON.parse(session);
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const currentUser = users.find(u => u.id === sessionData.userId);
-            
-            if (!currentUser) {
-                alert('Current user not found in database');
-                return;
-            }
-            
-            console.log('Current user in database:', currentUser);
-            console.log('User sections in database:', currentUser.permissions?.sections);
-            
-            // Get all section cards
-            const hubCards = document.querySelectorAll('.hub-card');
-            console.log('Found hub cards:', hubCards.length);
-            
-            // Show/hide sections based on database data
-            hubCards.forEach(card => {
-                try {
-                    const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-                    console.log('Processing section:', sectionId);
-                    
-                    // Check if user has access to this section
-                    const hasAccess = currentUser.permissions?.sections?.includes(sectionId) || false;
-                    
-                    if (hasAccess) {
-                        card.style.display = 'block';
-                        console.log('✅ Showing section:', sectionId);
-                    } else {
-                        card.style.display = 'none';
-                        console.log('❌ Hiding section:', sectionId);
-                    }
-                } catch (error) {
-                    console.error('Error processing card:', error);
-                }
-            });
-            
-            // Show results
-            let results = 'ULTRA SIMPLE FIX APPLIED:\n\n';
-            results += `User: ${currentUser.username}\n`;
-            results += `Sections in database: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n\n`;
-            results += 'Sections have been updated based on database data.\n';
-            results += 'Check the page - you should now see the correct sections!';
-            
-            alert(results);
-            console.log('=== ULTRA SIMPLE FIX COMPLETE ===');
-        };
         
-        // Auto-sync function that runs every 5 seconds
-        window.startAutoSync = function() {
-            console.log('Starting auto-sync every 5 seconds...');
-            
-            setInterval(() => {
-                const session = localStorage.getItem('hubSession');
-                if (session) {
-                    console.log('Auto-sync running...');
-                    updateUserInterface();
-                }
-            }, 5000);
-            
-            alert('Auto-sync started! The page will automatically update every 5 seconds to keep sections in sync.');
-        };
         
-        // Stop auto-sync function
-        window.stopAutoSync = function() {
-            console.log('Stopping auto-sync...');
-            // Note: This is a simple implementation. In a real app, you'd store the interval ID.
-            alert('Auto-sync stopped. You can restart it with "Start Auto Sync" button.');
-        };
-        
-        // Comprehensive debug function
-        window.comprehensiveDebug = function() {
-            console.log('=== COMPREHENSIVE DEBUG ===');
-            
-            // 1. Check localStorage data
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            console.log('1. Users in localStorage:', users);
-            
-            // 2. Check current session
-            const session = localStorage.getItem('hubSession');
-            console.log('2. Current session:', session ? JSON.parse(session) : 'None');
-            
-            // 3. Find current user
-            if (session) {
-                const sessionData = JSON.parse(session);
-                const currentUser = users.find(u => u.id === sessionData.userId);
-                console.log('3. Current user found:', currentUser);
-                
-                if (currentUser) {
-                    console.log('4. User sections in database:', currentUser.permissions?.sections);
-                    console.log('5. User sections in session:', sessionData.permissions?.sections);
-                    
-                    // 6. Check if they match
-                    const sectionsMatch = JSON.stringify(sessionData.permissions?.sections) === JSON.stringify(currentUser.permissions?.sections);
-                    console.log('6. Sections match:', sectionsMatch);
-                    
-                    // 7. Check what sections are currently visible
-                    const hubCards = document.querySelectorAll('.hub-card');
-                    console.log('7. Found hub cards:', hubCards.length);
-                    
-                    const visibleSections = [];
-                    const hiddenSections = [];
-                    
-                    hubCards.forEach(card => {
-                        try {
-                            const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-                            if (card.style.display === 'none') {
-                                hiddenSections.push(sectionId);
-                            } else {
-                                visibleSections.push(sectionId);
-                            }
-                        } catch (error) {
-                            console.error('Error processing card:', error);
-                        }
-                    });
-                    
-                    console.log('8. Currently visible sections:', visibleSections);
-                    console.log('9. Currently hidden sections:', hiddenSections);
-                    
-                    // 10. Show comprehensive results
-                    let debugResults = 'COMPREHENSIVE DEBUG RESULTS:\n\n';
-                    debugResults += `User: ${currentUser.username} (${currentUser.role})\n`;
-                    debugResults += `Database sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
-                    debugResults += `Session sections: ${sessionData.permissions?.sections?.join(', ') || 'None'}\n`;
-                    debugResults += `Sections match: ${sectionsMatch}\n\n`;
-                    debugResults += `Currently visible: ${visibleSections.join(', ')}\n`;
-                    debugResults += `Currently hidden: ${hiddenSections.join(', ')}\n\n`;
-                    
-                    if (sectionsMatch && visibleSections.length === currentUser.permissions?.sections?.length) {
-                        debugResults += '✅ Everything looks correct!';
-                    } else {
-                        debugResults += '❌ There are issues that need fixing.';
-                    }
-                    
-                    alert(debugResults);
-                }
-            }
-            
-            console.log('=== COMPREHENSIVE DEBUG COMPLETE ===');
-        };
-        
-        // Manual permission setter for testing
-        window.setUserPermissions = function() {
-            console.log('=== MANUALLY SETTING USER PERMISSIONS ===');
-            
-            // Get current session
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
-                alert('No active session found');
-                return;
-            }
-            
-            const sessionData = JSON.parse(session);
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const currentUser = users.find(u => u.id === sessionData.userId);
-            
-            if (!currentUser) {
-                alert('Current user not found');
-                return;
-            }
-            
-            console.log('Current user before change:', currentUser);
-            
-            // Manually set user permissions to include more sections
-            currentUser.permissions.sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
-            currentUser.permissions.editableSections = ['costing', 'supply-planning'];
-            
-            // Save updated users
-            localStorage.setItem('hubUsers', JSON.stringify(users));
-            console.log('Updated users saved to localStorage');
-            
-            // Update session
-            sessionData.permissions = currentUser.permissions;
-            localStorage.setItem('hubSession', JSON.stringify(sessionData));
-            console.log('Updated session saved');
-            
-            // Update UI
-            updateUserInterface();
-            
-            alert(`USER PERMISSIONS MANUALLY SET:\n\nUser: ${currentUser.username}\nSections: ${currentUser.permissions.sections.join(', ')}\nEditable: ${currentUser.permissions.editableSections.join(', ')}\n\nCheck the page - you should now see all sections!`);
-            
-            console.log('=== MANUAL PERMISSION SET COMPLETE ===');
-        };
-        
-        // Test login sync function
-        window.testLoginSync = function() {
-            console.log('=== TESTING LOGIN SYNC ===');
-            
-            // 1. Check current session
-            const session = localStorage.getItem('hubSession');
-            console.log('1. Current session:', session ? JSON.parse(session) : 'None');
-            
-            // 2. Check stored users
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            console.log('2. Stored users:', users);
-            
-            // 3. Find current user in stored data
-            if (session) {
-                const sessionData = JSON.parse(session);
-                const currentUser = users.find(u => u.id === sessionData.userId);
-                console.log('3. Current user in stored data:', currentUser);
-                
-                if (currentUser) {
-                    console.log('4. User sections in stored data:', currentUser.permissions?.sections);
-                    console.log('5. Session sections:', sessionData.permissions?.sections);
-                    
-                    // 6. Check if they match
-                    const sectionsMatch = JSON.stringify(sessionData.permissions?.sections) === JSON.stringify(currentUser.permissions?.sections);
-                    console.log('6. Sections match:', sectionsMatch);
-                    
-                    if (!sectionsMatch) {
-                        console.log('7. SYNCING SESSION WITH STORED DATA...');
-                        sessionData.permissions = currentUser.permissions;
-                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                        updateUserInterface();
-                        console.log('7. Session synced!');
-                    }
-                    
-                    // 7. Show results
-                    let results = 'LOGIN SYNC TEST RESULTS:\n\n';
-                    results += `User: ${currentUser.username}\n`;
-                    results += `Stored sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
-                    results += `Session sections: ${sessionData.permissions?.sections?.join(', ') || 'None'}\n`;
-                    results += `Sections match: ${sectionsMatch}\n\n`;
-                    
-                    if (sectionsMatch) {
-                        results += '✅ Login sync is working correctly!';
-                    } else {
-                        results += '❌ Login sync had issues - now fixed!';
-                    }
-                    
-                    alert(results);
-                }
-            }
-            
-            console.log('=== LOGIN SYNC TEST COMPLETE ===');
-        };
-        
-        // Force sync user permissions from database
-        window.forceSyncUserPermissions = function() {
-            console.log('=== FORCING USER PERMISSION SYNC ===');
-            
-            // Get current session
-            const session = localStorage.getItem('hubSession');
-            if (!session) {
-                alert('No active session found');
-                return;
-            }
-            
-            const sessionData = JSON.parse(session);
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const currentUser = users.find(u => u.id === sessionData.userId);
-            
-            if (!currentUser) {
-                alert('Current user not found in database');
-                return;
-            }
-            
-            console.log('Current user in database:', currentUser);
-            console.log('Current session before sync:', sessionData);
-            
-            // Force update session with database data
-            const updatedSession = {
-                userId: currentUser.id,
-                username: currentUser.username,
-                role: currentUser.role,
-                name: currentUser.name,
-                email: currentUser.email,
-                loginTime: sessionData.loginTime,
-                permissions: currentUser.permissions
-            };
-            
-            localStorage.setItem('hubSession', JSON.stringify(updatedSession));
-            console.log('Session updated with database data:', updatedSession);
-            
-            // Force update UI
-            updateUserInterface();
-            
-            // Show what was synced
-            let syncResults = 'USER PERMISSIONS FORCE SYNCED:\n\n';
-            syncResults += `User: ${currentUser.username}\n`;
-            syncResults += `Database sections: ${currentUser.permissions?.sections?.join(', ') || 'None'}\n`;
-            syncResults += `Session sections: ${updatedSession.permissions?.sections?.join(', ') || 'None'}\n\n`;
-            syncResults += 'Session has been updated with latest database data.\n';
-            syncResults += 'The page should now show the correct sections!';
-            
-            alert(syncResults);
-            console.log('=== FORCE SYNC COMPLETE ===');
-        };
-        
-        // Fallback navigation function in case the main one doesn't work
-        window.navigateToSection = function(sectionId) {
-            console.log('Fallback navigateToSection called with:', sectionId);
-            localStorage.setItem('currentSection', sectionId);
-            window.location.href = `section.html?section=${sectionId}`;
-        };
         
         // Quick action functions
         window.showAllSections = function() {
@@ -2348,49 +1557,7 @@ Permissions:
                                 InformationHubClass: !!window.InformationHub,
                                 windowAddUser: typeof window.addUser
                             });
-                            // Fallback: perform local Add User inline if hub isn't ready
-                            try {
-                                const fallbackAddUser = () => {
-                                    const username = prompt('Enter username:');
-                                    if (!username) return;
-                                    const password = prompt('Enter password:');
-                                    if (!password) return;
-                                    const name = prompt('Enter full name:');
-                                    const email = prompt('Enter email:');
-                                    const role = prompt('Enter role (admin/manager/user):');
-                                    const validRoles = ['admin','manager','user'];
-                                    if (!validRoles.includes((role || '').toLowerCase())) {
-                                        alert('Invalid role. Must be admin, manager, or user');
-                                        return;
-                                    }
-                                    const defaults = {
-                                        admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
-                                        manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'] },
-                                        user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'] }
-                                    };
-                                    const newUser = {
-                                        id: Date.now(),
-                                        username: username,
-                                        password: password,
-                                        name: name || username,
-                                        email: email || '',
-                                        role: role.toLowerCase(),
-                                        permissions: defaults[role.toLowerCase()],
-                                        createdAt: new Date().toISOString()
-                                    };
-                                    const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                                    users.push(newUser);
-                                    localStorage.setItem('hubUsers', JSON.stringify(users));
-                                    // Best-effort: persist to IndexedDB if ready
-                                    try { if (window.hubDatabase && hubDatabase.saveUser) hubDatabase.saveUser(newUser); } catch(_){}
-                                    // Try refresh UI if available
-                                    try { if (typeof loadUsersList === 'function') loadUsersList(); } catch(_){}
-                                    try { alert('User added successfully (fallback)'); } catch(_){}
-                                };
-                                return fallbackAddUser();
-                            } catch (fallbackError) {
-                                alert('Add User function failed to initialize. Please refresh the page and try again.');
-                            }
+                            alert('Add User function not available. Please ensure the system is properly initialized.');
                         } catch (err) {
                             alert('Add User failed: ' + err.message);
                         }
@@ -2550,7 +1717,6 @@ Permissions:
                 // Show/hide admin panel button and quick access
                 const adminBtn = document.getElementById('adminPanelBtn');
                 const adminQuickAccess = document.getElementById('adminQuickAccess');
-                const debugSection = document.getElementById('debugSection');
                 const reshuffleBtn = document.getElementById('reshuffleBackgroundsBtn');
                 
                 console.log('Admin button found:', !!adminBtn);
@@ -2579,16 +1745,6 @@ Permissions:
                         }
                     }
                     
-                    // Show debug section only for admin
-                    if (debugSection) {
-                        if (user.role === 'admin') {
-                            debugSection.style.display = 'block';
-                            console.log('Debug section shown for admin');
-                        } else {
-                            debugSection.style.display = 'none';
-                            console.log('Debug section hidden for manager');
-                        }
-                    }
 
                     // Show reshuffle backgrounds only for admin
                     if (reshuffleBtn) {
@@ -2615,7 +1771,6 @@ Permissions:
                     // Hide admin controls for regular users
                     if (adminBtn) adminBtn.style.display = 'none';
                     if (adminQuickAccess) adminQuickAccess.style.display = 'none';
-                    if (debugSection) debugSection.style.display = 'none';
                     if (reshuffleBtn) reshuffleBtn.style.display = 'none';
                     console.log('Admin controls hidden for regular user');
                 }
@@ -2667,12 +1822,9 @@ Permissions:
                 allowedSections = user.permissions.sections.filter(id => visibleSections.includes(id));
                 console.log('✅ Using user-specific section permissions (intersect visible):', allowedSections);
             } else {
-                // Role fallback intersect visible
-                let fallback = [];
-                if (user.role === 'manager') fallback = ['costing', 'supply-planning', 'operations', 'quality'];
-                else fallback = ['costing', 'supply-planning'];
-                allowedSections = fallback.filter(id => visibleSections.includes(id));
-                console.log('⚠️ Role-based fallback permissions (intersect visible):', allowedSections);
+                // No specific permissions - show no sections
+                allowedSections = [];
+                console.log('No specific permissions - showing no sections');
             }
             
             console.log('Final allowed sections for', user.username, ':', allowedSections);
@@ -4198,64 +3350,53 @@ Permissions:
         let lastUpdateTime = 0;
         
         async function updateMainHubSections() {
-            console.log('=== updateMainHubSections CALLED ===');
+            console.log('Loading sections from Supabase...');
             
             // Check if hubDatabase is available
             if (!window.hubDatabase || !window.hubDatabaseReady) {
-                console.log('hubDatabase not ready, keeping simple sections');
+                console.error('Database not ready');
                 return;
             }
             
-            console.log('hubDatabase is ready, attempting to load sections...');
-            
             const now = Date.now();
             if (isUpdatingSections) {
-                console.log('updateMainHubSections already running, skipping...');
+                console.log('Update already in progress, skipping...');
                 return;
             }
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
-                console.log('updateMainHubSections called too frequently, skipping...');
+                console.log('Update called too frequently, skipping...');
                 return;
             }
             
             isUpdatingSections = true;
             lastUpdateTime = now;
-            console.log('=== UPDATE MAIN HUB SECTIONS (REBUILD) ===');
+            
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) {
-                console.error('hubGrid not found!');
+                console.error('Hub grid not found');
                 isUpdatingSections = false;
                 return;
             }
             
-            console.log('hubGrid found, proceeding with section loading...');
-            // Always re-read manifest to reflect background-pic folder changes
-            try { await ensureBackgroundImagesLoaded(true); } catch (_) {}
-            
             // Load sections from Supabase database
             let visibleSections = [];
-            let databaseLoaded = false;
             
             try {
-                // Wait for database to be ready (with retry)
+                // Wait for database to be ready
                 let retries = 0;
-                const maxRetries = 20; // Increased retries
+                const maxRetries = 20;
                 while (retries < maxRetries && (!window.hubDatabase || !window.hubDatabaseReady)) {
-                    console.log('Waiting for database to be ready...', retries + 1);
-                    await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay
+                    await new Promise(resolve => setTimeout(resolve, 200));
                     retries++;
                 }
                 
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                    console.log('Loading sections from Supabase database...');
                     const sections = await hubDatabase.getAllSections();
                     console.log('Loaded sections from database:', sections);
                     
                     if (sections && sections.length > 0) {
-                        databaseLoaded = true;
-                        
                         // Get current user permissions
                         const sessionRaw = localStorage.getItem('hubSession');
                         let user = null;
@@ -4291,49 +3432,21 @@ Permissions:
                             console.log('No user logged in, showing all sections:', visibleSections.length);
                         }
                     } else {
-                        console.warn('Database returned no sections');
+                        console.warn('No sections found in database');
                     }
                 } else {
-                    console.warn('hubDatabase not available after retries');
+                    console.error('Database not available');
                 }
             } catch (error) {
                 console.error('Error loading sections from database:', error);
             }
             
-            // ALWAYS show fallback sections - never leave page blank
-            if (!databaseLoaded || visibleSections.length === 0) {
-                console.error('CRITICAL: Database failed to load sections. Using emergency fallback.');
-                console.error('Please check:');
-                console.error('1. Supabase connection');
-                console.error('2. Database has sections');
-                console.error('3. User permissions are set');
-                console.error('4. RLS policies allow access');
-                
-                // Emergency fallback - show basic sections
-                visibleSections = [
-                    { id: 'example', name: 'Example Section', description: 'Database connection failed - using fallback', icon: 'fas fa-exclamation-triangle', visible: true, order: 1 },
-                    { id: 'debug', name: 'Debug Database', description: 'Click to debug database connection', icon: 'fas fa-bug', visible: true, order: 2 },
-                    { id: 'test', name: 'Test Section', description: 'This is a test section to verify the system is working', icon: 'fas fa-check-circle', visible: true, order: 3 }
-                ];
-                console.log('Using emergency fallback sections:', visibleSections);
-                
-                // Add debug info to the page immediately
-                const debugInfo = document.createElement('div');
-                debugInfo.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24; font-size: 12px; z-index: 9999; max-width: 300px;';
-                debugInfo.innerHTML = `
-                    <strong>⚠️ Database Error</strong><br>
-                    Database connection failed. Using fallback sections.<br>
-                    <a href="debug-database-connection.html" target="_blank" style="color: #721c24;">Debug Database</a>
-                `;
-                document.body.appendChild(debugInfo);
-            }
-            
+            // If no sections found, show empty state
             if (visibleSections.length === 0) {
-                console.warn('No visible sections configured - using emergency fallback');
-                // EMERGENCY FALLBACK - ALWAYS show something
-                visibleSections = [
-                    { id: 'emergency', name: 'Emergency Fallback', description: 'System is working but database failed', icon: 'fas fa-exclamation-triangle', visible: true, order: 1 }
-                ];
+                console.log('No sections to display');
+                hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
+                isUpdatingSections = false;
+                return;
             }
             const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
             const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
@@ -4439,11 +3552,8 @@ Permissions:
                         return `<span>${iconHtml} <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
                     }).join(' ');
 
-                    // Special handling for debug section
-                    const onClickHandler = section.id === 'debug' ? 'window.open("debug-database-connection.html", "_blank")' : `navigateToSection('${section.id}')`;
-                    
                     const cardHTML = `
-                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="${onClickHandler}">
+                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
                     <div class="card-header">
                         <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                         <div class="card-title">
@@ -4455,24 +3565,8 @@ Permissions:
                 </div>`;
                     newContent += cardHTML;
                 } catch (e) {
-                    console.warn('Card build failed for section', section && section.id, e);
-                    // Fallback: render the classic 3 counters to avoid blank cards
-                    const fallbackHTML = `
-                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
-                    <div class="card-header">
-                        <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
-                        <div class="card-title">
-                            <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
-                            <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
-                        </div>
-                    </div>
-                    <div class="card-stats" id="${section.id}-stats">
-                        <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> Playbooks</span>
-                        <span><i class="fas fa-link"></i> <span id="${section.id}-boxLinks">0</span> Box Links</span>
-                        <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
-                    </div>
-                </div>`;
-                    newContent += fallbackHTML;
+                    console.error('Card build failed for section', section && section.id, e);
+                    // Skip this section if it fails to build
                 }
                 // Background will be scheduled lazily
             }
@@ -4490,75 +3584,6 @@ Permissions:
             // Reset the flag
             isUpdatingSections = false;
         }
-        
-        // Debug function to check sections
-        window.debugSections = function() {
-            console.log('=== DEBUGGING SECTIONS ===');
-            
-            // Check sectionOrder in localStorage
-            const savedOrder = localStorage.getItem('sectionOrder');
-            console.log('Saved sectionOrder:', savedOrder);
-            
-            if (savedOrder) {
-                const sections = JSON.parse(savedOrder);
-                console.log('Parsed sections:', sections);
-                console.log('Section IDs:', sections.map(s => s.id));
-                console.log('Visible sections:', sections.filter(s => s.visible).map(s => s.id));
-            }
-            
-            // Check getAllAvailableSections function
-            const availableSections = getAllAvailableSections();
-            console.log('getAllAvailableSections result:', availableSections);
-            
-            // Check getSectionDisplayNames function
-            const sectionNames = getSectionDisplayNames();
-            console.log('getSectionDisplayNames result:', sectionNames);
-            
-            // Check if permission form exists
-            const sectionCheckboxes = document.getElementById('sectionCheckboxes');
-            console.log('sectionCheckboxes element exists:', !!sectionCheckboxes);
-            if (sectionCheckboxes) {
-                console.log('sectionCheckboxes innerHTML length:', sectionCheckboxes.innerHTML.length);
-                console.log('sectionCheckboxes children count:', sectionCheckboxes.children.length);
-            }
-            
-            alert(`Sections Debug:\n\nSaved sections: ${savedOrder ? JSON.parse(savedOrder).map(s => s.id).join(', ') : 'None'}\nAvailable sections: ${availableSections.join(', ')}\nPermission form exists: ${!!sectionCheckboxes}`);
-            
-            console.log('=== SECTIONS DEBUG COMPLETE ===');
-        };
-        
-        // Debug function to check what's happening with saves
-        window.debugSave = function() {
-            console.log('=== DEBUGGING SAVE OPERATIONS ===');
-            
-            // Check current session
-            const session = localStorage.getItem('hubSession');
-            console.log('Current session:', session);
-            
-            // Check users data
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            console.log('Users data:', users);
-            
-            // Check section order
-            const sectionOrder = localStorage.getItem('sectionOrder');
-            console.log('Section order:', sectionOrder);
-            
-            // Check if any modals are open
-            const adminModal = document.getElementById('adminPanelModal');
-            const editModal = document.getElementById('editUserModal');
-            const permissionModal = document.getElementById('permissionModal');
-            
-            console.log('Admin modal open:', adminModal && adminModal.style.display === 'block');
-            console.log('Edit modal open:', editModal && editModal.style.display === 'block');
-            console.log('Permission modal open:', permissionModal && permissionModal.style.display === 'block');
-            
-            // Check current editing user
-            console.log('Current editing user:', currentEditingUser);
-            
-            alert(`Save Debug:\n\nSession exists: ${!!session}\nUsers count: ${users.length}\nSection order exists: ${!!sectionOrder}\nAdmin modal open: ${adminModal && adminModal.style.display === 'block'}\nEdit modal open: ${editModal && editModal.style.display === 'block'}\nPermission modal open: ${permissionModal && permissionModal.style.display === 'block'}\nCurrent editing user: ${currentEditingUser ? currentEditingUser.username : 'None'}`);
-            
-            console.log('=== SAVE DEBUG COMPLETE ===');
-        };
         
         // Load section assignments for admin panel (GitHub-driven)
         window.loadSectionAssignments = async function() {
@@ -5521,8 +4546,6 @@ Permissions:
                     actions.className = 'form-actions';
                     const saveBtn = document.createElement('button');
                     saveBtn.className = 'btn btn-primary'; saveBtn.textContent = 'Save & Connect';
-                    const testBtn = document.createElement('button');
-                    testBtn.className = 'btn btn-secondary'; testBtn.textContent = 'Test Read';
                     const seedBtn = document.createElement('button');
                     seedBtn.className = 'btn btn-secondary'; seedBtn.textContent = 'Bootstrap Configs';
                     const status = document.createElement('div');
@@ -5540,13 +4563,6 @@ Permissions:
                             setStatus('Saved. You can now use GitHub actions.', true);
                         } catch(e){ setStatus('Save failed: ' + e.message, false); }
                     };
-                    testBtn.onclick = async () => {
-                        try {
-                            if (!window.githubData) return setStatus('githubData not ready', false);
-                            const r = await githubData.readJson('data/section-configs.json');
-                            setStatus(r && (r.json || r.sha) ? 'Read OK' : 'File missing (OK for first-time)', !!(r && (r.json || r.sha)));
-                        } catch(e){ setStatus('Read failed: ' + e.message, false); }
-                    };
                     seedBtn.onclick = async () => {
                         try {
                             if (typeof window.ensureSectionConfigsFile !== 'function') return setStatus('Bootstrap function missing', false);
@@ -5554,7 +4570,7 @@ Permissions:
                             setStatus('Bootstrap complete', true);
                         } catch(e){ setStatus('Bootstrap failed: ' + e.message, false); }
                     };
-                    actions.appendChild(saveBtn); actions.appendChild(testBtn); actions.appendChild(seedBtn);
+                    actions.appendChild(saveBtn); actions.appendChild(seedBtn);
                     [ownerRow.wrap, repoRow.wrap, branchRow.wrap, tokenRow.wrap, help, actions, status].forEach(n => body.appendChild(n));
                     box.appendChild(header); box.appendChild(body); modal.appendChild(box); document.body.appendChild(modal);
                 } catch(_) {}
