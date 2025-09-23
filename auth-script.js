@@ -159,14 +159,26 @@ class AuthSystem {
                 try {
                     const { data: secs } = await window.supabaseClient.from('sections').select('section_id');
                     sectionIds = Array.isArray(secs) ? secs.map(s => s.section_id).filter(Boolean) : [];
-                } catch (_) { sectionIds = []; }
+                } catch (_) { 
+                    console.warn('Failed to load sections during signup, will assign empty permissions');
+                    sectionIds = []; 
+                }
+                
+                // If no sections exist yet, give user access to view all sections by default
+                // This ensures they can see content when sections are added later
+                const permissions = {
+                    sections: sectionIds.length > 0 ? sectionIds : ['*'], // '*' means access to all sections
+                    editableSections: [],
+                    canViewAllSections: sectionIds.length === 0 // If no specific sections, allow viewing all
+                };
+                
                 await window.supabaseClient.from('profiles').upsert({
                     id: uid,
                     email,
                     username: email,
                     name,
                     role: 'viewer',
-                    permissions: { sections: sectionIds, editableSections: [] }
+                    permissions: permissions
                 });
             }
             this.showMessage('Signup successful. Please verify your email if required.', 'success');
@@ -229,6 +241,28 @@ class AuthSystem {
                 .eq('id', authUser.id)
                 .single();
             if (error) {
+                console.warn('User profile not found, creating default profile with full access');
+                
+                // Create a default profile with full access to all sections
+                const defaultPermissions = {
+                    sections: ['*'], // Access to all sections
+                    editableSections: [],
+                    canViewAllSections: true
+                };
+                
+                try {
+                    await window.supabaseClient.from('profiles').upsert({
+                        id: authUser.id,
+                        email: authUser.email,
+                        username: authUser.email,
+                        name: authUser.user_metadata?.name || '',
+                        role: 'viewer',
+                        permissions: defaultPermissions
+                    });
+                } catch (profileError) {
+                    console.error('Failed to create user profile:', profileError);
+                }
+                
                 const session = {
                     userId: authUser.id,
                     username: authUser.email,
@@ -236,7 +270,7 @@ class AuthSystem {
                     name: authUser.user_metadata?.name || '',
                     email: authUser.email,
                     loginTime: new Date().toISOString(),
-                    permissions: {}
+                    permissions: defaultPermissions
                 };
                 localStorage.setItem('hubSession', JSON.stringify(session));
                 return;

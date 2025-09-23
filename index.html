@@ -4268,14 +4268,18 @@ Permissions:
                             const role = String(user.role || '').toLowerCase();
                             const canAll = !!(user.permissions && user.permissions.canEditAllSections);
                             const canViewAll = !!(user.permissions && user.permissions.canViewAllSections);
+                            const allowedSections = (user.permissions && user.permissions.sections) || [];
                             
-                            if (role === 'admin' || canAll || canViewAll) {
+                            // Check if user has wildcard access or can view all sections
+                            const hasWildcardAccess = allowedSections.includes('*') || canViewAll;
+                            
+                            if (role === 'admin' || canAll || hasWildcardAccess) {
                                 // Admin or user with all access - show all sections
                                 visibleSections = sections.filter(s => s.visible !== false).sort((a,b) => (a.order||0)-(b.order||0));
                                 console.log('User has admin/all access, showing all sections:', visibleSections.length);
                             } else {
                                 // Regular user - filter by permissions
-                                const allowed = new Set((user.permissions && user.permissions.sections) || []);
+                                const allowed = new Set(allowedSections);
                                 visibleSections = sections.filter(s => 
                                     s.visible !== false && allowed.has(s.section_id)
                                 ).sort((a,b) => (a.order||0)-(b.order||0));
