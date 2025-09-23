@@ -192,11 +192,13 @@ class HubDatabase {
                     name: section.name,
                     icon: section.icon,
                     color: section.color,
-                    config: section.config || {},
-                    data: section.data || {},
-                    visible: section.visible !== false,
-                    intro: section.intro || '',
-                    order: section.order || 0
+                    config: {
+                        ...(section.config || {}),
+                        visible: section.visible !== false,
+                        intro: section.intro || '',
+                        order: section.order || 0
+                    },
+                    data: section.data || {}
                 });
             
             if (error) throw error;
@@ -215,11 +217,13 @@ class HubDatabase {
                     name: section.name,
                     icon: section.icon,
                     color: section.color,
-                    config: section.config || {},
-                    data: section.data || {},
-                    visible: section.visible !== false,
-                    intro: section.intro || '',
-                    order: section.order || 0
+                    config: {
+                        ...(section.config || {}),
+                        visible: section.visible !== false,
+                        intro: section.intro || '',
+                        order: section.order || 0
+                    },
+                    data: section.data || {}
                 })
                 .eq('section_id', section.sectionId || section.id);
             
