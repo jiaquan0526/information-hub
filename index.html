@@ -2576,7 +2576,22 @@ Permissions:
                 if (window.hubDatabase && window.hubDatabaseReady) {
                     const sections = await hubDatabase.getAllSections();
                     console.log('Loaded sections from Supabase:', sections);
-                    sectionOrder = sections || [];
+                    
+                    // Map database format to expected format
+                    sectionOrder = (sections || []).map(section => ({
+                        id: section.section_id || section.id,
+                        name: section.name,
+                        icon: section.icon,
+                        image: section.image,
+                        visible: section.visible !== false,
+                        intro: section.intro || '',
+                        order: section.order || 0,
+                        color: section.color,
+                        config: section.config || {},
+                        data: section.data || {}
+                    }));
+                    
+                    console.log('Mapped sections for UI:', sectionOrder);
                     renderSectionsList();
                 } else {
                     console.log('Database not ready');
@@ -2639,32 +2654,42 @@ Permissions:
         }
 
         // Toggle section visibility from the admin Manage Sections list
-        window.toggleSectionVisibility = function(sectionId) {
+        window.toggleSectionVisibility = async function(sectionId) {
             try {
                 const checkbox = document.querySelector(`.section-item-admin[data-section-id="${sectionId}"] input[type="checkbox"]`);
                 const isVisible = checkbox ? checkbox.checked : true;
                 const section = sectionOrder.find(s => s.id === sectionId);
                 if (!section) return;
-                // Mandatory GitHub sync for section visibility
+                
+                // Update section visibility in Supabase
                 section.visible = isVisible;
-                if (window.githubData && typeof githubData.upsertSection === 'function') {
-                    githubData.upsertSection(section).then(() => {
+                
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady) {
+                        await hubDatabase.updateSection(section);
+                        console.log('Section visibility updated in Supabase:', section);
+                        
+                        // Update local storage
                         localStorage.setItem('sectionOrder', JSON.stringify(sectionOrder));
+                        
+                        // Update hub page
                         updateMainHubSections();
+                        
+                        // Update user access
                         const sessionRaw = localStorage.getItem('hubSession');
                         if (sessionRaw) {
                             try { updateHubCardsAccess(JSON.parse(sessionRaw)); } catch (_) {}
                         }
-                    }).catch(() => {
-                        alert('GitHub sync failed – reverting visibility');
-                        section.visible = !isVisible;
-                        if (checkbox) checkbox.checked = section.visible;
-                    });
-                    return;
-                } else {
-                    alert('GitHub sync unavailable – cannot change visibility.');
-                    if (checkbox) checkbox.checked = section.visible;
-                    return;
+                        
+                        console.log('Section visibility toggled successfully');
+                    } else {
+                        alert('Database not ready. Please try again.');
+                        if (checkbox) checkbox.checked = !isVisible; // Revert checkbox
+                    }
+                } catch (error) {
+                    console.error('Error updating section visibility:', error);
+                    alert('Failed to update visibility: ' + error.message);
+                    if (checkbox) checkbox.checked = !isVisible; // Revert checkbox
                 }
             } catch (e) {
                 console.error('toggleSectionVisibility error', e);
