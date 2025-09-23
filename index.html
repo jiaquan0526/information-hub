@@ -16,7 +16,7 @@
     <link rel="prefetch" href="section.html" as="document" crossorigin>
     <link rel="preload" href="section-script.js" as="script">
     <link rel="preload" href="database.js" as="script">
-    <link rel="preload" href="hub-script.js" as="script">
+    <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
     <script>
     // Default-disable heavy backgrounds for better performance; user can re-enable via toggle
@@ -374,7 +374,7 @@
     <!-- <script src="githubData.js" defer></script> -->
     <script src="excel-export.js" defer></script>
     <script src="auth-script.js" defer></script>
-    <script src="hub-script.js" defer></script>
+    <!-- <script src="hub-script.js" defer></script> -->
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
@@ -422,31 +422,6 @@
                 } catch (_) {}
                 // Try to load background image manifest (optional)
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                // SIMPLE APPROACH - Just show basic sections immediately
-                console.log('Setting up basic sections...');
-                const hubGrid = document.querySelector('.hub-grid');
-                if (hubGrid) {
-                    console.log('hub-grid found, setting basic content');
-                    hubGrid.innerHTML = `
-                        <div class="hub-card" onclick="alert('Example Section Clicked')">
-                            <div class="card-header">
-                                <div class="card-icon"><i class="fas fa-th-large"></i></div>
-                                <div class="card-title">
-                                    <h3>Example Section</h3>
-                                    <p class="card-intro">This is a basic example section</p>
-                                </div>
-                            </div>
-                            <div class="card-stats">
-                                <span><i class="fas fa-book"></i> <span>0</span> Playbooks</span>
-                                <span><i class="fas fa-link"></i> <span>0</span> Box Links</span>
-                                <span><i class="fas fa-chart-bar"></i> <span>0</span> Dashboards</span>
-                            </div>
-                        </div>
-                    `;
-                    console.log('Basic sections set successfully');
-                } else {
-                    console.error('hub-grid not found!');
-                }
                 
                 // Try to load database sections after a delay
                 setTimeout(() => {
@@ -1494,7 +1469,7 @@ Permissions:
                 const ensureReady = async () => {
                     try {
                         if (!window.InformationHub) {
-                            await loadScriptOnce('hub-script.js');
+                            // await loadScriptOnce('hub-script.js');
                         }
                     } catch (e) {
                         console.error('hub-script.js load error', e);
