@@ -19,6 +19,35 @@
     <link rel="preload" href="database-supabase.js" as="script">
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
+    <!-- Load Supabase first -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="config.js"></script>
+    
+    <script>
+        // Initialize Supabase client immediately
+        window.supabaseClient = null;
+        
+        // Wait for Supabase to load and initialize
+        function initSupabase() {
+            if (typeof window.supabase !== 'undefined' && CONFIG) {
+                try {
+                    window.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                    console.log('Supabase client initialized successfully');
+                    // Dispatch event to signal Supabase is ready
+                    window.dispatchEvent(new CustomEvent('supabase-ready'));
+                } catch (error) {
+                    console.error('Failed to initialize Supabase client:', error);
+                }
+            } else {
+                // Retry after a short delay
+                setTimeout(initSupabase, 100);
+            }
+        }
+        
+        // Start initialization
+        initSupabase();
+    </script>
+    
     <script>
     // Default-disable heavy backgrounds for better performance; user can re-enable via toggle
     try {
@@ -381,10 +410,54 @@
         // Check authentication before loading the hub
         document.addEventListener('DOMContentLoaded', async () => {
             try {
+            // Wait for Supabase to be ready
+            if (!window.supabaseClient) {
+                console.log('Waiting for Supabase to initialize...');
+                // Wait for supabase-ready event
+                await new Promise((resolve) => {
+                    const timeout = setTimeout(() => {
+                        console.log('Supabase initialization timeout, redirecting to auth page');
+                        resolve();
+                    }, 5000);
+                    
+                    window.addEventListener('supabase-ready', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    }, { once: true });
+                });
+                
+                // Check again after waiting
+                if (!window.supabaseClient) {
+                    console.log('Supabase not available, redirecting to auth page');
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (mainContent) {
+                        mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
+                    }
+                    setTimeout(() => {
+                        window.location.href = 'auth.html';
+                    }, 1000);
+                    return;
+                }
+            }
+            
             // Check if user is authenticated via Supabase
-            const { data: { user }, error } = await supabase.auth.getUser();
+            const { data: { user }, error } = await window.supabaseClient.auth.getUser();
             if (error || !user) {
-                window.location.href = 'auth.html';
+                console.log('No authenticated user, redirecting to auth page');
+                // Hide loading screen before redirect
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'block';
+                // Show redirect message briefly
+                if (mainContent) {
+                    mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
+                }
+                setTimeout(() => {
+                    window.location.href = 'auth.html';
+                }, 1000);
                 return;
             }
             const hideLoading = () => {
@@ -397,6 +470,23 @@
             };
             // Safety: ensure loading is hidden even if something delays
             setTimeout(hideLoading, 600);
+            
+            // Emergency fallback: if nothing happens in 5 seconds, redirect to auth
+            setTimeout(() => {
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen && loadingScreen.style.display !== 'none') {
+                    console.log('Emergency fallback: redirecting to auth page');
+                    loadingScreen.style.display = 'none';
+                    const mainContent = document.getElementById('mainContent');
+                    if (mainContent) {
+                        mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
+                        mainContent.style.display = 'block';
+                    }
+                    setTimeout(() => {
+                        window.location.href = 'auth.html';
+                    }, 1000);
+                }
+            }, 5000);
             
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
             try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
@@ -4689,8 +4779,6 @@ Permissions:
             }
         })();
     </script>
-    <script src="config.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="database-consolidated.js"></script>
     <script>
         (function(){
