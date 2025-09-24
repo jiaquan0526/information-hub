@@ -1248,10 +1248,10 @@ function initInformationHubOnce() {
 		
 		if (!window.supabaseClient) {
 			console.error('Supabase client not available after waiting');
-			showHubInitProgress('❌ Supabase client not available', 100);
+			showHubInitProgress('❌ Supabase client not available. Retrying...', 100);
 			setTimeout(() => {
 				hideHubInitProgress();
-				window.location.href = 'auth.html';
+				window.location.reload();
 			}, 2000);
 			return;
 		}
@@ -1264,12 +1264,23 @@ function initInformationHubOnce() {
 			const { data: { user }, error } = await window.supabaseClient.auth.getUser();
 			if (error || !user) {
 				console.error('Authentication check failed:', error);
-				showHubInitProgress('❌ Authentication failed', 100);
-				setTimeout(() => {
-					hideHubInitProgress();
-					window.location.href = 'auth.html';
-				}, 2000);
-				return;
+				// Retry briefly to allow session restoration
+				let authRetries = 0;
+				while (authRetries < 20) { // ~2s
+					await new Promise(r => setTimeout(r, 100));
+					const { data: { user: u2 } } = await window.supabaseClient.auth.getUser();
+					if (u2) { break; }
+					authRetries++;
+				}
+				const { data: { user: finalUser } } = await window.supabaseClient.auth.getUser();
+				if (!finalUser) {
+					showHubInitProgress('❌ Authentication failed', 100);
+					setTimeout(() => {
+						hideHubInitProgress();
+						window.location.href = 'auth.html';
+					}, 2000);
+					return;
+				}
 			}
 			
 			console.log('Authentication verified, initializing InformationHub');
@@ -1287,7 +1298,7 @@ function initInformationHubOnce() {
 			showHubInitProgress('❌ Authentication error', 100);
 			setTimeout(() => {
 				hideHubInitProgress();
-				window.location.href = 'auth.html';
+				window.location.reload();
 			}, 2000);
 		}
 	};
