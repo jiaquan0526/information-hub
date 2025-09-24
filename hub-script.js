@@ -147,8 +147,24 @@ class InformationHub {
         
         // Get current user from Supabase auth only
         try {
-            const { data: { user }, error } = await window.supabaseClient.auth.getUser();
-            
+            // Use getSession with brief retries to allow session restoration
+            let user = null, error = null;
+            try {
+                const { data: s1, error: e1 } = await window.supabaseClient.auth.getSession();
+                user = s1 && s1.session && s1.session.user ? s1.session.user : null;
+                error = e1 || null;
+            } catch (_) {}
+            if (!user) {
+                let tries = 0;
+                while (tries < 30 && !user) { // ~3s
+                    await new Promise(r => setTimeout(r, 100));
+                    try {
+                        const { data: s2 } = await window.supabaseClient.auth.getSession();
+                        user = s2 && s2.session && s2.session.user ? s2.session.user : null;
+                    } catch (_) {}
+                    tries++;
+                }
+            }
             console.log('Auth check result:', { user: user ? user.email : 'null', error: error ? error.message : 'none' });
             
             if (error) {

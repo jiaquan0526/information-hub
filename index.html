@@ -538,6 +538,17 @@
             
             // The hub-script.js will handle all authentication and data loading
             // No need to duplicate the logic here
+            // Watchdog: if hub initialization stalls, load sections directly
+            setTimeout(async () => {
+                try {
+                    const grid = document.querySelector('.hub-grid');
+                    const stillLoading = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
+                    if (stillLoading) {
+                        console.warn('Hub init watchdog triggered, loading sections directly');
+                        await loadSectionsFromSupabase();
+                    }
+                } catch (e) { console.error('Watchdog error:', e); }
+            }, 3000);
             
             // Add basic navigation function if not available
             if (typeof window.navigateToSection !== 'function') {
@@ -574,10 +585,25 @@
             try {
                 updateHubProgress('✅ Supabase connected! Authenticating...', 25);
                 
-                // Check authentication status
-                const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
-                if (authError || !user) {
-                    console.error('Authentication error:', authError);
+                // Check authentication status (prefer session restoration with retries)
+                let user = null;
+                try {
+                    const { data: sess } = await window.supabaseClient.auth.getSession();
+                    user = sess && sess.session && sess.session.user ? sess.session.user : null;
+                } catch (_) {}
+                if (!user) {
+                    let tries = 0;
+                    while (tries < 20 && !user) { // ~2s
+                        await new Promise(r => setTimeout(r, 100));
+                        try {
+                            const { data: s2 } = await window.supabaseClient.auth.getSession();
+                            user = s2 && s2.session && s2.session.user ? s2.session.user : null;
+                        } catch (_) {}
+                        tries++;
+                    }
+                }
+                if (!user) {
+                    console.error('Authentication error: session missing');
                     updateHubProgress('❌ Authentication failed', 100);
                     setTimeout(() => showFallbackSections(), 2000);
                     return;
