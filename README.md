@@ -1,259 +1,203 @@
-# Information Hub with Role-Based Access Control
+# Information Hub
 
-A comprehensive information management system with user authentication, role-based permissions, and audit logging.
+A modern, responsive web application for managing organizational resources and information across different functional areas. Built with vanilla JavaScript and Supabase for authentication and data management.
 
-## 🔐 Authentication & User Management
+## 🚀 Features
 
-### Default User Accounts
+- **Multi-Section Dashboard**: Organized sections for different functional areas (Costing, Supply Planning, Operations, Quality, HR, IT)
+- **User Authentication**: Secure login system powered by Supabase
+- **Role-Based Access Control**: Different permission levels for different user types
+- **Resource Management**: Upload, organize, and manage documents and resources
+- **Real-time Updates**: Live data synchronization with Supabase
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Admin Panel**: User management and system administration tools
 
-The system comes with three pre-configured user accounts for testing:
+## 🛠️ Tech Stack
 
-| Username | Password | Role | Access Level |
-|----------|----------|------|--------------|
-| `admin` | `admin123` | Admin | Full access to all sections and admin functions |
-| `manager` | `manager123` | Manager | Access to 4 sections, can delete resources |
-| `user` | `user123` | User | Read-only access to 2 sections |
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript
+- **Backend**: Supabase (PostgreSQL, Authentication, Real-time)
+- **Styling**: Custom CSS with modern design principles
+- **Icons**: Font Awesome
+- **Deployment**: Vercel/Netlify ready
 
-### User Roles & Permissions
+## 📋 Prerequisites
 
-#### 🔧 **Admin Role**
-- **Full System Access**: All sections and resources
-- **User Management**: Create, edit, delete users
-- **Admin Panel**: Access to user management, permissions, audit log
-- **Resource Management**: Full CRUD operations on all resources
-- **Audit Logging**: View all system activities
+- Modern web browser (Chrome, Firefox, Safari, Edge)
+- Supabase account and project
+- Web server (for local development)
 
-**Accessible Sections**: All 8 sections (Costing, Supply Planning, Operations, Quality, HR, IT, Sales, Compliance)
+## 🚀 Quick Start
 
-#### 👔 **Manager Role**
-- **Limited Section Access**: 4 core business sections
-- **Resource Management**: Can add, edit, and delete resources in assigned sections
-- **No User Management**: Cannot create or manage users
-- **No Admin Panel**: Cannot access administrative functions
+### 1. Clone the Repository
 
-**Accessible Sections**: Costing, Supply Planning, Operations, Quality Management
-
-#### 👤 **User Role**
-- **Read-Only Access**: 2 basic sections only
-- **Limited Resource Management**: Can only view resources
-- **No Administrative Functions**: Cannot manage users or access admin panel
-
-**Accessible Sections**: Costing, Supply Planning
-
-## 🚀 Getting Started
-
-### 1. **Login Process**
-1. Open `auth.html` in your browser
-2. Use one of the demo accounts or create a new user (admin only)
-3. Click "Sign In" to access the hub
-
-### 2. **Navigation**
-- **Main Hub**: Overview of all sections with access indicators
-- **Section Pages**: Detailed view of resources within each section
-- **User Profile**: View your account details and permissions
-- **Admin Panel**: Manage users and view audit logs (admin only)
-
-### 3. **Resource Management**
-- **Add Resources**: Click "Add" buttons to create new playbooks, box links, or dashboards
-- **Edit Resources**: Click the edit icon on any resource card
-- **Delete Resources**: Click the delete icon (if you have permission)
-- **Search & Filter**: Use search bar and category filters to find resources
-
-## 🛡️ Security Features
-
-### Access Control
-- **Section-Level Permissions**: Users can only access assigned sections
-- **Resource-Level Permissions**: Edit/delete permissions based on role
-- **Session Management**: Automatic logout and session validation
-- **Permission Validation**: Server-side permission checks for all actions
-
-### Audit Logging
-- **User Activities**: Login, logout, resource creation, editing, deletion
-- **Admin Actions**: User management, permission changes
-- **Timestamp Tracking**: All activities logged with precise timestamps
-- **User Identification**: Each log entry includes user information
-
-### Data Security
-- **Local Storage**: All data stored locally in browser
-- **Session Tokens**: Secure session management
-- **Permission Validation**: Every action validated against user permissions
-- **Access Restrictions**: UI elements hidden/disabled based on permissions
-
-## 📊 Admin Panel Features
-
-### User Management
-- **View All Users**: Complete list of system users
-- **Add New Users**: Create users with specific roles and permissions
-- **Edit User Details**: Modify user information and permissions
-- **Delete Users**: Remove users from the system
-
-### Permission Management
-- **Role-Based Permissions**: Predefined permission sets for each role
-- **Section Access Control**: Assign specific sections to users
-- **Permission Inheritance**: Automatic permission assignment based on role
-
-### Audit Log
-- **Activity Tracking**: Complete log of all user activities
-- **Filtering Options**: Filter by user, action type, or date
-- **Real-Time Updates**: Live updates of system activities
-- **Export Capabilities**: View and analyze audit data
-
-## 🔧 Technical Implementation
-
-### File Structure
-```
-playbook-hub/
-├── auth.html              # Login page
-├── index.html             # Main hub dashboard
-├── styles.css             # Complete styling
-├── auth-script.js         # Authentication system
-├── hub-script.js          # Main application logic
-├── section-script.js      # Section page functionality
-└── README.md              # This documentation
+```bash
+git clone https://github.com/yourusername/information-hub.git
+cd information-hub
 ```
 
-### Key Components
+### 2. Configure Supabase
 
-#### Authentication System (`auth-script.js`)
-- User login/logout functionality
-- Session management
-- Permission validation
-- Audit logging
+1. Your Supabase project is already set up at [supabase.com](https://supabase.com)
+2. Your current Supabase credentials in `config.js`:
+   - **URL**: `https://pioubcszuayewepdawzt.supabase.co`
+   - **Anon Key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k`
 
-#### Main Hub (`hub-script.js`)
-- Section navigation
-- User interface updates
-- Admin panel management
+**Note**: These credentials are already configured in your `config.js` file.
+
+### 3. Set Up Database
+
+Run the SQL scripts in the following order:
+
+1. `complete-schema-final.sql` - Main database schema
+2. `create-sample-data.sql` - Sample data for testing
+3. `fix-rls-policies-v2.sql` - Row Level Security policies
+
+### 4. Deploy to Vercel
+
+**Your project is configured for Vercel deployment:**
+
+1. **Connect to Vercel:**
+   - Go to [vercel.com](https://vercel.com)
+   - Sign in with your GitHub account
+   - Click "New Project" and import your repository
+
+2. **Deploy Settings:**
+   - **Framework Preset**: Other
+   - **Root Directory**: `./` (root)
+   - **Build Command**: Leave empty (no build needed)
+   - **Output Directory**: Leave empty
+
+3. **Environment Variables:**
+   - `SUPABASE_URL`: `https://pioubcszuayewepdawzt.supabase.co`
+   - `SUPABASE_ANON_KEY`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k`
+
+4. **Deploy:** Click "Deploy" and your site will be live!
+
+**Your live URL will be:** `https://your-project-name.vercel.app`
+
+#### Local Development
+```bash
+# Using Python
+python -m http.server 8000
+
+# Using Node.js
+npx serve .
+
+# Using PHP
+php -S localhost:8000
+```
+
+## 📁 Project Structure
+
+```
+information-hub/
+├── index.html              # Main dashboard page
+├── auth.html               # Authentication page
+├── section.html            # Individual section page
+├── styles.css              # Main stylesheet
+├── config.js               # Configuration file
+├── database-supabase.js    # Supabase database operations
+├── hub-script.js           # Main application logic
+├── section-script.js       # Section-specific functionality
+├── auth-script.js          # Authentication logic
+├── excel-export.js         # Excel export functionality
+├── background-pic/         # Background images and assets
+├── data/                   # JSON data files
+├── *.sql                   # Database schema and setup files
+└── README.md               # This file
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file (for local development) or set environment variables in your deployment platform:
+
+```env
+SUPABASE_URL=your-supabase-url
+SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+### Database Setup
+
+1. **Users Table**: Stores user profiles and permissions
+2. **Sections Table**: Defines available sections
+3. **Resources Table**: Stores uploaded resources
+4. **Activities Table**: Tracks user activities
+5. **Views Table**: Tracks resource views
+
+## 👥 User Roles
+
+- **Admin**: Full access to all features and admin panel
+- **Manager**: Can manage assigned sections
+- **Member**: Basic access to assigned sections
+- **Guest**: Limited read-only access
+
+## 🔐 Security Features
+
+- Row Level Security (RLS) policies
+- JWT-based authentication
 - Role-based access control
+- Secure file uploads
+- Input validation and sanitization
 
-#### Section Management (`section-script.js`)
-- Resource CRUD operations
-- Permission-based UI updates
-- Access validation
-- Resource filtering
+## 📱 Responsive Design
 
-## 🎯 Usage Examples
+The application is fully responsive and works on:
+- Desktop computers
+- Tablets
+- Mobile phones
+- Various screen sizes and orientations
 
-### For Administrators
-1. **Login** with admin credentials
-2. **Access Admin Panel** to manage users
-3. **Create New Users** with specific roles
-4. **Monitor Audit Log** for system activities
-5. **Manage All Resources** across all sections
+## 🚀 Deployment
 
-### For Managers
-1. **Login** with manager credentials
-2. **Access Assigned Sections** (Costing, Supply Planning, Operations, Quality)
-3. **Add/Edit Resources** in accessible sections
-4. **Delete Resources** as needed
-5. **View User Profile** for account details
+### Vercel Deployment
 
-### For Regular Users
-1. **Login** with user credentials
-2. **View Assigned Sections** (Costing, Supply Planning)
-3. **Browse Resources** in accessible sections
-4. **View Resource Details** and follow links
-5. **Update Profile** information
+1. Fork this repository
+2. Connect to Vercel
+3. Set environment variables
+4. Deploy
 
-## 🔄 Customization
+### Netlify Deployment
 
-### Adding New Roles
-1. Update `getDefaultPermissions()` in `hub-script.js`
-2. Add role-specific permission sets
-3. Update UI elements to handle new roles
-4. Test permission inheritance
+1. Fork this repository
+2. Connect to Netlify
+3. Set build settings
+4. Deploy
 
-### Modifying Section Access
-1. Update user permissions in admin panel
-2. Modify section access arrays
-3. Update UI access controls
-4. Test access restrictions
+## 🤝 Contributing
 
-### Adding New Resource Types
-1. Update section page templates
-2. Add new resource type handling
-3. Update permission checks
-4. Test CRUD operations
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 🚨 Security Considerations
+## 📝 License
 
-### Production Deployment
-- **Server-Side Authentication**: Implement proper server-side authentication
-- **Database Storage**: Move from localStorage to secure database
-- **HTTPS**: Use secure connections for all communications
-- **Password Hashing**: Implement proper password hashing
-- **Session Management**: Use secure session tokens
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Access Control
-- **Permission Validation**: Validate all permissions server-side
-- **Input Sanitization**: Sanitize all user inputs
-- **XSS Protection**: Implement proper XSS protection
-- **CSRF Protection**: Add CSRF tokens for all forms
+## 🆘 Support
 
-## 📈 Future Enhancements
+If you encounter any issues or have questions:
 
-### Planned Features
-- **Multi-Factor Authentication**: Add 2FA support
-- **Advanced Permissions**: Granular permission system
-- **Resource Sharing**: Share resources between users
-- **Notification System**: Real-time notifications
-- **API Integration**: REST API for external integrations
-- **Mobile App**: Native mobile application
-- **Cloud Sync**: Cloud-based data synchronization
+1. Check the [Issues](https://github.com/yourusername/information-hub/issues) page
+2. Create a new issue with detailed information
+3. Contact the development team
 
-### Integration Options
-- **LDAP/Active Directory**: Enterprise authentication
-- **SSO Integration**: Single sign-on support
-- **External Databases**: Connect to existing databases
-- **Cloud Storage**: Integration with cloud storage services
+## 🔄 Version History
+
+- **v1.0.0** - Initial release with basic functionality
+- **v1.1.0** - Added Supabase integration
+- **v1.2.0** - Enhanced UI and user experience
+- **v1.3.0** - Added admin panel and user management
+
+## 🙏 Acknowledgments
+
+- Supabase for backend services
+- Font Awesome for icons
+- The open-source community for inspiration and tools
 
 ---
 
-**Ready to use!** 🎉 The Information Hub is now fully functional with comprehensive role-based access control, user management, and audit logging capabilities.
-
-## 🚀 Deploy to GitHub Pages (Copy/Paste)
-
-1) Create an empty public repo on GitHub (e.g., `YOUR_REPO_NAME`).
-2) Upload these items from this folder to the repo root:
-```
-auth.html
-index.html
-styles.css
-auth-script.js
-hub-script.js
-section-script.js
-database.js
-excel-export.js
-logo.svg
-redirect.html
-start.html
-.nojekyll
-background-pic/            # images + manifest.json
-```
-3) In your repo: Settings → Pages → Source: Deploy from a branch; Branch: main; Folder: /
-4) Wait a few minutes, then open: `https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/`
-
-Notes:
-- `.nojekyll` avoids Jekyll processing so static assets load correctly.
-- All paths are relative; the app works under a subpath like `/YOUR_REPO_NAME/`.
-
-### Supabase setup (required)
-- In `index.html` and `auth.html`, set `window.SUPABASE_URL` and `window.SUPABASE_ANON_KEY`.
-- In Supabase, enable Realtime for `public.resources` and `public.sections`.
-- Add your deployed GitHub Pages URL to Supabase Auth Redirect URLs.
-
-### 🔒 Secure GitHub Writer (Serverless)
-
-If you host on Vercel or Netlify, you can enable server-side writes to GitHub so tokens are never exposed in the browser. This repo includes:
-
-- Vercel endpoint: `api/gh-write.js`
-- Netlify function: `netlify/functions/gh-write.js`
-
-Set these environment variables on your platform:
-
-- `GITHUB_TOKEN` (required) – repo-scoped with contents:write
-- `GH_OWNER`, `GH_REPO`, `GH_BRANCH` (optional) – if not on `*.github.io`
-- `ALLOWED_ORIGINS` (optional) – CSV of allowed origins for CORS
-
-Clients will automatically attempt the secure endpoint first (2s timeout), then fall back to direct GitHub API writes if unavailable.
-
+**Made with ❤️ for better information management**

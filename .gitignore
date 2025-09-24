@@ -4,10 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Production builds
-dist/
-build/
-
 # Environment variables
 .env
 .env.local
@@ -15,14 +11,20 @@ build/
 .env.test.local
 .env.production.local
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Logs
@@ -42,5 +44,29 @@ coverage/
 tmp/
 temp/
 
-# Vercel
-.vercel
+# Build outputs
+dist/
+build/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Test files
+test-*.html
+debug-*.html
+*-test.html
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+
+# Local configuration overrides
+config.local.js

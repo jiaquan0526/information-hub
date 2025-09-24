@@ -82,7 +82,11 @@ class InformationHub {
     }
 
     async init() {
-        this.checkAuthentication();
+        await this.checkAuthentication();
+        if (!this.currentUser) {
+            // If authentication failed, user will be redirected to auth.html
+            return;
+        }
         await this.loadData();
         this.bindEvents();
         // Start blank by default; no sample data seeding
@@ -107,14 +111,55 @@ class InformationHub {
         try { this.setupSupabaseAutoRefresh(); } catch (_) {}
     }
 
-    checkAuthentication() {
+    async checkAuthentication() {
         // Authentication is handled by Supabase auth
         if (!window.supabaseClient) {
             window.location.href = 'auth.html';
             return;
         }
         // Get current user from Supabase auth
-        this.currentUser = window.supabaseClient.auth.getUser();
+        try {
+            const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+            if (error) {
+                console.error('Auth error:', error);
+                window.location.href = 'auth.html';
+                return;
+            }
+            if (user) {
+                // Get user profile from database
+                const { data: profile, error: profileError } = await window.supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                
+                if (profileError) {
+                    console.error('Profile error:', profileError);
+                    // Create a basic user object if profile doesn't exist
+                    this.currentUser = {
+                        id: user.id,
+                        username: user.email,
+                        email: user.email,
+                        role: 'viewer',
+                        permissions: this.getDefaultPermissions('viewer')
+                    };
+                } else {
+                    this.currentUser = {
+                        id: user.id,
+                        username: profile.username || user.email,
+                        email: user.email,
+                        name: profile.name,
+                        role: profile.role || 'viewer',
+                        permissions: profile.permissions || this.getDefaultPermissions(profile.role || 'viewer')
+                    };
+                }
+            } else {
+                window.location.href = 'auth.html';
+            }
+        } catch (error) {
+            console.error('Authentication check failed:', error);
+            window.location.href = 'auth.html';
+        }
     }
 
     updateUserInterface() {
