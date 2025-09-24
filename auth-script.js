@@ -206,22 +206,44 @@ class AuthSystem {
             console.log('Login successful, creating session for user:', user.email);
             this.showLoginProgress('Setting up your account...', 70);
             await this.createSessionFromSupabase(user);
+            
+            // Wait for session persistence before redirecting
+            this.showLoginProgress('Confirming session...', 85);
+            const sessionReady = await this.waitForSessionReady(50); // ~5s
+            if (!sessionReady) {
+                console.warn('Session not confirmed after login. Proceeding with redirect, hub will retry.');
+            }
+            
             console.log('Session created, redirecting to hub...');
             this.showLoginProgress('Almost ready...', 90);
             
-            // Add a small delay before redirect to ensure session is saved
+            // Small delay, then redirect
             setTimeout(() => {
                 console.log('Executing redirect to hub...');
                 this.showLoginProgress('Redirecting to hub...', 100);
                 setTimeout(() => {
                     this.redirectToHub();
-                }, 500);
+                }, 300);
             }, 100);
         } catch (error) { 
             console.error('Login exception:', error);
             this.showMessage('Login failed: ' + error.message, 'error'); 
             this.hideLoginProgress();
         }
+    }
+
+    async waitForSessionReady(maxTries = 30) {
+        try {
+            if (!window.supabaseClient) return false;
+            let tries = 0;
+            while (tries < maxTries) {
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                if (session && session.user) return true;
+                await new Promise(r => setTimeout(r, 100));
+                tries++;
+            }
+        } catch (_) {}
+        return false;
     }
 
     async handleSignup() {
