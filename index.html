@@ -19,33 +19,104 @@
     <link rel="preload" href="database-supabase.js" as="script">
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
-    <!-- Load Supabase first -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <!-- Load Supabase with multiple CDN fallbacks -->
     <script src="config.js"></script>
-    
     <script>
-        // Initialize Supabase client immediately
+        // Initialize Supabase client with multiple CDN fallbacks
         window.supabaseClient = null;
+        window.supabase = null;
         
-        // Wait for Supabase to load and initialize
+        function loadSupabase() {
+            const cdns = [
+                'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
+                'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
+                'https://cdn.skypack.dev/@supabase/supabase-js@2'
+            ];
+            
+            let currentCdn = 0;
+            
+            function tryNextCdn() {
+                if (currentCdn >= cdns.length) {
+                    console.error('All Supabase CDNs failed, trying ESM import');
+                    // Try ESM import as last resort
+                    const script = document.createElement('script');
+                    script.type = 'module';
+                    script.textContent = `
+                        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+                        window.supabase = { createClient };
+                        window.dispatchEvent(new CustomEvent('supabase-esm-ready'));
+                    `;
+                    script.onload = () => {
+                        console.log('Supabase ESM loaded');
+                        initSupabase();
+                    };
+                    script.onerror = () => {
+                        console.error('ESM import also failed, using minimal fallback');
+                        // Use a minimal fallback
+                        window.supabase = {
+                            createClient: function(url, key) {
+                                return {
+                                    auth: {
+                                        getUser: () => Promise.resolve({ data: { user: null }, error: { message: 'Supabase not available' } }),
+                                        signOut: () => Promise.resolve({ error: null })
+                                    }
+                                };
+                            }
+                        };
+                        initSupabase();
+                    };
+                    document.head.appendChild(script);
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = cdns[currentCdn];
+                script.onload = () => {
+                    console.log('Supabase script loaded from:', cdns[currentCdn]);
+                    console.log('Available globals:', Object.keys(window).filter(k => k.includes('supabase')));
+                    // Wait a moment for the script to fully initialize
+                    setTimeout(initSupabase, 50);
+                };
+                script.onerror = () => {
+                    console.log('Failed to load from:', cdns[currentCdn]);
+                    currentCdn++;
+                    tryNextCdn();
+                };
+                document.head.appendChild(script);
+            }
+            
+            tryNextCdn();
+        }
+        
         function initSupabase() {
-            if (typeof window.supabase !== 'undefined' && CONFIG) {
+            console.log('initSupabase called');
+            console.log('window.supabase:', typeof window.supabase);
+            console.log('CONFIG:', typeof CONFIG);
+            
+            // Check different ways Supabase might be exposed
+            const supabaseLib = window.supabase || window.supabaseJs || window.supabaseClient;
+            
+            if (supabaseLib && typeof supabaseLib.createClient === 'function' && CONFIG) {
                 try {
-                    window.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                    window.supabaseClient = supabaseLib.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
                     console.log('Supabase client initialized successfully');
                     // Dispatch event to signal Supabase is ready
                     window.dispatchEvent(new CustomEvent('supabase-ready'));
                 } catch (error) {
                     console.error('Failed to initialize Supabase client:', error);
                 }
-            } else {
+            } else if (CONFIG) {
+                console.log('Supabase library not ready, retrying...');
                 // Retry after a short delay
+                setTimeout(initSupabase, 100);
+            } else {
+                console.log('CONFIG not available, retrying...');
                 setTimeout(initSupabase, 100);
             }
         }
         
-        // Start initialization
-        initSupabase();
+        // Start loading
+        loadSupabase();
     </script>
     
     <script>
@@ -409,29 +480,49 @@
         
         // Check authentication before loading the hub
         document.addEventListener('DOMContentLoaded', async () => {
+            console.log('=== DOMContentLoaded started ===');
+            
             try {
-            // Wait for Supabase to be ready
-            if (!window.supabaseClient) {
-                console.log('Waiting for Supabase to initialize...');
-                // Wait for supabase-ready event
-                await new Promise((resolve) => {
-                    const timeout = setTimeout(() => {
-                        console.log('Supabase initialization timeout, redirecting to auth page');
-                        resolve();
-                    }, 5000);
-                    
-                    window.addEventListener('supabase-ready', () => {
-                        clearTimeout(timeout);
-                        resolve();
-                    }, { once: true });
-                });
-                
-                // Check again after waiting
+            // Hide loading screen immediately and show main content
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainContent = document.getElementById('mainContent');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (mainContent) mainContent.style.display = 'block';
+            
+            console.log('Loading screen hidden, main content shown');
+            
+            // Simple check: if no Supabase client after 2 seconds, redirect
+            setTimeout(() => {
                 if (!window.supabaseClient) {
-                    console.log('Supabase not available, redirecting to auth page');
-                    const loadingScreen = document.getElementById('loadingScreen');
-                    const mainContent = document.getElementById('mainContent');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    console.log('No Supabase client after 2 seconds, redirecting to auth');
+                    if (mainContent) {
+                        mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
+                    }
+                    setTimeout(() => {
+                        window.location.href = 'auth.html';
+                    }, 1000);
+                }
+            }, 2000);
+            
+            // Try to check authentication if client is available
+            if (window.supabaseClient) {
+                console.log('Supabase client available, checking authentication');
+                try {
+                    const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+                    if (error || !user) {
+                        console.log('No authenticated user, redirecting to auth page');
+                        if (mainContent) {
+                            mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
+                        }
+                        setTimeout(() => {
+                            window.location.href = 'auth.html';
+                        }, 1000);
+                        return;
+                    } else {
+                        console.log('User authenticated:', user.email);
+                    }
+                } catch (authError) {
+                    console.error('Authentication check failed:', authError);
                     if (mainContent) {
                         mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
                     }
@@ -440,53 +531,10 @@
                     }, 1000);
                     return;
                 }
+            } else {
+                console.log('Supabase client not available yet, will check in 2 seconds');
             }
-            
-            // Check if user is authenticated via Supabase
-            const { data: { user }, error } = await window.supabaseClient.auth.getUser();
-            if (error || !user) {
-                console.log('No authenticated user, redirecting to auth page');
-                // Hide loading screen before redirect
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'block';
-                // Show redirect message briefly
-                if (mainContent) {
-                    mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
-                }
-                setTimeout(() => {
-                    window.location.href = 'auth.html';
-                }, 1000);
-                return;
-            }
-            const hideLoading = () => {
-                try {
-                    const loadingScreen = document.getElementById('loadingScreen');
-                    const mainContent = document.getElementById('mainContent');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-                    if (mainContent) mainContent.style.display = 'block';
-                } catch (_) {}
-            };
-            // Safety: ensure loading is hidden even if something delays
-            setTimeout(hideLoading, 600);
-            
-            // Emergency fallback: if nothing happens in 5 seconds, redirect to auth
-            setTimeout(() => {
-                const loadingScreen = document.getElementById('loadingScreen');
-                if (loadingScreen && loadingScreen.style.display !== 'none') {
-                    console.log('Emergency fallback: redirecting to auth page');
-                    loadingScreen.style.display = 'none';
-                    const mainContent = document.getElementById('mainContent');
-                    if (mainContent) {
-                        mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
-                        mainContent.style.display = 'block';
-                    }
-                    setTimeout(() => {
-                        window.location.href = 'auth.html';
-                    }, 1000);
-                }
-            }, 5000);
+            console.log('=== DOMContentLoaded completed ===');
             
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
             try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
