@@ -14,7 +14,7 @@
     <link rel="alternate icon" href="favicon.ico">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="prefetch" href="section.html" as="document" crossorigin>
-    <link rel="preload" href="section-script.js" as="script">
+    <link rel="prefetch" href="section-script.js" as="script">
     <link rel="preload" href="config.js" as="script">
     <link rel="preload" href="database-supabase.js" as="script">
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
@@ -545,6 +545,12 @@
                     const stillLoading = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
                     if (stillLoading) {
                         console.warn('Hub init watchdog triggered, loading sections directly');
+                        try {
+                            const loadingScreen = document.getElementById('loadingScreen');
+                            const mainContent = document.getElementById('mainContent');
+                            if (loadingScreen) loadingScreen.style.display = 'none';
+                            if (mainContent) mainContent.style.display = 'block';
+                        } catch (_) {}
                         await loadSectionsFromSupabase();
                     }
                 } catch (e) { console.error('Watchdog error:', e); }
