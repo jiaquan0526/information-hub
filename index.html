@@ -382,36 +382,44 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
-        // Smooth authentication flow
-        document.addEventListener('DOMContentLoaded', async () => {
+        // Fast loading - show interface immediately, check auth in background
+        document.addEventListener('DOMContentLoaded', () => {
             console.log('=== DOMContentLoaded started ===');
             
-            // Show loading screen with smooth animation
+            // Show interface immediately
             const loadingScreen = document.getElementById('loadingScreen');
             const mainContent = document.getElementById('mainContent');
             
-            if (loadingScreen) {
-                loadingScreen.style.display = 'flex';
-                loadingScreen.style.opacity = '1';
-            }
-            if (mainContent) {
-                mainContent.style.display = 'none';
-            }
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (mainContent) mainContent.style.display = 'block';
             
-            console.log('Loading screen shown, checking authentication...');
+            // Set temporary user info
+            const userNameEl = document.getElementById('userName');
+            const userRoleEl = document.getElementById('userRole');
+            if (userNameEl) userNameEl.textContent = 'Loading...';
+            if (userRoleEl) userRoleEl.textContent = 'Loading...';
             
+            console.log('Interface shown immediately, checking auth in background...');
+            
+            // Check authentication in background (non-blocking)
+            checkAuthenticationInBackground();
+            
+            console.log('=== DOMContentLoaded completed ===');
+        });
+        
+        // Background authentication check
+        async function checkAuthenticationInBackground() {
             try {
-                // Wait for Supabase to be available
+                // Wait for Supabase with timeout
                 let attempts = 0;
-                while (!window.supabase && attempts < 50) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                while (!window.supabase && attempts < 20) { // Reduced from 50 to 20
+                    await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms to 50ms
                     attempts++;
                 }
                 
                 if (!window.supabase) {
                     console.log('Supabase not available, redirecting to auth');
-                    showRedirectMessage();
-                    setTimeout(() => window.location.href = 'auth.html', 1500);
+                    showAuthRedirect();
                     return;
                 }
                 
@@ -420,100 +428,85 @@
                     window.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
                 }
                 
-                // Check authentication
+                // Quick auth check
                 const { data: { user }, error } = await window.supabaseClient.auth.getUser();
                 
                 if (error || !user) {
                     console.log('No authenticated user, redirecting to auth');
-                    showRedirectMessage();
-                    setTimeout(() => window.location.href = 'auth.html', 1500);
+                    showAuthRedirect();
                     return;
                 }
                 
                 console.log('User authenticated:', user.email);
                 
-                // Get user profile from database
-                const { data: profile, error: profileError } = await window.supabaseClient
+                // Get user profile (with timeout)
+                const profilePromise = window.supabaseClient
                     .from('users')
                     .select('*')
                     .eq('id', user.id)
                     .single();
                 
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+                );
+                
+                const { data: profile, error: profileError } = await Promise.race([
+                    profilePromise,
+                    timeoutPromise
+                ]);
+                
                 if (profileError || !profile) {
                     console.log('User profile not found, redirecting to auth');
-                    showRedirectMessage();
-                    setTimeout(() => window.location.href = 'auth.html', 1500);
+                    showAuthRedirect();
                     return;
                 }
                 
-                // Smooth transition to main content
-                await showMainContent(profile);
+                // Update UI with real user data
+                updateUserInterface(profile);
                 
             } catch (error) {
                 console.error('Authentication error:', error);
-                showRedirectMessage();
-                setTimeout(() => window.location.href = 'auth.html', 1500);
-            }
-            
-            console.log('=== DOMContentLoaded completed ===');
-        });
-        
-        // Show redirect message with smooth animation
-        function showRedirectMessage() {
-            const loadingScreen = document.getElementById('loadingScreen');
-            if (loadingScreen) {
-                loadingScreen.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
-                        <h2>Redirecting to Login...</h2>
-                        <p>Please sign in to access your resources.</p>
-                    </div>
-                `;
+                showAuthRedirect();
             }
         }
         
-        // Show main content with user data
-        async function showMainContent(userProfile) {
-            const loadingScreen = document.getElementById('loadingScreen');
-            const mainContent = document.getElementById('mainContent');
+        // Show auth redirect overlay
+        function showAuthRedirect() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: rgba(0,0,0,0.8); z-index: 10000; 
+                display: flex; justify-content: center; align-items: center;
+                color: white; font-family: 'Segoe UI', sans-serif;
+            `;
+            overlay.innerHTML = `
+                <div style="text-align: center; padding: 40px; background: #333; border-radius: 10px;">
+                    <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                    <h2>Redirecting to Login...</h2>
+                    <p>Please sign in to access your resources.</p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
             
-            // Update user info in header
+            setTimeout(() => {
+                window.location.href = 'auth.html';
+            }, 2000);
+        }
+        
+        // Update UI with user data
+        function updateUserInterface(profile) {
             const userNameEl = document.getElementById('userName');
             const userRoleEl = document.getElementById('userRole');
             
-            if (userNameEl) userNameEl.textContent = userProfile.username || userProfile.name || 'User';
-            if (userRoleEl) userRoleEl.textContent = userProfile.role || 'User';
+            if (userNameEl) userNameEl.textContent = profile.username || profile.name || 'User';
+            if (userRoleEl) userRoleEl.textContent = profile.role || 'User';
             
-            // Set global user for other functions
-            window.currentUser = userProfile;
+            // Set global user
+            window.currentUser = profile;
             
-            // Smooth fade transition
-            if (loadingScreen) {
-                loadingScreen.style.transition = 'opacity 0.5s ease-out';
-                loadingScreen.style.opacity = '0';
-            }
-            
-            if (mainContent) {
-                mainContent.style.display = 'block';
-                mainContent.style.opacity = '0';
-                mainContent.style.transition = 'opacity 0.5s ease-in';
-                
-                // Trigger fade in
-                setTimeout(() => {
-                    mainContent.style.opacity = '1';
-                }, 100);
-            }
-            
-            // Hide loading screen after transition
-            setTimeout(() => {
-                if (loadingScreen) loadingScreen.style.display = 'none';
-            }, 500);
-            
-            console.log('Main content shown for user:', userProfile.username);
-            
-            // Initialize other functions
-            try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
-            try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
+            console.log('User interface updated for:', profile.username);
+        }
+        
                 
                 // Initialize info bar
                 try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
