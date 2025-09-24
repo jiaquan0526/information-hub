@@ -213,10 +213,12 @@ class InformationHub {
             }
             
             console.log('Current user set:', this.currentUser);
+            return true;
             
         } catch (error) {
             console.error('Authentication check failed:', error);
             window.location.href = 'auth.html';
+            return false;
         }
     }
 
