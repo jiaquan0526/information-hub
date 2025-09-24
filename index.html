@@ -19,105 +19,9 @@
     <link rel="preload" href="database-supabase.js" as="script">
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
-    <!-- Load Supabase with multiple CDN fallbacks -->
+    <!-- Load Supabase for later use -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="config.js"></script>
-    <script>
-        // Initialize Supabase client with multiple CDN fallbacks
-        window.supabaseClient = null;
-        window.supabase = null;
-        
-        function loadSupabase() {
-            const cdns = [
-                'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
-                'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
-                'https://cdn.skypack.dev/@supabase/supabase-js@2'
-            ];
-            
-            let currentCdn = 0;
-            
-            function tryNextCdn() {
-                if (currentCdn >= cdns.length) {
-                    console.error('All Supabase CDNs failed, trying ESM import');
-                    // Try ESM import as last resort
-                    const script = document.createElement('script');
-                    script.type = 'module';
-                    script.textContent = `
-                        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-                        window.supabase = { createClient };
-                        window.dispatchEvent(new CustomEvent('supabase-esm-ready'));
-                    `;
-                    script.onload = () => {
-                        console.log('Supabase ESM loaded');
-                        initSupabase();
-                    };
-                    script.onerror = () => {
-                        console.error('ESM import also failed, using minimal fallback');
-                        // Use a minimal fallback
-                        window.supabase = {
-                            createClient: function(url, key) {
-                                return {
-                                    auth: {
-                                        getUser: () => Promise.resolve({ data: { user: null }, error: { message: 'Supabase not available' } }),
-                                        signOut: () => Promise.resolve({ error: null })
-                                    }
-                                };
-                            }
-                        };
-                        initSupabase();
-                    };
-                    document.head.appendChild(script);
-                    return;
-                }
-                
-                const script = document.createElement('script');
-                script.src = cdns[currentCdn];
-                script.onload = () => {
-                    console.log('Supabase script loaded from:', cdns[currentCdn]);
-                    console.log('Available globals:', Object.keys(window).filter(k => k.includes('supabase')));
-                    // Wait a moment for the script to fully initialize
-                    setTimeout(initSupabase, 50);
-                };
-                script.onerror = () => {
-                    console.log('Failed to load from:', cdns[currentCdn]);
-                    currentCdn++;
-                    tryNextCdn();
-                };
-                document.head.appendChild(script);
-            }
-            
-            tryNextCdn();
-        }
-        
-        function initSupabase() {
-            console.log('initSupabase called');
-            console.log('window.supabase:', typeof window.supabase);
-            console.log('CONFIG:', typeof CONFIG);
-            
-            // Check different ways Supabase might be exposed
-            const supabaseLib = window.supabase || window.supabaseJs || window.supabaseClient;
-            
-            if (supabaseLib && typeof supabaseLib.createClient === 'function' && CONFIG) {
-                try {
-                    window.supabaseClient = supabaseLib.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-                    console.log('Supabase client initialized successfully');
-                    // Dispatch event to signal Supabase is ready
-                    window.dispatchEvent(new CustomEvent('supabase-ready'));
-                } catch (error) {
-                    console.error('Failed to initialize Supabase client:', error);
-                }
-            } else if (CONFIG) {
-                console.log('Supabase library not ready, retrying...');
-                // Retry after a short delay
-                setTimeout(initSupabase, 100);
-            } else {
-                console.log('CONFIG not available, retrying...');
-                setTimeout(initSupabase, 100);
-            }
-        }
-        
-        // Start loading
-        loadSupabase();
-    </script>
     
     <script>
     // Default-disable heavy backgrounds for better performance; user can re-enable via toggle
@@ -135,7 +39,7 @@
 
 </head>
 <body>
-    <div id="loadingScreen" style="display: none; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
         <div style="text-align: center;">
             <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
             <h2>Loading Information Hub...</h2>
@@ -143,7 +47,7 @@
         </div>
     </div>
     
-    <div id="mainContent" style="display: block;">
+    <div id="mainContent" style="display: none;">
     <div class="container">
         <header class="header">
             <div class="header-content">
@@ -478,166 +382,161 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
-        // Check authentication before loading the hub
+        // Smooth authentication flow
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('=== DOMContentLoaded started ===');
             
-            try {
-            // Hide loading screen immediately and show main content
+            // Show loading screen with smooth animation
             const loadingScreen = document.getElementById('loadingScreen');
             const mainContent = document.getElementById('mainContent');
-            if (loadingScreen) loadingScreen.style.display = 'none';
-            if (mainContent) mainContent.style.display = 'block';
             
-            console.log('Loading screen hidden, main content shown');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'flex';
+                loadingScreen.style.opacity = '1';
+            }
+            if (mainContent) {
+                mainContent.style.display = 'none';
+            }
             
-            // Simple check: if no Supabase client after 2 seconds, redirect
-            setTimeout(() => {
-                if (!window.supabaseClient) {
-                    console.log('No Supabase client after 2 seconds, redirecting to auth');
-                    if (mainContent) {
-                        mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
-                    }
-                    setTimeout(() => {
-                        window.location.href = 'auth.html';
-                    }, 1000);
+            console.log('Loading screen shown, checking authentication...');
+            
+            try {
+                // Wait for Supabase to be available
+                let attempts = 0;
+                while (!window.supabase && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
                 }
-            }, 2000);
-            
-            // Try to check authentication if client is available
-            if (window.supabaseClient) {
-                console.log('Supabase client available, checking authentication');
-                try {
-                    const { data: { user }, error } = await window.supabaseClient.auth.getUser();
-                    if (error || !user) {
-                        console.log('No authenticated user, redirecting to auth page');
-                        if (mainContent) {
-                            mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
-                        }
-                        setTimeout(() => {
-                            window.location.href = 'auth.html';
-                        }, 1000);
-                        return;
-                    } else {
-                        console.log('User authenticated:', user.email);
-                    }
-                } catch (authError) {
-                    console.error('Authentication check failed:', authError);
-                    if (mainContent) {
-                        mainContent.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Redirecting to login...</h2><p>Please wait...</p></div>';
-                    }
-                    setTimeout(() => {
-                        window.location.href = 'auth.html';
-                    }, 1000);
+                
+                if (!window.supabase) {
+                    console.log('Supabase not available, redirecting to auth');
+                    showRedirectMessage();
+                    setTimeout(() => window.location.href = 'auth.html', 1500);
                     return;
                 }
-            } else {
-                console.log('Supabase client not available yet, will check in 2 seconds');
+                
+                // Initialize Supabase client
+                if (!window.supabaseClient && CONFIG) {
+                    window.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                }
+                
+                // Check authentication
+                const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+                
+                if (error || !user) {
+                    console.log('No authenticated user, redirecting to auth');
+                    showRedirectMessage();
+                    setTimeout(() => window.location.href = 'auth.html', 1500);
+                    return;
+                }
+                
+                console.log('User authenticated:', user.email);
+                
+                // Get user profile from database
+                const { data: profile, error: profileError } = await window.supabaseClient
+                    .from('users')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                
+                if (profileError || !profile) {
+                    console.log('User profile not found, redirecting to auth');
+                    showRedirectMessage();
+                    setTimeout(() => window.location.href = 'auth.html', 1500);
+                    return;
+                }
+                
+                // Smooth transition to main content
+                await showMainContent(profile);
+                
+            } catch (error) {
+                console.error('Authentication error:', error);
+                showRedirectMessage();
+                setTimeout(() => window.location.href = 'auth.html', 1500);
             }
-            console.log('=== DOMContentLoaded completed ===');
             
+            console.log('=== DOMContentLoaded completed ===');
+        });
+        
+        // Show redirect message with smooth animation
+        function showRedirectMessage() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                        <h2>Redirecting to Login...</h2>
+                        <p>Please sign in to access your resources.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Show main content with user data
+        async function showMainContent(userProfile) {
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainContent = document.getElementById('mainContent');
+            
+            // Update user info in header
+            const userNameEl = document.getElementById('userName');
+            const userRoleEl = document.getElementById('userRole');
+            
+            if (userNameEl) userNameEl.textContent = userProfile.username || userProfile.name || 'User';
+            if (userRoleEl) userRoleEl.textContent = userProfile.role || 'User';
+            
+            // Set global user for other functions
+            window.currentUser = userProfile;
+            
+            // Smooth fade transition
+            if (loadingScreen) {
+                loadingScreen.style.transition = 'opacity 0.5s ease-out';
+                loadingScreen.style.opacity = '0';
+            }
+            
+            if (mainContent) {
+                mainContent.style.display = 'block';
+                mainContent.style.opacity = '0';
+                mainContent.style.transition = 'opacity 0.5s ease-in';
+                
+                // Trigger fade in
+                setTimeout(() => {
+                    mainContent.style.opacity = '1';
+                }, 100);
+            }
+            
+            // Hide loading screen after transition
+            setTimeout(() => {
+                if (loadingScreen) loadingScreen.style.display = 'none';
+            }, 500);
+            
+            console.log('Main content shown for user:', userProfile.username);
+            
+            // Initialize other functions
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
             try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
-            
-                // Hide loading screen and show main content FIRST
+                
+                // Initialize info bar
+                try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+                try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+                try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
+                
+            } catch (error) {
+                console.error('Error in DOMContentLoaded:', error);
+                // Ensure loading screen is hidden even if there's an error
                 const loadingScreen = document.getElementById('loadingScreen');
                 const mainContent = document.getElementById('mainContent');
                 
                 if (loadingScreen) {
                     loadingScreen.style.display = 'none';
-                    console.log('Loading screen hidden');
                 }
                 
                 if (mainContent) {
                     mainContent.style.display = 'block';
-                    console.log('Main content shown');
                 }
-                
-                // Ensure a minimal initial configuration if none exists
-                try {
-                    // Using Supabase database only
-                } catch (_) {}
-                // Try to load background image manifest (optional)
-                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                
-                // Show interface immediately and try to load database sections
-                console.log('Showing interface immediately...');
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'block';
-                
-                // Check authentication and redirect if needed
-                try {
-                    const { data: { user }, error } = await supabase.auth.getUser();
-                    if (error || !user) {
-                        console.log('No authenticated user, redirecting to auth page');
-                        window.location.href = 'auth.html';
-                        return;
-                    }
-                } catch (e) {
-                    console.log('Authentication check failed, redirecting to auth page');
-                    window.location.href = 'auth.html';
-                    return;
-                }
-                
-                // Try to load database sections after a delay
-                setTimeout(() => {
-                    console.log('Attempting to load database sections...');
-                    if (window.hubDatabase && window.hubDatabaseReady) {
-                        console.log('Database is ready, loading sections...');
-                        try { 
-                            updateMainHubSections(); 
-                            console.log('updateMainHubSections called');
-                        } catch (e) { 
-                            console.error('updateMainHubSections error', e);
-                        }
-                    } else {
-                        console.log('Database not ready yet, keeping simple sections');
-                        // Add a status indicator
-                        const statusDiv = document.createElement('div');
-                        statusDiv.style.cssText = 'position: fixed; bottom: 10px; right: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; color: #856404; font-size: 12px; z-index: 9999;';
-                        statusDiv.innerHTML = 'Database loading...';
-                        document.body.appendChild(statusDiv);
-                    }
-                }, 2000);
-                // Update background toggle button to show correct state
-                try { updateBackgroundToggleButton(); } catch (e) { console.warn('updateBackgroundToggleButton error', e); }
-                
-                // Force update with fresh data from Supabase
-                setTimeout(() => {
-                    console.log('Forcing interface update...');
-                    updateUserInterface();
-                }, 100);
-            } else {
-                console.log('Regular page load, updating interface...');
-                // Update user interface based on role
-                updateUserInterface();
             }
-        }
-        
-        // Initialize info bar
-        try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
-        try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
-        try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
-        
-    } catch (error) {
-        console.error('Error in DOMContentLoaded:', error);
-        // Ensure loading screen is hidden even if there's an error
-        const loadingScreen = document.getElementById('loadingScreen');
-        const mainContent = document.getElementById('mainContent');
-        
-        if (loadingScreen) {
-            loadingScreen.style.display = 'none';
-        }
-        
-        if (mainContent) {
-            mainContent.style.display = 'block';
-        }
-    }
-    
-    console.log('After DOM loaded - navigateToSection function exists:', typeof window.navigateToSection);
-});
+            
+            console.log('After DOM loaded - navigateToSection function exists:', typeof window.navigateToSection);
+        });
         
         // On bfcache restore or fast back/forward, ensure hub is visible and refresh counts quickly
         window.addEventListener('pageshow', () => {
