@@ -12,6 +12,16 @@ class AuthSystem {
         this.checkExistingSession();
         // Show password recovery form if coming from email
         this.maybeShowRecoveryForm();
+        
+        // Add test function for debugging
+        window.testAuth = () => {
+            console.log('=== AUTH TEST ===');
+            console.log('Supabase client:', !!window.supabaseClient);
+            console.log('Supabase library:', !!window.supabase);
+            console.log('CONFIG:', window.CONFIG);
+            console.log('SUPABASE_URL:', window.SUPABASE_URL);
+            console.log('SUPABASE_ANON_KEY:', window.SUPABASE_ANON_KEY ? 'Present' : 'Missing');
+        };
     }
 
     ensureSupabaseClient() {
@@ -46,10 +56,23 @@ class AuthSystem {
     }
 
     async initSupabase(timeoutMs = 5000) {
-        if (this.ensureSupabaseClient()) return true;
-        if (!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY)) return false;
+        console.log('Initializing Supabase...');
+        console.log('SUPABASE_URL:', window.SUPABASE_URL);
+        console.log('SUPABASE_ANON_KEY:', window.SUPABASE_ANON_KEY ? 'Present' : 'Missing');
+        
+        if (this.ensureSupabaseClient()) {
+            console.log('Supabase client already initialized');
+            return true;
+        }
+        
+        if (!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY)) {
+            console.error('Missing Supabase configuration');
+            return false;
+        }
+        
         // Dynamically load CDN if missing
         if (!window.supabase) {
+            console.log('Loading Supabase from CDN...');
             const existing = document.querySelector('script[data-supabase-cdn]');
             if (!existing) {
                 const s = document.createElement('script');
@@ -59,11 +82,18 @@ class AuthSystem {
                 document.head.appendChild(s);
             }
         }
+        
         const startedAt = Date.now();
         return await new Promise((resolve) => {
             const tryInit = () => {
-                if (this.ensureSupabaseClient()) return resolve(true);
-                if (Date.now() - startedAt > timeoutMs) return resolve(false);
+                if (this.ensureSupabaseClient()) {
+                    console.log('Supabase client initialized successfully');
+                    return resolve(true);
+                }
+                if (Date.now() - startedAt > timeoutMs) {
+                    console.error('Supabase initialization timeout');
+                    return resolve(false);
+                }
                 setTimeout(tryInit, 100);
             };
             tryInit();
@@ -140,16 +170,40 @@ class AuthSystem {
 
     async handleLogin() {
         try {
-            if (!(await this.initSupabase())) { this.showMessage('Supabase not initialized', 'error'); return; }
+            console.log('Starting login process...');
+            if (!(await this.initSupabase())) { 
+                console.error('Supabase not initialized');
+                this.showMessage('Supabase not initialized', 'error'); 
+                return; 
+            }
+            console.log('Supabase initialized, attempting login...');
+            
             const email = String(document.getElementById('username').value || '').trim();
             const password = String(document.getElementById('password').value || '').trim();
+            console.log('Login attempt for email:', email);
+            
             const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
-            if (error) { this.showMessage(error.message || 'Invalid email or password', 'error'); return; }
+            if (error) { 
+                console.error('Login error:', error);
+                this.showMessage(error.message || 'Invalid email or password', 'error'); 
+                return; 
+            }
+            
             const user = data && data.user ? data.user : null;
-            if (!user) { this.showMessage('Login failed', 'error'); return; }
+            if (!user) { 
+                console.error('No user returned from login');
+                this.showMessage('Login failed', 'error'); 
+                return; 
+            }
+            
+            console.log('Login successful, creating session for user:', user.email);
             await this.createSessionFromSupabase(user);
+            console.log('Session created, redirecting to hub...');
             this.redirectToHub();
-        } catch (_) { this.showMessage('Login failed', 'error'); }
+        } catch (error) { 
+            console.error('Login exception:', error);
+            this.showMessage('Login failed: ' + error.message, 'error'); 
+        }
     }
 
     async handleSignup() {
@@ -166,19 +220,27 @@ class AuthSystem {
                 // Assign default access to all visible sections in hub (from Supabase)
                 let sectionIds = [];
                 try {
-                    const { data: secs } = await window.supabaseClient.from('sections').select('section_id');
+                    const { data: secs } = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id')
+                        .eq('config->>visible', true);
                     sectionIds = Array.isArray(secs) ? secs.map(s => s.section_id).filter(Boolean) : [];
                 } catch (_) { 
-                    console.warn('Failed to load sections during signup, will assign empty permissions');
-                    sectionIds = []; 
+                    console.warn('Failed to load sections during signup, using default list');
+                    // Fallback to default sections if database query fails
+                    sectionIds = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
                 }
                 
-                // If no sections exist yet, give user access to view all sections by default
-                // This ensures they can see content when sections are added later
+                // Give new users full access to all sections by default
                 const permissions = {
-                    sections: sectionIds.length > 0 ? sectionIds : ['*'], // '*' means access to all sections
-                    editableSections: [],
-                    canViewAllSections: sectionIds.length === 0 // If no specific sections, allow viewing all
+                    sections: sectionIds.length > 0 ? sectionIds : ['*'], // Access to all sections
+                    editableSections: sectionIds.length > 0 ? sectionIds : ['*'], // Can edit all sections
+                    canViewAllSections: true,
+                    canEditAllSections: true,
+                    canManageUsers: false,
+                    canDeleteResources: true,
+                    canViewAuditLog: false,
+                    canManageRoles: false
                 };
                 
                 await window.supabaseClient.from('profiles').upsert({
@@ -186,7 +248,7 @@ class AuthSystem {
                     email,
                     username: email,
                     name,
-                    role: 'viewer',
+                    role: 'editor', // Give editor role for full access
                     permissions: permissions
                 });
             }
@@ -252,22 +314,51 @@ class AuthSystem {
             if (error) {
                 console.warn('User profile not found, creating default profile with full access');
                 
+                // Get all available sections from Supabase
+                let allSections = [];
+                try {
+                    const { data: sections } = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id')
+                        .eq('config->>visible', true);
+                    allSections = sections ? sections.map(s => s.section_id) : [];
+                } catch (sectionsError) {
+                    console.warn('Could not fetch sections, using default list:', sectionsError);
+                    // Fallback to default sections if database query fails
+                    allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                }
+                
                 // Create a default profile with full access to all sections
                 const defaultPermissions = {
-                    sections: ['*'], // Access to all sections
-                    editableSections: [],
-                    canViewAllSections: true
+                    sections: allSections, // Access to all visible sections
+                    editableSections: allSections, // Can edit all sections
+                    canViewAllSections: true,
+                    canEditAllSections: true,
+                    canManageUsers: false,
+                    canDeleteResources: true,
+                    canViewAuditLog: false,
+                    canManageRoles: false
                 };
                 
                 try {
-                    await window.supabaseClient.from('profiles').upsert({
-                        id: authUser.id,
-                        email: authUser.email,
-                        username: authUser.email,
-                        name: authUser.user_metadata?.name || '',
-                        role: 'viewer',
-                        permissions: defaultPermissions
-                    });
+                    const { data: newProfile, error: profileError } = await window.supabaseClient
+                        .from('profiles')
+                        .upsert({
+                            id: authUser.id,
+                            email: authUser.email,
+                            username: authUser.email,
+                            name: authUser.user_metadata?.name || '',
+                            role: 'editor', // Give editor role for full access
+                            permissions: defaultPermissions
+                        })
+                        .select()
+                        .single();
+                    
+                    if (profileError) {
+                        console.error('Failed to create user profile:', profileError);
+                    } else {
+                        console.log('User profile created successfully:', newProfile);
+                    }
                 } catch (profileError) {
                     console.error('Failed to create user profile:', profileError);
                 }
@@ -275,13 +366,13 @@ class AuthSystem {
                 const session = {
                     userId: authUser.id,
                     username: authUser.email,
-                    role: 'viewer',
+                    role: 'editor',
                     name: authUser.user_metadata?.name || '',
                     email: authUser.email,
                     loginTime: new Date().toISOString(),
                     permissions: defaultPermissions
                 };
-                // Session is managed by Supabase auth
+                localStorage.setItem('hubSession', JSON.stringify(session));
                 return;
             }
             const p = data || {};
