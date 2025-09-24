@@ -56,6 +56,12 @@
             
             // Guard to prevent fallback re-initialization with placeholders
             window.SUPABASE_CLIENT_READY = true;
+            try {
+                // Lightweight auth-state debug (visible only in console)
+                window.supabaseClient.auth.onAuthStateChange((event, session) => {
+                    console.log('[AuthStateChange]', event, session && session.user ? session.user.email : null);
+                });
+            } catch (_) {}
             console.log('✅ Supabase client initialized successfully');
         };
         

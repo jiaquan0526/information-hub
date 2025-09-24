@@ -47,7 +47,16 @@ class AuthSystem {
             }
             
             if (!window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
-                window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+                window.supabaseClient = window.supabase.createClient(
+                    window.SUPABASE_URL,
+                    window.SUPABASE_ANON_KEY,
+                    { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+                );
+                try {
+                    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+                        console.log('[AuthStateChange@auth]', event, session && session.user ? session.user.email : null);
+                    });
+                } catch (_) {}
             }
         } catch (error) {
             console.error('Error ensuring Supabase client:', error);
