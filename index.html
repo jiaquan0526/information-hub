@@ -78,6 +78,11 @@
             }
             
             // Initialize Supabase client
+            try {
+                // Normalize globals to avoid mixed sources overriding
+                window.SUPABASE_URL = window.CONFIG.SUPABASE_URL;
+                window.SUPABASE_ANON_KEY = window.CONFIG.SUPABASE_ANON_KEY;
+            } catch (_) {}
             window.supabaseClient = window.supabase.createClient(
                 window.CONFIG.SUPABASE_URL, 
                 window.CONFIG.SUPABASE_ANON_KEY,
