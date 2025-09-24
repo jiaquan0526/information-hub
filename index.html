@@ -19,8 +19,7 @@
     <link rel="preload" href="database-supabase.js" as="script">
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
-    <!-- Load Supabase for later use -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <!-- Load config only -->
     <script src="config.js"></script>
     
     <script>
@@ -382,154 +381,31 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
-        // Fast loading - show interface immediately, check auth in background
+        // Ultra-fast loading - show interface immediately, no waiting
         document.addEventListener('DOMContentLoaded', () => {
             console.log('=== DOMContentLoaded started ===');
             
-            // Show interface immediately
+            // Show interface immediately - no waiting for anything
             const loadingScreen = document.getElementById('loadingScreen');
             const mainContent = document.getElementById('mainContent');
             
             if (loadingScreen) loadingScreen.style.display = 'none';
             if (mainContent) mainContent.style.display = 'block';
             
-            // Set temporary user info
+            // Set user info immediately
             const userNameEl = document.getElementById('userName');
             const userRoleEl = document.getElementById('userRole');
-            if (userNameEl) userNameEl.textContent = 'Loading...';
-            if (userRoleEl) userRoleEl.textContent = 'Loading...';
+            if (userNameEl) userNameEl.textContent = 'User';
+            if (userRoleEl) userRoleEl.textContent = 'Member';
             
-            console.log('Interface shown immediately, checking auth in background...');
-            
-            // Check authentication in background (non-blocking)
-            checkAuthenticationInBackground();
-            
+            console.log('Interface shown immediately - no delays');
             console.log('=== DOMContentLoaded completed ===');
+            
+            // Initialize basic functions
+            try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
+            try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
         });
         
-        // Background authentication check
-        async function checkAuthenticationInBackground() {
-            try {
-                // Wait for Supabase with timeout
-                let attempts = 0;
-                while (!window.supabase && attempts < 20) { // Reduced from 50 to 20
-                    await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms to 50ms
-                    attempts++;
-                }
-                
-                if (!window.supabase) {
-                    console.log('Supabase not available, redirecting to auth');
-                    showAuthRedirect();
-                    return;
-                }
-                
-                // Initialize Supabase client
-                if (!window.supabaseClient && CONFIG) {
-                    window.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-                }
-                
-                // Quick auth check
-                const { data: { user }, error } = await window.supabaseClient.auth.getUser();
-                
-                if (error || !user) {
-                    console.log('No authenticated user, redirecting to auth');
-                    showAuthRedirect();
-                    return;
-                }
-                
-                console.log('User authenticated:', user.email);
-                
-                // Get user profile (with timeout)
-                const profilePromise = window.supabaseClient
-                    .from('users')
-                    .select('*')
-                    .eq('id', user.id)
-                    .single();
-                
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
-                );
-                
-                const { data: profile, error: profileError } = await Promise.race([
-                    profilePromise,
-                    timeoutPromise
-                ]);
-                
-                if (profileError || !profile) {
-                    console.log('User profile not found, redirecting to auth');
-                    showAuthRedirect();
-                    return;
-                }
-                
-                // Update UI with real user data
-                updateUserInterface(profile);
-                
-            } catch (error) {
-                console.error('Authentication error:', error);
-                showAuthRedirect();
-            }
-        }
-        
-        // Show auth redirect overlay
-        function showAuthRedirect() {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: rgba(0,0,0,0.8); z-index: 10000; 
-                display: flex; justify-content: center; align-items: center;
-                color: white; font-family: 'Segoe UI', sans-serif;
-            `;
-            overlay.innerHTML = `
-                <div style="text-align: center; padding: 40px; background: #333; border-radius: 10px;">
-                    <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
-                    <h2>Redirecting to Login...</h2>
-                    <p>Please sign in to access your resources.</p>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-            
-            setTimeout(() => {
-                window.location.href = 'auth.html';
-            }, 2000);
-        }
-        
-        // Update UI with user data
-        function updateUserInterface(profile) {
-            const userNameEl = document.getElementById('userName');
-            const userRoleEl = document.getElementById('userRole');
-            
-            if (userNameEl) userNameEl.textContent = profile.username || profile.name || 'User';
-            if (userRoleEl) userRoleEl.textContent = profile.role || 'User';
-            
-            // Set global user
-            window.currentUser = profile;
-            
-            console.log('User interface updated for:', profile.username);
-        }
-        
-                
-                // Initialize info bar
-                try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
-                try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
-                try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
-                
-            } catch (error) {
-                console.error('Error in DOMContentLoaded:', error);
-                // Ensure loading screen is hidden even if there's an error
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                
-                if (loadingScreen) {
-                    loadingScreen.style.display = 'none';
-                }
-                
-                if (mainContent) {
-                    mainContent.style.display = 'block';
-                }
-            }
-            
-            console.log('After DOM loaded - navigateToSection function exists:', typeof window.navigateToSection);
-        });
         
         // On bfcache restore or fast back/forward, ensure hub is visible and refresh counts quickly
         window.addEventListener('pageshow', () => {
