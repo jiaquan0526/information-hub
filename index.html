@@ -687,6 +687,9 @@
                 setTimeout(() => showFallbackSections(), 2000);
             }
         }
+
+        // Expose for console debugging on the hub page
+        try { window.loadSectionsFromSupabase = loadSectionsFromSupabase; } catch (_) {}
         
         // Function to update hub progress
         function updateHubProgress(message, percentage) {
