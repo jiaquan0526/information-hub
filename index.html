@@ -19,6 +19,10 @@
     <link rel="preload" href="database-supabase.js" as="script">
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
+    <!-- Supabase config fallback for static hosting (e.g., GitHub Pages) -->
+    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
+    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
+
     <!-- Load Supabase and config -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="config.js"></script>
@@ -42,9 +46,35 @@
                 return;
             }
             
+            // Build CONFIG from meta/local if config.js is not present
             if (!window.CONFIG) {
-                console.error('CONFIG not available');
-                return;
+                try {
+                    const metaUrl = document.querySelector('meta[name="supabase-url"]').content;
+                    const metaKey = document.querySelector('meta[name="supabase-anon-key"]').content;
+                    const url = window.SUPABASE_URL || localStorage.getItem('SUPABASE_URL') || metaUrl;
+                    const key = window.SUPABASE_ANON_KEY || localStorage.getItem('SUPABASE_ANON_KEY') || metaKey;
+                    if (url && key) {
+                        window.CONFIG = {
+                            SUPABASE_URL: url,
+                            SUPABASE_ANON_KEY: key,
+                            APP_NAME: 'Information Hub',
+                            VERSION: '1.0.0',
+                            DB_RETRY_ATTEMPTS: 3,
+                            DB_TIMEOUT_MS: 5000,
+                            SESSION_TIMEOUT_MS: 24 * 60 * 60 * 1000,
+                            MAX_LOGIN_ATTEMPTS: 5,
+                            DEBUG_MODE: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'),
+                            ENABLE_LOGGING: true
+                        };
+                        console.log('CONFIG created from meta tags/local values');
+                    } else {
+                        console.error('CONFIG not available and no meta/local values found');
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Failed to derive CONFIG from meta/local', e);
+                    return;
+                }
             }
             
             // Initialize Supabase client
