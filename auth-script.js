@@ -363,29 +363,10 @@ class AuthSystem {
                     console.error('Failed to create user profile:', profileError);
                 }
                 
-                const session = {
-                    userId: authUser.id,
-                    username: authUser.email,
-                    role: 'editor',
-                    name: authUser.user_metadata?.name || '',
-                    email: authUser.email,
-                    loginTime: new Date().toISOString(),
-                    permissions: defaultPermissions
-                };
-                localStorage.setItem('hubSession', JSON.stringify(session));
+                // Session is managed by Supabase auth only
                 return;
             }
-            const p = data || {};
-            const session = {
-                userId: p.id,
-                username: p.username || authUser.email,
-                role: p.role || 'viewer',
-                name: p.name || '',
-                email: p.email || authUser.email,
-                loginTime: new Date().toISOString(),
-                permissions: p.permissions || {}
-            };
-            localStorage.setItem('hubSession', JSON.stringify(session));
+            // Session is managed by Supabase auth only
         } catch (_) {}
     }
 
@@ -394,11 +375,11 @@ class AuthSystem {
             if (!window.supabaseClient) return;
             const { data: { user } } = await window.supabaseClient.auth.getUser();
             if (!user) return;
-            await this.createSessionFromSupabase(user);
+            // Session is managed by Supabase auth only
             if (location.pathname.endsWith('auth.html')) return;
             this.redirectToHub();
         } catch (e) {
-            console.warn('Invalid existing session; clearing.', e);
+            console.warn('Invalid existing session.', e);
             // Session is managed by Supabase auth
         }
     }

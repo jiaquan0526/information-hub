@@ -112,29 +112,41 @@ class InformationHub {
     }
 
     async checkAuthentication() {
-        // Authentication is handled by Supabase auth
+        // Wait for Supabase client to be ready
+        let retries = 0;
+        const maxRetries = 50; // 5 seconds max wait
+        
+        while (retries < maxRetries && !window.supabaseClient) {
+            console.log('Waiting for Supabase client...', retries + 1);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+        }
+        
         if (!window.supabaseClient) {
-            console.log('No Supabase client, redirecting to auth');
+            console.log('Supabase client not available after waiting, redirecting to auth');
             window.location.href = 'auth.html';
             return;
         }
         
-        // Get current user from Supabase auth
+        // Get current user from Supabase auth only
         try {
+            console.log('Checking authentication with Supabase...');
             const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+            
             if (error) {
                 console.error('Auth error:', error);
+                console.log('Redirecting to auth due to error');
                 window.location.href = 'auth.html';
                 return;
             }
             
             if (!user) {
-                console.log('No authenticated user, redirecting to auth');
+                console.log('No authenticated user found, redirecting to auth');
                 window.location.href = 'auth.html';
                 return;
             }
             
-            console.log('User authenticated:', user.email);
+            console.log('User authenticated successfully:', user.email);
             
             // Try to get user profile from database, but don't fail if it doesn't exist
             try {
