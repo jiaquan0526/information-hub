@@ -429,6 +429,20 @@
                 if (loadingScreen) loadingScreen.style.display = 'none';
                 if (mainContent) mainContent.style.display = 'block';
                 
+                // Check authentication and redirect if needed
+                try {
+                    const { data: { user }, error } = await supabase.auth.getUser();
+                    if (error || !user) {
+                        console.log('No authenticated user, redirecting to auth page');
+                        window.location.href = 'auth.html';
+                        return;
+                    }
+                } catch (e) {
+                    console.log('Authentication check failed, redirecting to auth page');
+                    window.location.href = 'auth.html';
+                    return;
+                }
+                
                 // Try to load database sections after a delay
                 setTimeout(() => {
                     console.log('Attempting to load database sections...');
@@ -1652,7 +1666,8 @@ Permissions:
                 // Get current user from Supabase
                 const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
                 if (authError || !authUser) {
-                    console.log('No authenticated user found');
+                    console.log('No authenticated user found, redirecting to auth page');
+                    window.location.href = 'auth.html';
                     return;
                 }
                 
@@ -1664,7 +1679,8 @@ Permissions:
                     .single();
                 
                 if (profileError || !user) {
-                    console.log('User profile not found in database');
+                    console.log('User profile not found in database, redirecting to auth page');
+                    window.location.href = 'auth.html';
                     return;
                 }
                 
