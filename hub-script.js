@@ -87,9 +87,9 @@ class InformationHub {
         // Add a small delay to ensure Supabase client is ready
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        await this.checkAuthentication();
-        if (!this.currentUser) {
-            console.log('No current user, authentication failed');
+        const authResult = await this.checkAuthentication();
+        if (!authResult) {
+            console.log('Authentication failed, stopping initialization');
             // If authentication failed, user will be redirected to auth.html
             return;
         }
@@ -122,6 +122,8 @@ class InformationHub {
     }
 
     async checkAuthentication() {
+        console.log('=== Starting authentication check ===');
+        
         // Wait for Supabase client to be ready
         let retries = 0;
         const maxRetries = 50; // 5 seconds max wait
@@ -133,30 +135,41 @@ class InformationHub {
         }
         
         if (!window.supabaseClient) {
-            console.log('Supabase client not available after waiting, redirecting to auth');
-            window.location.href = 'auth.html';
-            return;
+            console.error('Supabase client not available after waiting');
+            console.log('Redirecting to auth due to missing Supabase client');
+            setTimeout(() => {
+                window.location.href = 'auth.html';
+            }, 1000);
+            return false;
         }
+        
+        console.log('Supabase client is ready, checking authentication...');
         
         // Get current user from Supabase auth only
         try {
-            console.log('Checking authentication with Supabase...');
             const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+            
+            console.log('Auth check result:', { user: user ? user.email : 'null', error: error ? error.message : 'none' });
             
             if (error) {
                 console.error('Auth error:', error);
-                console.log('Redirecting to auth due to error');
-                window.location.href = 'auth.html';
-                return;
+                console.log('Redirecting to auth due to auth error');
+                setTimeout(() => {
+                    window.location.href = 'auth.html';
+                }, 1000);
+                return false;
             }
             
             if (!user) {
-                console.log('No authenticated user found, redirecting to auth');
-                window.location.href = 'auth.html';
-                return;
+                console.log('No authenticated user found');
+                console.log('Redirecting to auth due to no user');
+                setTimeout(() => {
+                    window.location.href = 'auth.html';
+                }, 1000);
+                return false;
             }
             
-            console.log('User authenticated successfully:', user.email);
+            console.log('✅ User authenticated successfully:', user.email);
             
             // Try to get user profile from database, but don't fail if it doesn't exist
             try {
@@ -1236,19 +1249,47 @@ function initInformationHubOnce() {
 		if (!window.supabaseClient) {
 			console.error('Supabase client not available after waiting');
 			showHubInitProgress('❌ Supabase client not available', 100);
-			setTimeout(() => hideHubInitProgress(), 2000);
+			setTimeout(() => {
+				hideHubInitProgress();
+				window.location.href = 'auth.html';
+			}, 2000);
 			return;
 		}
 		
-		console.log('Supabase client ready, initializing InformationHub');
-		showHubInitProgress('✅ Supabase ready, initializing hub...', 50);
+		console.log('Supabase client ready, checking authentication...');
+		showHubInitProgress('✅ Supabase ready, checking authentication...', 50);
 		
-		informationHub = new InformationHub();
-		// Export for global access
-		window.informationHub = informationHub;
-		
-		showHubInitProgress('✅ Hub initialized successfully!', 100);
-		setTimeout(() => hideHubInitProgress(), 1500);
+		// Test authentication before initializing hub
+		try {
+			const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+			if (error || !user) {
+				console.error('Authentication check failed:', error);
+				showHubInitProgress('❌ Authentication failed', 100);
+				setTimeout(() => {
+					hideHubInitProgress();
+					window.location.href = 'auth.html';
+				}, 2000);
+				return;
+			}
+			
+			console.log('Authentication verified, initializing InformationHub');
+			showHubInitProgress('✅ Authentication verified, initializing hub...', 75);
+			
+			informationHub = new InformationHub();
+			// Export for global access
+			window.informationHub = informationHub;
+			
+			showHubInitProgress('✅ Hub initialized successfully!', 100);
+			setTimeout(() => hideHubInitProgress(), 1500);
+			
+		} catch (error) {
+			console.error('Error during authentication check:', error);
+			showHubInitProgress('❌ Authentication error', 100);
+			setTimeout(() => {
+				hideHubInitProgress();
+				window.location.href = 'auth.html';
+			}, 2000);
+		}
 	};
 	
 	waitForSupabase();
