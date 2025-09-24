@@ -382,35 +382,31 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
-        // Fast loading - show interface after auth check
+        // Fast loading - show interface immediately
         document.addEventListener('DOMContentLoaded', () => {
             console.log('=== DOMContentLoaded started ===');
             
-            // Wait for authentication to complete before showing interface
-            const showInterface = () => {
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'block';
-                
-                // Load hub sections after interface is shown
-                if (typeof updateMainHubSections === 'function') {
-                    updateMainHubSections();
-                }
-            };
+            // Show interface immediately
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainContent = document.getElementById('mainContent');
             
-            // Show interface after a short delay to allow auth to complete
-            setTimeout(showInterface, 100);
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (mainContent) mainContent.style.display = 'block';
             
-            // Fallback: force show interface after 3 seconds regardless
-            setTimeout(() => {
-                const loadingScreen = document.getElementById('loadingScreen');
-                if (loadingScreen && loadingScreen.style.display !== 'none') {
-                    console.log('Force showing interface after timeout');
-                    showInterface();
-                }
-            }, 3000);
+            // Show loading message while waiting for database
+            const hubGrid = document.querySelector('.hub-grid');
+            if (hubGrid) {
+                hubGrid.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                        <h3>Loading from database...</h3>
+                        <p>Fetching sections from Supabase database.</p>
+                    </div>
+                `;
+            }
+            
+            // Load sections from Supabase database
+            loadSectionsFromSupabase();
             
             // Set user info immediately
             const userNameEl = document.getElementById('userName');
@@ -418,8 +414,107 @@
             if (userNameEl) userNameEl.textContent = 'User';
             if (userRoleEl) userRoleEl.textContent = 'Member';
             
-            console.log('Interface shown immediately - no delays');
-            console.log('=== DOMContentLoaded completed ===');
+            // Add basic navigation function if not available
+            if (typeof window.navigateToSection !== 'function') {
+                window.navigateToSection = function(sectionId) {
+                    console.log('Navigating to section:', sectionId);
+                    // Simple navigation - will be overridden by hub-script.js when loaded
+                    window.location.href = `section.html?section=${sectionId}`;
+                };
+            }
+        });
+        
+        // Function to load sections from Supabase database
+        async function loadSectionsFromSupabase() {
+            console.log('Loading sections from Supabase...');
+            
+            // Wait for Supabase client to be ready
+            let retries = 0;
+            const maxRetries = 50; // 5 seconds max wait
+            
+            while (retries < maxRetries && !window.supabaseClient) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                retries++;
+            }
+            
+            if (!window.supabaseClient) {
+                console.error('Supabase client not available after waiting');
+                showFallbackSections();
+                return;
+            }
+            
+            try {
+                // Fetch sections from Supabase
+                const { data: sections, error } = await window.supabaseClient
+                    .from('sections')
+                    .select('section_id, name, icon, color, config')
+                    .eq('config->>visible', true)
+                    .order('config->>order', { ascending: true });
+                
+                if (error) {
+                    console.error('Error fetching sections:', error);
+                    showFallbackSections();
+                    return;
+                }
+                
+                if (!sections || sections.length === 0) {
+                    console.log('No sections found in database');
+                    showEmptyState();
+                    return;
+                }
+                
+                console.log('Loaded sections from Supabase:', sections);
+                renderSections(sections);
+                
+            } catch (error) {
+                console.error('Error loading sections:', error);
+                showFallbackSections();
+            }
+        }
+        
+        // Function to render sections
+        function renderSections(sections) {
+            const hubGrid = document.querySelector('.hub-grid');
+            if (!hubGrid) return;
+            
+            const sectionsHtml = sections.map(section => `
+                <div class="hub-card" onclick="navigateToSection('${section.section_id}')">
+                    <div class="card-icon" style="color: ${section.color || '#3498db'};">
+                        <i class="${section.icon || 'fas fa-folder'}"></i>
+                    </div>
+                    <h3>${section.name || section.section_id}</h3>
+                    <p>Access ${section.name || section.section_id} resources and tools</p>
+                </div>
+            `).join('');
+            
+            hubGrid.innerHTML = sectionsHtml;
+        }
+        
+        // Function to show empty state when no sections exist
+        function showEmptyState() {
+            console.log('Showing empty state - no sections in database');
+            const hubGrid = document.querySelector('.hub-grid');
+            if (!hubGrid) return;
+            
+            hubGrid.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: #666; grid-column: 1 / -1;">
+                    <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <h3>No Sections Available</h3>
+                    <p>There are no sections configured in the database yet.</p>
+                    <p style="font-size: 14px; margin-top: 10px; opacity: 0.7;">
+                        Contact an administrator to add sections to the Information Hub.
+                    </p>
+                </div>
+            `;
+        }
+        
+        // Function to show fallback sections if database fails
+        function showFallbackSections() {
+            console.log('Database connection failed, showing empty state');
+            showEmptyState();
+        }
             
             // Initialize basic functions
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
@@ -3400,28 +3495,8 @@ Permissions:
             
             // Check if hubDatabase is available
             if (!window.hubDatabase || !window.hubDatabaseReady) {
-                console.warn('Database not ready, showing fallback content');
-                // Show fallback content instead of empty state
-                const hubGrid = document.querySelector('.hub-grid');
-                if (hubGrid) {
-                    hubGrid.innerHTML = `
-                        <div class="hub-card" onclick="navigateToSection('costing')">
-                            <div class="card-icon">
-                                <i class="fas fa-calculator"></i>
-                            </div>
-                            <h3>Costing</h3>
-                            <p>Financial planning and cost management</p>
-                        </div>
-                        <div class="hub-card" onclick="navigateToSection('operations')">
-                            <div class="card-icon">
-                                <i class="fas fa-cogs"></i>
-                            </div>
-                            <h3>Operations</h3>
-                            <p>Operational processes and procedures</p>
-                        </div>
-                    `;
-                }
-                return;
+                console.warn('Database not ready, keeping existing content');
+                return; // Keep the existing content, don't replace it
             }
             
             const now = Date.now();
@@ -4636,16 +4711,23 @@ Permissions:
         })();
     </script>
     <script>
-        // Initialize database (non-blocking)
+        // Initialize database (no default sections)
         (function(){
             // Initialize HubDatabase
             if (typeof HubDatabase !== 'undefined') {
                 window.hubDatabase = new HubDatabase();
                 window.hubDatabaseReady = false;
                 
-                // Mark as ready immediately to avoid blocking UI
-                window.hubDatabaseReady = true;
-                console.log('Database initialized');
+                // Wait for database to be ready
+                const initDatabase = async () => {
+                    if (window.hubDatabase && window.hubDatabase.supabase) {
+                        window.hubDatabaseReady = true;
+                        console.log('Database initialized');
+                    } else {
+                        setTimeout(initDatabase, 100);
+                    }
+                };
+                initDatabase();
             }
         })();
     </script>
