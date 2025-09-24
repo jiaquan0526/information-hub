@@ -382,30 +382,35 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
-        // Fast loading - show interface immediately
+        // Fast loading - show interface after auth check
         document.addEventListener('DOMContentLoaded', () => {
             console.log('=== DOMContentLoaded started ===');
             
-            // Show interface immediately - no waiting
-            const loadingScreen = document.getElementById('loadingScreen');
-            const mainContent = document.getElementById('mainContent');
+            // Wait for authentication to complete before showing interface
+            const showInterface = () => {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'block';
+                
+                // Load hub sections after interface is shown
+                if (typeof updateMainHubSections === 'function') {
+                    updateMainHubSections();
+                }
+            };
             
-            if (loadingScreen) loadingScreen.style.display = 'none';
-            if (mainContent) mainContent.style.display = 'block';
+            // Show interface after a short delay to allow auth to complete
+            setTimeout(showInterface, 100);
             
-            // Load hub sections immediately
-            if (typeof updateMainHubSections === 'function') {
-                updateMainHubSections();
-            }
-            
-            // Fallback: force show interface after 2 seconds regardless
+            // Fallback: force show interface after 3 seconds regardless
             setTimeout(() => {
+                const loadingScreen = document.getElementById('loadingScreen');
                 if (loadingScreen && loadingScreen.style.display !== 'none') {
                     console.log('Force showing interface after timeout');
-                    loadingScreen.style.display = 'none';
-                    if (mainContent) mainContent.style.display = 'block';
+                    showInterface();
                 }
-            }, 2000);
+            }, 3000);
             
             // Set user info immediately
             const userNameEl = document.getElementById('userName');

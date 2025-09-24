@@ -114,9 +114,11 @@ class InformationHub {
     async checkAuthentication() {
         // Authentication is handled by Supabase auth
         if (!window.supabaseClient) {
+            console.log('No Supabase client, redirecting to auth');
             window.location.href = 'auth.html';
             return;
         }
+        
         // Get current user from Supabase auth
         try {
             const { data: { user }, error } = await window.supabaseClient.auth.getUser();
@@ -125,8 +127,17 @@ class InformationHub {
                 window.location.href = 'auth.html';
                 return;
             }
-            if (user) {
-                // Get user profile from database
+            
+            if (!user) {
+                console.log('No authenticated user, redirecting to auth');
+                window.location.href = 'auth.html';
+                return;
+            }
+            
+            console.log('User authenticated:', user.email);
+            
+            // Try to get user profile from database, but don't fail if it doesn't exist
+            try {
                 const { data: profile, error: profileError } = await window.supabaseClient
                     .from('profiles')
                     .select('*')
@@ -134,7 +145,7 @@ class InformationHub {
                     .single();
                 
                 if (profileError) {
-                    console.error('Profile error:', profileError);
+                    console.warn('Profile not found, creating default user:', profileError.message);
                     // Create a basic user object if profile doesn't exist
                     this.currentUser = {
                         id: user.id,
@@ -144,6 +155,7 @@ class InformationHub {
                         permissions: this.getDefaultPermissions('viewer')
                     };
                 } else {
+                    console.log('Profile found:', profile);
                     this.currentUser = {
                         id: user.id,
                         username: profile.username || user.email,
@@ -153,9 +165,20 @@ class InformationHub {
                         permissions: profile.permissions || this.getDefaultPermissions(profile.role || 'viewer')
                     };
                 }
-            } else {
-                window.location.href = 'auth.html';
+            } catch (profileError) {
+                console.warn('Error fetching profile, using default user:', profileError);
+                // Create a basic user object if profile fetch fails
+                this.currentUser = {
+                    id: user.id,
+                    username: user.email,
+                    email: user.email,
+                    role: 'viewer',
+                    permissions: this.getDefaultPermissions('viewer')
+                };
             }
+            
+            console.log('Current user set:', this.currentUser);
+            
         } catch (error) {
             console.error('Authentication check failed:', error);
             window.location.href = 'auth.html';
