@@ -474,21 +474,18 @@
             
             if (typeof window.informationHub === 'undefined') {
                 console.error('hub-script.js failed to load after waiting');
-                // Show error but do not redirect automatically
-                const loadingScreen = document.getElementById('loadingScreen');
-                if (loadingScreen) {
-                    loadingScreen.innerHTML = `
-                        <div style="text-align: center;">
-                            <div style="border: 4px solid #ff6b6b; border-radius: 50%; width: 40px; height: 40px; margin: 20px auto; display: flex; align-items: center; justify-content: center; color: #ff6b6b; font-size: 20px;">!</div>
-                            <h2>Loading Issue</h2>
-                            <p>Required scripts didn't finish loading. Retrying...</p>
-                        </div>
-                    `;
+                // Graceful fallback: hide overlay and load sections directly via Supabase
+                try {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (mainContent) mainContent.style.display = 'block';
+                } catch (_) {}
+                try {
+                    await loadSectionsFromSupabase();
+                } catch (e) {
+                    console.error('Fallback section load failed:', e);
                 }
-                // Try initializing again without redirect
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
                 return;
             }
             
