@@ -568,7 +568,8 @@
         
         // Function to load sections from Supabase database
         async function loadSectionsFromSupabase() {
-            console.log('Loading sections from Supabase...');
+            console.time('loadSectionsFromSupabase');
+            console.log('[Hub] Loading sections from Supabase...');
             updateHubProgress('Initializing Supabase connection...', 5);
             
             // Wait for Supabase client to be ready
@@ -609,7 +610,7 @@
                     }
                 }
                 if (!user) {
-                    console.error('Authentication error: session missing');
+                    console.error('[Hub] Authentication error: session missing');
                     updateHubProgress('❌ Authentication failed', 100);
                     setTimeout(() => showFallbackSections(), 2000);
                     return;
@@ -617,15 +618,14 @@
                 
                 updateHubProgress(`✅ Authenticated as ${user.email}`, 35);
                 
-                // Test database connection
+                // Test database connection (lightweight, correct count usage)
                 updateHubProgress('Testing database connection...', 40);
-                const { data: testData, error: testError } = await window.supabaseClient
+                const { error: testError } = await window.supabaseClient
                     .from('sections')
-                    .select('count')
-                    .limit(1);
+                    .select('section_id', { head: true, count: 'exact' });
                 
                 if (testError) {
-                    console.error('Database connection test failed:', testError);
+                    console.error('[Hub] Database connection test failed:', testError);
                     updateHubProgress('❌ Database connection failed', 100);
                     setTimeout(() => showFallbackSections(), 2000);
                     return;
@@ -642,12 +642,13 @@
                     .order('name', { ascending: true });
                 
                 if (error) {
-                    console.error('Error fetching sections:', error);
+                    console.error('[Hub] Error fetching sections:', error);
                     updateHubProgress('❌ Error loading sections: ' + error.message, 100);
                     setTimeout(() => showFallbackSections(), 2000);
                     return;
                 }
                 
+                console.log('[Hub] Sections loaded:', { count: (sections||[]).length, sample: (sections||[])[0] });
                 updateHubProgress(`✅ Loaded ${sections ? sections.length : 0} sections`, 75);
                 
                 if (!sections || sections.length === 0) {
@@ -656,11 +657,18 @@
                     setTimeout(() => {
                         showEmptyState();
                         updateHubProgress('✅ Ready!', 100);
+                        try {
+                            const loadingScreen = document.getElementById('loadingScreen');
+                            const mainContent = document.getElementById('mainContent');
+                            if (loadingScreen) loadingScreen.style.display = 'none';
+                            if (mainContent) mainContent.style.display = 'block';
+                        } catch (_) {}
+                        console.timeEnd('loadSectionsFromSupabase');
                     }, 1000);
                     return;
                 }
                 
-                console.log('Loaded sections from Supabase:', sections);
+                console.log('[Hub] Loaded sections from Supabase (rendering)...');
                 updateHubProgress('Rendering sections...', 85);
                 
                 // Simulate rendering progress
@@ -671,24 +679,24 @@
                         setTimeout(() => {
                             renderSections(sections);
                             updateHubProgress('✅ Hub loaded successfully!', 100);
+                            try {
+                                const loadingScreen = document.getElementById('loadingScreen');
+                                const mainContent = document.getElementById('mainContent');
+                                if (loadingScreen) loadingScreen.style.display = 'none';
+                                if (mainContent) mainContent.style.display = 'block';
+                            } catch (_) {}
                             setTimeout(() => {
                                 // Hide progress after success
                                 const progressContainer = document.querySelector('.hub-grid > div');
-                                if (progressContainer && progressContainer.innerHTML.includes('Loading from database')) {
-                                    progressContainer.style.opacity = '0';
-                                    setTimeout(() => {
-                                        if (progressContainer.parentNode) {
-                                            progressContainer.parentNode.removeChild(progressContainer);
-                                        }
-                                    }, 500);
-                                }
+                                try { if (progressContainer) progressContainer.remove(); } catch (_) {}
+                                console.timeEnd('loadSectionsFromSupabase');
                             }, 1500);
                         }, 300);
                     }, 300);
                 }, 500);
                 
             } catch (error) {
-                console.error('Error loading sections:', error);
+                console.error('[Hub] Error loading sections:', error);
                 updateHubProgress('❌ Unexpected error: ' + error.message, 100);
                 setTimeout(() => showFallbackSections(), 2000);
             }
@@ -788,7 +796,13 @@
         
         // Function to show fallback sections if database fails
         function showFallbackSections() {
-            console.log('Database connection failed, showing empty state');
+            console.log('[Hub] Database connection failed, showing empty state');
+            try {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'block';
+            } catch (_) {}
             showEmptyState();
         }
 
