@@ -295,7 +295,7 @@ class AuthSystem {
                     const { data: secs } = await window.supabaseClient
                         .from('sections')
                         .select('section_id')
-                        .eq('config->>visible', true);
+                        .eq('config->>visible', 'true');
                     sectionIds = Array.isArray(secs) ? secs.map(s => s.section_id).filter(Boolean) : [];
                 } catch (_) { 
                     console.warn('Failed to load sections during signup, using default list');
@@ -401,7 +401,7 @@ class AuthSystem {
                     const { data: sections } = await window.supabaseClient
                         .from('sections')
                         .select('section_id')
-                        .eq('config->>visible', true);
+                        .eq('config->>visible', 'true');
                     allSections = sections ? sections.map(s => s.section_id) : [];
                 } catch (sectionsError) {
                     console.warn('Could not fetch sections, using default list:', sectionsError);

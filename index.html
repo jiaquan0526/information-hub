@@ -632,7 +632,7 @@
                 const { data: sections, error } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, icon, color, config')
-                    .eq('config->>visible', true)
+                    .eq('config->>visible', 'true')
                     .order('config->>order', { ascending: true });
                 
                 if (error) {
