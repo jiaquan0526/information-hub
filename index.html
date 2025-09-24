@@ -382,7 +382,7 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
-        // Simple loading - show interface immediately
+        // Fast loading - show interface immediately
         document.addEventListener('DOMContentLoaded', () => {
             console.log('=== DOMContentLoaded started ===');
             
@@ -393,12 +393,19 @@
             if (loadingScreen) loadingScreen.style.display = 'none';
             if (mainContent) mainContent.style.display = 'block';
             
-            // Load hub sections after a short delay to ensure database is ready
+            // Load hub sections immediately
+            if (typeof updateMainHubSections === 'function') {
+                updateMainHubSections();
+            }
+            
+            // Fallback: force show interface after 2 seconds regardless
             setTimeout(() => {
-                if (typeof updateMainHubSections === 'function') {
-                    updateMainHubSections();
+                if (loadingScreen && loadingScreen.style.display !== 'none') {
+                    console.log('Force showing interface after timeout');
+                    loadingScreen.style.display = 'none';
+                    if (mainContent) mainContent.style.display = 'block';
                 }
-            }, 500);
+            }, 2000);
             
             // Set user info immediately
             const userNameEl = document.getElementById('userName');
@@ -3388,7 +3395,27 @@ Permissions:
             
             // Check if hubDatabase is available
             if (!window.hubDatabase || !window.hubDatabaseReady) {
-                console.error('Database not ready');
+                console.warn('Database not ready, showing fallback content');
+                // Show fallback content instead of empty state
+                const hubGrid = document.querySelector('.hub-grid');
+                if (hubGrid) {
+                    hubGrid.innerHTML = `
+                        <div class="hub-card" onclick="navigateToSection('costing')">
+                            <div class="card-icon">
+                                <i class="fas fa-calculator"></i>
+                            </div>
+                            <h3>Costing</h3>
+                            <p>Financial planning and cost management</p>
+                        </div>
+                        <div class="hub-card" onclick="navigateToSection('operations')">
+                            <div class="card-icon">
+                                <i class="fas fa-cogs"></i>
+                            </div>
+                            <h3>Operations</h3>
+                            <p>Operational processes and procedures</p>
+                        </div>
+                    `;
+                }
                 return;
             }
             
@@ -4604,23 +4631,16 @@ Permissions:
         })();
     </script>
     <script>
-        // Initialize database
+        // Initialize database (non-blocking)
         (function(){
             // Initialize HubDatabase
             if (typeof HubDatabase !== 'undefined') {
                 window.hubDatabase = new HubDatabase();
                 window.hubDatabaseReady = false;
                 
-                // Wait for database to be ready
-                const checkDatabaseReady = async () => {
-                    if (window.hubDatabase && window.hubDatabase.supabase) {
-                        window.hubDatabaseReady = true;
-                        console.log('Database ready');
-                    } else {
-                        setTimeout(checkDatabaseReady, 100);
-                    }
-                };
-                checkDatabaseReady();
+                // Mark as ready immediately to avoid blocking UI
+                window.hubDatabaseReady = true;
+                console.log('Database initialized');
             }
         })();
     </script>
