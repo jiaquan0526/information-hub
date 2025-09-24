@@ -110,10 +110,13 @@ class AuthSystem {
     }
 
     bindEvents() {
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleLogin();
-        });
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleLogin();
+            });
+        }
 
         const signupForm = document.getElementById('signupForm');
         if (signupForm) {
