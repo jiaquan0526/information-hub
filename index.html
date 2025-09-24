@@ -35,7 +35,7 @@
 
 </head>
 <body>
-    <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    <div id="loadingScreen" style="display: none; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
         <div style="text-align: center;">
             <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
             <h2>Loading Information Hub...</h2>
@@ -43,7 +43,7 @@
         </div>
     </div>
     
-    <div id="mainContent" style="display: none;">
+    <div id="mainContent" style="display: block;">
     <div class="container">
         <header class="header">
             <div class="header-content">
@@ -422,6 +422,13 @@
                 // Try to load background image manifest (optional)
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                 
+                // Show interface immediately and try to load database sections
+                console.log('Showing interface immediately...');
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'block';
+                
                 // Try to load database sections after a delay
                 setTimeout(() => {
                     console.log('Attempting to load database sections...');
@@ -441,7 +448,7 @@
                         statusDiv.innerHTML = 'Database loading...';
                         document.body.appendChild(statusDiv);
                     }
-                }, 5000);
+                }, 2000);
                 // Update background toggle button to show correct state
                 try { updateBackgroundToggleButton(); } catch (e) { console.warn('updateBackgroundToggleButton error', e); }
                 
