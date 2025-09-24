@@ -206,6 +206,23 @@ class AuthSystem {
             console.log('Login successful, creating session for user:', user.email);
             this.showLoginProgress('Setting up your account...', 70);
             await this.createSessionFromSupabase(user);
+
+            // Confirm session with Supabase before redirecting
+            this.showLoginProgress('Confirming session...', 85);
+            let tries = 0;
+            let confirmed = false;
+            while (tries < 30) { // ~3s
+                try {
+                    const { data: { user: u2 }, error: e2 } = await window.supabaseClient.auth.getUser();
+                    if (u2 && !e2) { confirmed = true; break; }
+                } catch (_) {}
+                await new Promise(r => setTimeout(r, 100));
+                tries++;
+            }
+            if (!confirmed) {
+                console.warn('Session not confirmed in time, proceeding cautiously');
+            }
+
             console.log('Session created, redirecting to hub...');
             this.showLoginProgress('Almost ready...', 90);
             
@@ -215,8 +232,8 @@ class AuthSystem {
                 this.showLoginProgress('Redirecting to hub...', 100);
                 setTimeout(() => {
                     this.redirectToHub();
-                }, 500);
-            }, 100);
+                }, 300);
+            }, 150);
         } catch (error) { 
             console.error('Login exception:', error);
             this.showMessage('Login failed: ' + error.message, 'error'); 
