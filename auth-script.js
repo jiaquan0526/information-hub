@@ -199,7 +199,12 @@ class AuthSystem {
             console.log('Login successful, creating session for user:', user.email);
             await this.createSessionFromSupabase(user);
             console.log('Session created, redirecting to hub...');
-            this.redirectToHub();
+            
+            // Add a small delay before redirect to ensure session is saved
+            setTimeout(() => {
+                console.log('Executing redirect to hub...');
+                this.redirectToHub();
+            }, 100);
         } catch (error) { 
             console.error('Login exception:', error);
             this.showMessage('Login failed: ' + error.message, 'error'); 

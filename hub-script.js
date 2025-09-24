@@ -82,11 +82,19 @@ class InformationHub {
     }
 
     async init() {
+        console.log('InformationHub init started');
+        
+        // Add a small delay to ensure Supabase client is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         await this.checkAuthentication();
         if (!this.currentUser) {
+            console.log('No current user, authentication failed');
             // If authentication failed, user will be redirected to auth.html
             return;
         }
+        
+        console.log('Authentication successful, continuing initialization');
         await this.loadData();
         this.bindEvents();
         // Start blank by default; no sample data seeding
@@ -109,6 +117,8 @@ class InformationHub {
         this.setupHubSessionLogging();
         // Auto-refresh from Supabase database
         try { this.setupSupabaseAutoRefresh(); } catch (_) {}
+        
+        console.log('InformationHub init completed');
     }
 
     async checkAuthentication() {
@@ -1203,14 +1213,36 @@ window.restoreJson = async () => {
     }
 };
 
-// Initialize the application (once)
+// Initialize the application (once) - wait for Supabase
 let informationHub;
 function initInformationHubOnce() {
 	if (informationHub && informationHub instanceof InformationHub) return;
-	informationHub = new InformationHub();
-	// Export for global access
-	window.informationHub = informationHub;
+	
+	// Wait for Supabase client to be ready
+	const waitForSupabase = async () => {
+		let retries = 0;
+		const maxRetries = 100; // 10 seconds max wait
+		
+		while (retries < maxRetries && !window.supabaseClient) {
+			console.log('Waiting for Supabase client...', retries + 1);
+			await new Promise(resolve => setTimeout(resolve, 100));
+			retries++;
+		}
+		
+		if (!window.supabaseClient) {
+			console.error('Supabase client not available after waiting');
+			return;
+		}
+		
+		console.log('Supabase client ready, initializing InformationHub');
+		informationHub = new InformationHub();
+		// Export for global access
+		window.informationHub = informationHub;
+	};
+	
+	waitForSupabase();
 }
+
 if (document.readyState === 'loading') {
 	document.addEventListener('DOMContentLoaded', initInformationHubOnce);
 } else {
