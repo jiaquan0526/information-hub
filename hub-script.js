@@ -1218,6 +1218,9 @@ let informationHub;
 function initInformationHubOnce() {
 	if (informationHub && informationHub instanceof InformationHub) return;
 	
+	// Show initialization progress
+	showHubInitProgress('Starting hub initialization...', 5);
+	
 	// Wait for Supabase client to be ready
 	const waitForSupabase = async () => {
 		let retries = 0;
@@ -1225,22 +1228,81 @@ function initInformationHubOnce() {
 		
 		while (retries < maxRetries && !window.supabaseClient) {
 			console.log('Waiting for Supabase client...', retries + 1);
+			showHubInitProgress(`Waiting for Supabase client... (${retries + 1}/${maxRetries})`, 10 + (retries * 0.8));
 			await new Promise(resolve => setTimeout(resolve, 100));
 			retries++;
 		}
 		
 		if (!window.supabaseClient) {
 			console.error('Supabase client not available after waiting');
+			showHubInitProgress('❌ Supabase client not available', 100);
+			setTimeout(() => hideHubInitProgress(), 2000);
 			return;
 		}
 		
 		console.log('Supabase client ready, initializing InformationHub');
+		showHubInitProgress('✅ Supabase ready, initializing hub...', 50);
+		
 		informationHub = new InformationHub();
 		// Export for global access
 		window.informationHub = informationHub;
+		
+		showHubInitProgress('✅ Hub initialized successfully!', 100);
+		setTimeout(() => hideHubInitProgress(), 1500);
 	};
 	
 	waitForSupabase();
+}
+
+// Function to show hub initialization progress
+function showHubInitProgress(message, percentage) {
+	// Remove existing progress
+	const existingProgress = document.getElementById('hubInitProgress');
+	if (existingProgress) {
+		existingProgress.remove();
+	}
+
+	// Create progress container
+	const progressDiv = document.createElement('div');
+	progressDiv.id = 'hubInitProgress';
+	progressDiv.style.cssText = `
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.9);
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		z-index: 9999;
+		color: white;
+		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+	`;
+
+	progressDiv.innerHTML = `
+		<div style="text-align: center; max-width: 400px; padding: 20px;">
+			<div style="margin-bottom: 20px;">
+				<div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #3498db; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+			</div>
+			<h3 style="margin: 0 0 10px 0; font-size: 18px;">${message}</h3>
+			<div style="background: rgba(255, 255, 255, 0.2); border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden;">
+				<div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${percentage}%; transition: width 0.3s ease; border-radius: 10px;"></div>
+			</div>
+			<p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.8;">${percentage}% Complete</p>
+		</div>
+	`;
+
+	document.body.appendChild(progressDiv);
+}
+
+// Function to hide hub initialization progress
+function hideHubInitProgress() {
+	const progressDiv = document.getElementById('hubInitProgress');
+	if (progressDiv) {
+		progressDiv.remove();
+	}
 }
 
 if (document.readyState === 'loading') {

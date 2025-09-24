@@ -397,14 +397,36 @@
             const hubGrid = document.querySelector('.hub-grid');
             if (hubGrid) {
                 hubGrid.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #666;">
-                        <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
-                        <h3>Loading from database...</h3>
-                        <p>Fetching sections from Supabase database.</p>
-                        <div style="background: #f0f0f0; border-radius: 10px; height: 6px; margin: 15px auto; width: 200px; overflow: hidden;">
-                            <div id="hubProgressBar" style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px;"></div>
+                    <div style="text-align: center; padding: 40px; color: #666; max-width: 500px; margin: 0 auto;">
+                        <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                        <h3 style="margin-bottom: 10px; color: #333;">Loading Information Hub</h3>
+                        <p style="margin-bottom: 20px; opacity: 0.8;">Connecting to Supabase and loading your sections...</p>
+                        
+                        <div style="background: #f8f9fa; border-radius: 15px; padding: 20px; margin: 20px 0; border: 1px solid #e9ecef;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-size: 14px; font-weight: 500;">Progress</span>
+                                <span id="hubProgressPercent" style="font-size: 14px; font-weight: 600; color: #3498db;">0%</span>
+                            </div>
+                            <div style="background: #e9ecef; border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden;">
+                                <div id="hubProgressBar" style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px;"></div>
+                            </div>
+                            <p id="hubProgressText" style="font-size: 13px; margin: 10px 0 0 0; opacity: 0.8; min-height: 20px;">Initializing...</p>
                         </div>
-                        <p id="hubProgressText" style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Initializing...</p>
+                        
+                        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 20px; font-size: 12px; opacity: 0.6;">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <div id="connectionStatus" style="width: 8px; height: 8px; border-radius: 50%; background: #ffc107;"></div>
+                                <span>Supabase</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <div id="authStatus" style="width: 8px; height: 8px; border-radius: 50%; background: #6c757d;"></div>
+                                <span>Auth</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <div id="dataStatus" style="width: 8px; height: 8px; border-radius: 50%; background: #6c757d;"></div>
+                                <span>Data</span>
+                            </div>
+                        </div>
                     </div>
                 `;
             }
@@ -431,28 +453,57 @@
         // Function to load sections from Supabase database
         async function loadSectionsFromSupabase() {
             console.log('Loading sections from Supabase...');
-            updateHubProgress('Connecting to database...', 20);
+            updateHubProgress('Initializing Supabase connection...', 5);
             
             // Wait for Supabase client to be ready
             let retries = 0;
             const maxRetries = 50; // 5 seconds max wait
             
             while (retries < maxRetries && !window.supabaseClient) {
-                updateHubProgress('Waiting for connection...', 30 + (retries * 2));
+                updateHubProgress(`Connecting to Supabase... (${retries + 1}/${maxRetries})`, 10 + (retries * 1.5));
                 await new Promise(resolve => setTimeout(resolve, 100));
                 retries++;
             }
             
             if (!window.supabaseClient) {
                 console.error('Supabase client not available after waiting');
-                updateHubProgress('Connection failed', 100);
-                setTimeout(() => showFallbackSections(), 1000);
+                updateHubProgress('❌ Supabase connection failed', 100);
+                setTimeout(() => showFallbackSections(), 2000);
                 return;
             }
             
             try {
-                updateHubProgress('Fetching sections...', 60);
+                updateHubProgress('✅ Supabase connected! Authenticating...', 25);
+                
+                // Check authentication status
+                const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
+                if (authError || !user) {
+                    console.error('Authentication error:', authError);
+                    updateHubProgress('❌ Authentication failed', 100);
+                    setTimeout(() => showFallbackSections(), 2000);
+                    return;
+                }
+                
+                updateHubProgress(`✅ Authenticated as ${user.email}`, 35);
+                
+                // Test database connection
+                updateHubProgress('Testing database connection...', 40);
+                const { data: testData, error: testError } = await window.supabaseClient
+                    .from('sections')
+                    .select('count')
+                    .limit(1);
+                
+                if (testError) {
+                    console.error('Database connection test failed:', testError);
+                    updateHubProgress('❌ Database connection failed', 100);
+                    setTimeout(() => showFallbackSections(), 2000);
+                    return;
+                }
+                
+                updateHubProgress('✅ Database connection verified', 50);
+                
                 // Fetch sections from Supabase
+                updateHubProgress('Fetching sections from database...', 60);
                 const { data: sections, error } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, icon, color, config')
@@ -461,29 +512,54 @@
                 
                 if (error) {
                     console.error('Error fetching sections:', error);
-                    updateHubProgress('Error loading data', 100);
-                    setTimeout(() => showFallbackSections(), 1000);
+                    updateHubProgress('❌ Error loading sections: ' + error.message, 100);
+                    setTimeout(() => showFallbackSections(), 2000);
                     return;
                 }
                 
+                updateHubProgress(`✅ Loaded ${sections ? sections.length : 0} sections`, 75);
+                
                 if (!sections || sections.length === 0) {
                     console.log('No sections found in database');
-                    updateHubProgress('No sections found', 100);
-                    setTimeout(() => showEmptyState(), 1000);
+                    updateHubProgress('ℹ️ No sections found - showing empty state', 90);
+                    setTimeout(() => {
+                        showEmptyState();
+                        updateHubProgress('✅ Ready!', 100);
+                    }, 1000);
                     return;
                 }
                 
                 console.log('Loaded sections from Supabase:', sections);
-                updateHubProgress('Rendering sections...', 90);
+                updateHubProgress('Rendering sections...', 85);
+                
+                // Simulate rendering progress
                 setTimeout(() => {
-                    renderSections(sections);
-                    updateHubProgress('Complete!', 100);
+                    updateHubProgress('Building section cards...', 90);
+                    setTimeout(() => {
+                        updateHubProgress('Finalizing layout...', 95);
+                        setTimeout(() => {
+                            renderSections(sections);
+                            updateHubProgress('✅ Hub loaded successfully!', 100);
+                            setTimeout(() => {
+                                // Hide progress after success
+                                const progressContainer = document.querySelector('.hub-grid > div');
+                                if (progressContainer && progressContainer.innerHTML.includes('Loading from database')) {
+                                    progressContainer.style.opacity = '0';
+                                    setTimeout(() => {
+                                        if (progressContainer.parentNode) {
+                                            progressContainer.parentNode.removeChild(progressContainer);
+                                        }
+                                    }, 500);
+                                }
+                            }, 1500);
+                        }, 300);
+                    }, 300);
                 }, 500);
                 
             } catch (error) {
                 console.error('Error loading sections:', error);
-                updateHubProgress('Error occurred', 100);
-                setTimeout(() => showFallbackSections(), 1000);
+                updateHubProgress('❌ Unexpected error: ' + error.message, 100);
+                setTimeout(() => showFallbackSections(), 2000);
             }
         }
         
@@ -491,12 +567,50 @@
         function updateHubProgress(message, percentage) {
             const progressBar = document.getElementById('hubProgressBar');
             const progressText = document.getElementById('hubProgressText');
+            const progressPercent = document.getElementById('hubProgressPercent');
+            const connectionStatus = document.getElementById('connectionStatus');
+            const authStatus = document.getElementById('authStatus');
+            const dataStatus = document.getElementById('dataStatus');
             
             if (progressBar) {
                 progressBar.style.width = percentage + '%';
             }
             if (progressText) {
                 progressText.textContent = message;
+            }
+            if (progressPercent) {
+                progressPercent.textContent = percentage + '%';
+            }
+            
+            // Update status indicators
+            if (connectionStatus) {
+                if (percentage >= 25) {
+                    connectionStatus.style.background = '#28a745'; // Green
+                } else if (percentage >= 10) {
+                    connectionStatus.style.background = '#ffc107'; // Yellow
+                } else {
+                    connectionStatus.style.background = '#6c757d'; // Gray
+                }
+            }
+            
+            if (authStatus) {
+                if (percentage >= 50) {
+                    authStatus.style.background = '#28a745'; // Green
+                } else if (percentage >= 35) {
+                    authStatus.style.background = '#ffc107'; // Yellow
+                } else {
+                    authStatus.style.background = '#6c757d'; // Gray
+                }
+            }
+            
+            if (dataStatus) {
+                if (percentage >= 75) {
+                    dataStatus.style.background = '#28a745'; // Green
+                } else if (percentage >= 60) {
+                    dataStatus.style.background = '#ffc107'; // Yellow
+                } else {
+                    dataStatus.style.background = '#6c757d'; // Gray
+                }
             }
         }
         
