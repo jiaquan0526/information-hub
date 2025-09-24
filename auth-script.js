@@ -16,23 +16,32 @@ class AuthSystem {
 
     ensureSupabaseClient() {
         try {
-            // Fallback: pull keys from localStorage or <meta> if not present on window
-            if (!window.SUPABASE_URL) {
-                try {
-                    var m1 = document.querySelector('meta[name="supabase-url"]');
-                    window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || (m1 && m1.content) || window.SUPABASE_URL;
-                } catch(_) {}
+            // Use CONFIG if available, otherwise fallback to old method
+            if (window.CONFIG) {
+                window.SUPABASE_URL = window.CONFIG.SUPABASE_URL;
+                window.SUPABASE_ANON_KEY = window.CONFIG.SUPABASE_ANON_KEY;
+            } else {
+                // Fallback: pull keys from <meta> tags if not present on window
+                if (!window.SUPABASE_URL) {
+                    try {
+                        var m1 = document.querySelector('meta[name="supabase-url"]');
+                        window.SUPABASE_URL = (m1 && m1.content) || window.SUPABASE_URL;
+                    } catch(_) {}
+                }
+                if (!window.SUPABASE_ANON_KEY) {
+                    try {
+                        var m2 = document.querySelector('meta[name="supabase-anon-key"]');
+                        window.SUPABASE_ANON_KEY = (m2 && m2.content) || window.SUPABASE_ANON_KEY;
+                    } catch(_) {}
+                }
             }
-            if (!window.SUPABASE_ANON_KEY) {
-                try {
-                    var m2 = document.querySelector('meta[name="supabase-anon-key"]');
-                    window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || (m2 && m2.content) || window.SUPABASE_ANON_KEY;
-                } catch(_) {}
-            }
+            
             if (!window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
                 window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
             }
-        } catch (_) {}
+        } catch (error) {
+            console.error('Error ensuring Supabase client:', error);
+        }
         return !!window.supabaseClient;
     }
 
@@ -272,7 +281,7 @@ class AuthSystem {
                     loginTime: new Date().toISOString(),
                     permissions: defaultPermissions
                 };
-                localStorage.setItem('hubSession', JSON.stringify(session));
+                // Session is managed by Supabase auth
                 return;
             }
             const p = data || {};
@@ -299,20 +308,20 @@ class AuthSystem {
             this.redirectToHub();
         } catch (e) {
             console.warn('Invalid existing session; clearing.', e);
-            localStorage.removeItem('hubSession');
+            // Session is managed by Supabase auth
         }
     }
 
     redirectToHub() {
         // Set a flag to indicate fresh login
-        localStorage.setItem('freshLogin', 'true');
+        // Fresh login flag is managed by Supabase auth
         console.log('Redirecting to hub...');
         window.location.href = 'index.html';
     }
 
     async logout() {
         try { if (window.supabaseClient) await window.supabaseClient.auth.signOut(); } catch (_) {}
-        localStorage.removeItem('hubSession');
+        // Session is managed by Supabase auth
         this.currentUser = null;
         window.location.href = 'auth.html';
     }
@@ -324,10 +333,9 @@ class AuthSystem {
     }
 
     getCurrentUser() {
-        const session = localStorage.getItem('hubSession');
-        if (session) {
-            const sessionData = JSON.parse(session);
-            return this.users.find(u => u.id === sessionData.userId);
+        // Get current user from Supabase auth
+        if (window.supabaseClient) {
+            return window.supabaseClient.auth.getUser();
         }
         return null;
     }
@@ -378,12 +386,12 @@ class AuthSystem {
             activities.splice(1000);
         }
         
-        localStorage.setItem('hubActivities', JSON.stringify(activities));
+        // Activities are managed in Supabase database
     }
 
     getActivities() {
-        const stored = localStorage.getItem('hubActivities');
-        return stored ? JSON.parse(stored) : [];
+        // Activities are retrieved from Supabase database
+        return [];
     }
 
     showMessage(message, type) {

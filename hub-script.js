@@ -103,19 +103,18 @@ class InformationHub {
         } catch (_) {}
         this._hubSessionLogged = false;
         this.setupHubSessionLogging();
-        // Auto-refresh hub cards/users from GitHub periodically for cross-user sync
-        try { this.setupGitHubAutoRefresh(); } catch (_) {}
+        // Auto-refresh from Supabase database
+        try { this.setupSupabaseAutoRefresh(); } catch (_) {}
     }
 
     checkAuthentication() {
-        const session = localStorage.getItem('hubSession');
-        if (!session) {
+        // Authentication is handled by Supabase auth
+        if (!window.supabaseClient) {
             window.location.href = 'auth.html';
             return;
         }
-        
-        const sessionData = JSON.parse(session);
-        this.currentUser = sessionData;
+        // Get current user from Supabase auth
+        this.currentUser = window.supabaseClient.auth.getUser();
     }
 
     updateUserInterface() {
@@ -198,33 +197,8 @@ class InformationHub {
                 try { if (document.getElementById('adminPanelModal')?.style.display === 'block') await this.loadExportOptions(); } catch(_) {}
                 // Optionally refresh visible hub cards if they depend on sectionOrder names (left local/local)
                 try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
-                // Every hour: flush audit queue and DB views to GitHub with 7-day retention
-                try {
-                    const now = Date.now();
-                    const last = parseInt(localStorage.getItem('lastHourlyGitHubSync') || '0', 10) || 0;
-                    if (now - last >= 60 * 60 * 1000) {
-                        localStorage.setItem('lastHourlyGitHubSync', String(now));
-                        if (window.githubData) {
-                            // Flush audit queue
-                            try {
-                                const q = JSON.parse(localStorage.getItem('auditQueue') || '[]');
-                                if (Array.isArray(q) && q.length > 0 && typeof githubData.upsertAudit === 'function') {
-                                    await githubData.upsertAudit(q, 7);
-                                    localStorage.setItem('auditQueue', '[]');
-                                }
-                            } catch(_) {}
-                            // Flush views from IndexedDB aggregation
-                            try {
-                                if (window.hubDatabase && typeof hubDatabase.getAllViews === 'function' && typeof githubData.upsertViewsAgg === 'function') {
-                                    const views = await hubDatabase.getAllViews();
-                                    if (Array.isArray(views) && views.length > 0) {
-                                        await githubData.upsertViewsAgg(views, 7);
-                                    }
-                                }
-                            } catch(_) {}
-                        }
-                    }
-                } catch(_) {}
+                // Data is automatically synced to Supabase database
+                // No manual sync needed
             } catch (_) {}
         };
         setTimeout(refresh, 2000);
@@ -259,8 +233,8 @@ class InformationHub {
 
     // Navigation Functions
     navigateToSection(sectionId) {
-        // Store the current section in localStorage for the section page
-        localStorage.setItem('currentSection', sectionId);
+        // Store the current section in session storage for the section page
+        sessionStorage.setItem('currentSection', sectionId);
 
         // Attempt to record hub card click (non-blocking)
         try {
@@ -524,7 +498,8 @@ class InformationHub {
 
     // Data Management
     saveData() {
-        localStorage.setItem('informationHub', JSON.stringify(this.sections));
+        // Data is automatically saved to Supabase database
+        // No manual save needed
     }
 
     async loadData() {
@@ -551,16 +526,7 @@ class InformationHub {
             console.error('Failed to load sections from Supabase:', error);
         }
 
-        // Fallback to localStorage if Supabase fails
-        const stored = localStorage.getItem('informationHub');
-        if (stored) {
-            const loadedSections = JSON.parse(stored);
-            Object.keys(loadedSections).forEach(key => {
-                if (this.sections[key]) {
-                    this.sections[key] = { ...this.sections[key], ...loadedSections[key] };
-                }
-            });
-        }
+        // No fallback needed - Supabase is the primary data source
     }
 
     // Quick Actions
@@ -586,11 +552,7 @@ class InformationHub {
     // Sample Data
     addSampleData() {
         // Start blank by default. Only seed example if no data anywhere.
-        try {
-            const anyLocal = localStorage.getItem('informationHub');
-            const anySectionOrder = localStorage.getItem('sectionOrder');
-            if (anyLocal || anySectionOrder) return;
-        } catch (_) {}
+        // Sample data is managed through Supabase database
         // Optional: Seed a tiny example dataset in the single example section if present
         if (this.sections['example']) {
             this.addSampleDataForSection('example');
@@ -745,8 +707,8 @@ class InformationHub {
         }
     }
 
-    loadAuditLog() {
-        const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+    async loadAuditLog() {
+        const activities = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getActivities() : [];
         const auditLog = document.getElementById('auditLog');
         
         auditLog.innerHTML = activities.map(activity => `
@@ -815,7 +777,7 @@ class InformationHub {
         return permissions[role] || permissions['viewer'];
     }
 
-    logActivity(action, description) {
+    async logActivity(action, description) {
         const user = this.currentUser;
         if (!user) return;
 
@@ -829,14 +791,10 @@ class InformationHub {
             ip: '127.0.0.1'
         };
 
-        const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-        activities.unshift(activity);
-        
-        if (activities.length > 1000) {
-            activities.splice(1000);
+        // Save activity to Supabase database
+        if (window.hubDatabase && window.hubDatabaseReady) {
+            await hubDatabase.saveActivity(activity);
         }
-        
-        localStorage.setItem('hubActivities', JSON.stringify(activities));
     }
 
     // Export Functions
@@ -851,7 +809,7 @@ class InformationHub {
                 .select('id, username, role');
             if (error) throw error;
             const users = Array.isArray(data) ? data : [];
-            const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
+            const me = this.currentUser;
             const myRole = String(me?.role || '').toLowerCase();
             const filtered = users.filter(u => {
                 if (myRole === 'admin') return true;
@@ -872,14 +830,10 @@ class InformationHub {
         try {
             let sections = [];
             try {
-                if (window.githubData && typeof githubData.readSections === 'function') {
-                    const remote = await githubData.readSections();
-                    sections = Array.isArray(remote.json) ? remote.json : [];
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    sections = await hubDatabase.getAllSections();
                 }
             } catch (_) { sections = []; }
-            if (!Array.isArray(sections) || sections.length === 0) {
-                try { sections = JSON.parse(localStorage.getItem('sectionOrder') || '[]'); } catch(_) { sections = []; }
-            }
             const list = (Array.isArray(sections) ? sections : [])
                 .map(s => ({ id: s.id, sectionId: s.id, name: s.name || s.id }))
                 .sort((a,b) => String(a.name).localeCompare(String(b.name)));
@@ -897,285 +851,277 @@ class InformationHub {
     }
 
     // Expose for index.html to call directly
-    window.loadExportOptions = async () => {
-        try { await this.loadExportOptions(); } catch (_) {}
-    };
+    static async loadExportOptions() {
+        try { 
+            const hub = new InformationHub();
+            await hub.loadExportOptions(); 
+        } catch (_) {}
+    }
+}
 
-    // Supabase-backed user management actions
-    window.editUser = async (userId) => {
+// Global functions for index.html
+window.editUser = async (userId) => {
+    try {
+        if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+        const { data: prof, error } = await window.supabaseClient
+            .from('profiles')
+            .select('id, username, name, email, role, permissions')
+            .eq('id', userId)
+            .single();
+        if (error) { alert('Failed to load user'); return; }
+        const name = prompt('Full name:', prof.name || '') ?? (prof.name || '');
+        const roleInput = prompt('Role (admin/editor/viewer):', prof.role || 'viewer') || prof.role || 'viewer';
+        const role = ['admin','editor','viewer'].includes(roleInput) ? roleInput : (prof.role || 'viewer');
+        // Keep existing permissions; optional tweak for disabled flag
+        const perms = prof.permissions || {};
+        if (perms.disabled === true) {
+            if (confirm('User is disabled. Re-enable this user?')) { delete perms.disabled; }
+        }
+        const { error: upErr } = await window.supabaseClient
+            .from('profiles')
+            .update({ name, role, permissions: perms })
+            .eq('id', userId);
+        if (upErr) { alert('Update failed: ' + upErr.message); return; }
+        try { informationHub.showMessage('User updated', 'success'); } catch (_) {}
+        try { await informationHub.loadUsersList(); } catch (_) {}
+    } catch (e) {
+        alert('Edit failed');
+    }
+};
+
+window.deleteUser = async (userId) => {
+    try {
+        if (!confirm('Disable this user? They will keep their auth account but be marked disabled in profiles.')) return;
+        if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+        // Soft-disable: set permissions.disabled = true and clear sections
+        const { data: prof, error } = await window.supabaseClient
+            .from('profiles')
+            .select('permissions')
+            .eq('id', userId)
+            .single();
+        if (error) { alert('Failed to load user'); return; }
+        const perms = Object.assign({}, prof?.permissions || {});
+        perms.disabled = true;
+        if (Array.isArray(perms.sections)) perms.sections = [];
+        if (Array.isArray(perms.editableSections)) perms.editableSections = [];
+        const { error: upErr } = await window.supabaseClient
+            .from('profiles')
+            .update({ permissions: perms })
+            .eq('id', userId);
+        if (upErr) { alert('Disable failed: ' + upErr.message); return; }
+        try { informationHub.showMessage('User disabled', 'success'); } catch (_) {}
+        try { await informationHub.loadUsersList(); } catch (_) {}
+    } catch (e) {
+        alert('Disable failed');
+    }
+};
+
+// Global export functions
+window.exportAllData = async () => {
+    try {
+        informationHub.showMessage('Preparing export...', 'success');
+        const result = await excelExporter.exportToExcel();
+        if (result.success) {
+            informationHub.showMessage(`Export completed! File: ${result.fileName}`, 'success');
+            informationHub.logActivity('EXPORT', `Exported all data - ${result.fileName}`);
+        } else {
+            informationHub.showMessage(`Export failed: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        informationHub.showMessage(`Export failed: ${error.message}`, 'error');
+    }
+};
+
+window.exportSectionData = async function() {
+    // Resolve section id from dropdown, or fallbacks (first option / hub cards)
+    let sectionId = '';
+    try { sectionId = document.getElementById('sectionExportSelect')?.value || ''; } catch (_) {}
+    if (!sectionId) {
         try {
-            if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
-            const { data: prof, error } = await window.supabaseClient
-                .from('profiles')
-                .select('id, username, name, email, role, permissions')
-                .eq('id', userId)
-                .single();
-            if (error) { alert('Failed to load user'); return; }
-            const name = prompt('Full name:', prof.name || '') ?? prof.name || '';
-            const roleInput = prompt('Role (admin/editor/viewer):', prof.role || 'viewer') || prof.role || 'viewer';
-            const role = ['admin','editor','viewer'].includes(roleInput) ? roleInput : (prof.role || 'viewer');
-            // Keep existing permissions; optional tweak for disabled flag
-            const perms = prof.permissions || {};
-            if (perms.disabled === true) {
-                if (confirm('User is disabled. Re-enable this user?')) { delete perms.disabled; }
-            }
-            const { error: upErr } = await window.supabaseClient
-                .from('profiles')
-                .update({ name, role, permissions: perms })
-                .eq('id', userId);
-            if (upErr) { alert('Update failed: ' + upErr.message); return; }
-            try { informationHub.showMessage('User updated', 'success'); } catch (_) {}
-            try { await informationHub.loadUsersList(); } catch (_) {}
-        } catch (e) {
-            alert('Edit failed');
+            const sel = document.getElementById('sectionExportSelect');
+            if (sel && sel.options && sel.options.length > 1) sectionId = sel.options[1].value;
+        } catch (_) {}
+    }
+    if (!sectionId) {
+        try { sectionId = document.querySelector('.hub-card')?.getAttribute('data-section-id') || ''; } catch (_) {}
+    }
+    if (!sectionId) {
+        alert('Please select a section');
+        return;
+    }
+    try {
+        const result = await excelExporter.exportSectionToExcel(sectionId);
+        if (!result || result.success !== true) {
+            alert('Export failed: ' + (result && result.error ? result.error : 'Unknown error'));
+        } else {
+            alert('Export completed: ' + result.fileName);
         }
-    };
+    } catch (err) {
+        console.error('Export error:', err);
+        alert('Export failed: ' + (err && err.message ? err.message : String(err)));
+    }
+};
 
-    window.deleteUser = async (userId) => {
+window.exportUserData = async () => {
+    const userId = document.getElementById('userExportSelect').value;
+    if (!userId) {
+        informationHub.showMessage('Please select a user', 'error');
+        return;
+    }
+
+    try {
+        // Permission guard: admin -> any; manager -> only users; user -> self
         try {
-            if (!confirm('Disable this user? They will keep their auth account but be marked disabled in profiles.')) return;
-            if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
-            // Soft-disable: set permissions.disabled = true and clear sections
-            const { data: prof, error } = await window.supabaseClient
-                .from('profiles')
-                .select('permissions')
-                .eq('id', userId)
-                .single();
-            if (error) { alert('Failed to load user'); return; }
-            const perms = Object.assign({}, prof?.permissions || {});
-            perms.disabled = true;
-            if (Array.isArray(perms.sections)) perms.sections = [];
-            if (Array.isArray(perms.editableSections)) perms.editableSections = [];
-            const { error: upErr } = await window.supabaseClient
-                .from('profiles')
-                .update({ permissions: perms })
-                .eq('id', userId);
-            if (upErr) { alert('Disable failed: ' + upErr.message); return; }
-            try { informationHub.showMessage('User disabled', 'success'); } catch (_) {}
-            try { await informationHub.loadUsersList(); } catch (_) {}
-        } catch (e) {
-            alert('Disable failed');
-        }
-    };
-
-    // Global export functions
-    window.exportAllData = async () => {
-        try {
-            this.showMessage('Preparing export...', 'success');
-            const result = await excelExporter.exportToExcel();
-            if (result.success) {
-                this.showMessage(`Export completed! File: ${result.fileName}`, 'success');
-                this.logActivity('EXPORT', `Exported all data - ${result.fileName}`);
-            } else {
-                this.showMessage(`Export failed: ${result.error}`, 'error');
-            }
-        } catch (error) {
-            this.showMessage(`Export failed: ${error.message}`, 'error');
-        }
-    };
-
-    window.exportSectionData = async function() {
-        // Resolve section id from dropdown, or fallbacks (first option / hub cards)
-        let sectionId = '';
-        try { sectionId = document.getElementById('sectionExportSelect')?.value || ''; } catch (_) {}
-        if (!sectionId) {
-            try {
-                const sel = document.getElementById('sectionExportSelect');
-                if (sel && sel.options && sel.options.length > 1) sectionId = sel.options[1].value;
-            } catch (_) {}
-        }
-        if (!sectionId) {
-            try { sectionId = document.querySelector('.hub-card')?.getAttribute('data-section-id') || ''; } catch (_) {}
-        }
-        if (!sectionId) {
-            alert('Please select a section');
-            return;
-        }
-        try {
-            const result = await excelExporter.exportSectionToExcel(sectionId);
-            if (!result || result.success !== true) {
-                alert('Export failed: ' + (result && result.error ? result.error : 'Unknown error'));
-            } else {
-                alert('Export completed: ' + result.fileName);
-            }
-        } catch (err) {
-            console.error('Export error:', err);
-            alert('Export failed: ' + (err && err.message ? err.message : String(err)));
-        }
-    };
-
-    window.exportUserData = async () => {
-        const userId = document.getElementById('userExportSelect').value;
-        if (!userId) {
-            this.showMessage('Please select a user', 'error');
-            return;
-        }
-
-        try {
-            // Permission guard: admin -> any; manager -> only users; user -> self
-            try {
-                const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
-                const role = String(me?.role || '').toLowerCase();
-                const targetId = parseInt(userId);
-                if (role === 'manager') {
-                    const target = (JSON.parse(localStorage.getItem('hubUsers') || '[]') || []).find(u => u.id === targetId);
-                    const targetRole = String(target?.role || '').toLowerCase();
-                    if (targetRole !== 'user' && targetId !== me?.userId && targetId !== me?.id) {
-                        this.showMessage('Managers can export only their users or self', 'error');
-                        return;
-                    }
-                } else if (role !== 'admin') {
-                    if (targetId !== me?.userId && targetId !== me?.id) {
-                        this.showMessage('You can export only your own data', 'error');
-                        return;
-                    }
+            const me = informationHub.currentUser;
+            const role = String(me?.role || '').toLowerCase();
+            const targetId = parseInt(userId);
+            if (role === 'manager') {
+                // Get users from Supabase database
+                const users = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllUsers() : [];
+                const target = users.find(u => u.id === targetId);
+                const targetRole = String(target?.role || '').toLowerCase();
+                if (targetRole !== 'user' && targetId !== me?.userId && targetId !== me?.id) {
+                    informationHub.showMessage('Managers can export only their users or self', 'error');
+                    return;
                 }
-            } catch (_) {}
-            this.showMessage('Preparing user data export...', 'success');
-            const result = await excelExporter.exportUserDataToExcel(parseInt(userId));
-            if (result.success) {
-                this.showMessage(`User data export completed! File: ${result.fileName}`, 'success');
-                this.logActivity('EXPORT', `Exported user data - ${result.username}`);
-            } else {
-                this.showMessage(`Export failed: ${result.error}`, 'error');
+            } else if (role !== 'admin') {
+                if (targetId !== me?.userId && targetId !== me?.id) {
+                    informationHub.showMessage('You can export only your own data', 'error');
+                    return;
+                }
             }
-        } catch (error) {
-            this.showMessage(`Export failed: ${error.message}`, 'error');
+        } catch (_) {}
+        informationHub.showMessage('Preparing user data export...', 'success');
+        const result = await excelExporter.exportUserDataToExcel(parseInt(userId));
+        if (result.success) {
+            informationHub.showMessage(`User data export completed! File: ${result.fileName}`, 'success');
+            informationHub.logActivity('EXPORT', `Exported user data - ${result.username}`);
+        } else {
+            informationHub.showMessage(`Export failed: ${result.error}`, 'error');
         }
-    };
+    } catch (error) {
+        informationHub.showMessage(`Export failed: ${error.message}`, 'error');
+    }
+};
 
-    window.exportAuditLog = async () => {
+window.exportAuditLog = async () => {
+    try {
+        informationHub.showMessage('Preparing audit log export...', 'success');
+        const activities = await hubDatabase.getActivities();
+        
+        // Create workbook
+        const workbook = XLSX.utils.book_new();
+        const activityData = activities.map(activity => ({
+            'ID': activity.id,
+            'User ID': activity.userId,
+            'Username': activity.username,
+            'Action': activity.action,
+            'Description': activity.description,
+            'Timestamp': new Date(activity.timestamp).toLocaleString(),
+            'IP Address': activity.ip || ''
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(activityData);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Audit Log');
+
+        const fileName = `Audit_Log_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+
+        informationHub.showMessage(`Audit log export completed! File: ${fileName}`, 'success');
+        informationHub.logActivity('EXPORT', 'Exported audit log');
+    } catch (error) {
+        informationHub.showMessage(`Export failed: ${error.message}`, 'error');
+    }
+};
+
+// JSON Backup/Restore (raw)
+window.backupJson = async () => {
+    try {
+        // Admin-only hint (non-blocking for download)
         try {
-            this.showMessage('Preparing audit log export...', 'success');
-            const activities = await hubDatabase.getActivities();
-            
-            // Create workbook
-            const workbook = XLSX.utils.book_new();
-            const activityData = activities.map(activity => ({
-                'ID': activity.id,
-                'User ID': activity.userId,
-                'Username': activity.username,
-                'Action': activity.action,
-                'Description': activity.description,
-                'Timestamp': new Date(activity.timestamp).toLocaleString(),
-                'IP Address': activity.ip || ''
-            }));
+            const me = informationHub.currentUser;
+            if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
+                informationHub.showMessage('Tip: Admin should perform backups for completeness.', 'error');
+            }
+        } catch(_) {}
 
-            const worksheet = XLSX.utils.json_to_sheet(activityData);
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Audit Log');
-
-            const fileName = `Audit_Log_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
-            XLSX.writeFile(workbook, fileName);
-
-            this.showMessage(`Audit log export completed! File: ${fileName}`, 'success');
-            this.logActivity('EXPORT', 'Exported audit log');
-        } catch (error) {
-            this.showMessage(`Export failed: ${error.message}`, 'error');
+        // Supabase database backup
+        let users = [], sections = [], sectionConfigs = {}, resources = {}, activities = [], views = [];
+        if (window.hubDatabase && window.hubDatabaseReady) {
+            try { users = await hubDatabase.getAllUsers(); } catch(_) {}
+            try { sections = await hubDatabase.getAllSections(); } catch(_) {}
+            try { activities = await hubDatabase.getActivities(); } catch(_) {}
+            try { views = await hubDatabase.getAllViews(); } catch(_) {}
+            // Per-section resources
+            for (const s of (sections||[])) {
+                const sid = String(s.section_id||s.id||'').trim(); if (!sid) continue;
+                try { resources[sid] = await hubDatabase.getResourcesBySection(sid); } catch(_) { resources[sid] = []; }
+            }
         }
-    };
 
-    // JSON Backup/Restore (raw)
-    window.backupJson = async () => {
-        try {
-            // Admin-only hint (non-blocking for download)
+        const payload = {
+            exportDate: new Date().toISOString(),
+            users, sections, sectionConfigs, resources, activities, views
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Information_Hub_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        informationHub.showMessage('Backup downloaded', 'success');
+    } catch (error) {
+        informationHub.showMessage(`Backup failed: ${error.message}`, 'error');
+    }
+};
+
+window.restoreJson = async () => {
+    try {
+        // Admin-only guard
+        const me = informationHub.currentUser;
+        if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
+            informationHub.showMessage('Only admin can restore data', 'error');
+            return;
+        }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const text = await file.text();
+            const json = JSON.parse(text);
+            if (!window.hubDatabase || !window.hubDatabaseReady) throw new Error('Supabase database unavailable');
+            // Users
+            try { if (Array.isArray(json.users)) for (const user of json.users) await hubDatabase.saveUser(user); } catch(_) {}
+            // Sections
+            try { if (Array.isArray(json.sections)) for (const section of json.sections) await hubDatabase.saveSection(section); } catch(_) {}
+            // Resources (as map: { [sectionId]: [...] })
             try {
-                const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
-                if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
-                    this.showMessage('Tip: Admin should perform backups for completeness.', 'error');
+                const res = json.resources && typeof json.resources === 'object' ? json.resources : {};
+                for (const sid of Object.keys(res)) {
+                    const resources = Array.isArray(res[sid]) ? res[sid] : [];
+                    for (const resource of resources) {
+                        await hubDatabase.saveResource({...resource, sectionId: sid});
+                    }
                 }
             } catch(_) {}
+            // Optional: audit + views
+            try { if (Array.isArray(json.activities)) for (const activity of json.activities) await hubDatabase.saveActivity(activity); } catch(_) {}
 
-            // GitHub-first comprehensive backup
-            let users = [], sections = [], sectionConfigs = {}, resources = {}, activities = [], views = [];
-            if (window.githubData) {
-                try { const r = await githubData.readUsers(); users = Array.isArray(r.json) ? r.json : []; } catch(_) {}
-                try { const r = await githubData.readSections(); sections = Array.isArray(r.json) ? r.json : []; } catch(_) {}
-                try { const r = await githubData.readJson('data/section-configs.json'); sectionConfigs = r.json && typeof r.json==='object' ? r.json : {}; } catch(_) {}
-                try { const r = await githubData.readJson('data/audit-log.json'); activities = Array.isArray(r.json) ? r.json : []; } catch(_) {}
-                try { const r = await githubData.readJson('data/views.json'); views = Array.isArray(r.json) ? r.json : []; } catch(_) {}
-                // Per-section resources
-                for (const s of (sections||[])) {
-                    const sid = String(s.id||'').trim(); if (!sid) continue;
-                    try { const r = await githubData.readSectionResources(sid); resources[sid] = r.json || {}; } catch(_) { resources[sid] = {}; }
-                }
-            }
-
-            // Fallback: DB/local export if GitHub is empty
-            if ((sections||[]).length===0 && window.hubDatabase && hubDatabase.exportRawState) {
-                try {
-                    const raw = await hubDatabase.exportRawState();
-                    users = raw.users||users; sections = raw.sections||sections; activities = raw.activities||activities; views = raw.views||views;
-                } catch(_) {}
-            }
-
-            const payload = {
-                exportDate: new Date().toISOString(),
-                users, sections, sectionConfigs, resources, activities, views
-            };
-
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `Information_Hub_Backup_${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            this.showMessage('Backup downloaded', 'success');
-        } catch (error) {
-            this.showMessage(`Backup failed: ${error.message}`, 'error');
-        }
-    };
-
-    window.restoreJson = async () => {
-        try {
-            // Admin-only guard
-            const me = this.currentUser || (JSON.parse(localStorage.getItem('hubSession') || 'null'));
-            if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
-                this.showMessage('Only admin can restore data', 'error');
-                return;
-            }
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'application/json';
-            input.onchange = async () => {
-                const file = input.files && input.files[0];
-                if (!file) return;
-                const text = await file.text();
-                const json = JSON.parse(text);
-                if (!window.githubData) throw new Error('GitHub API unavailable');
-                // Users
-                try { if (Array.isArray(json.users)) await githubData.writeUsers(json.users, 'Restore users'); } catch(_) {}
-                // Sections
-                try { if (Array.isArray(json.sections)) await githubData.writeSections(json.sections, 'Restore sections'); } catch(_) {}
-                // Section configs
-                try {
-                    if (json.sectionConfigs && typeof json.sectionConfigs === 'object') {
-                        await githubData.writeJson('data/section-configs.json', json.sectionConfigs, 'Restore section configs');
-                    }
-                } catch(_) {}
-                // Resources (as map: { [sectionId]: { typeId:[...] } })
-                try {
-                    const res = json.resources && typeof json.resources === 'object' ? json.resources : {};
-                    for (const sid of Object.keys(res)) {
-                        await githubData.writeSectionResources(sid, res[sid] || {}, 'Restore resources');
-                    }
-                } catch(_) {}
-                // Optional: audit + views
-                try { if (Array.isArray(json.activities)) await githubData.writeJson('data/audit-log.json', json.activities, 'Restore audit log'); } catch(_) {}
-                try { if (Array.isArray(json.views)) await githubData.writeJson('data/views.json', json.views, 'Restore views'); } catch(_) {}
-
-                // Refresh UI
-                try { updateMainHubSections(); } catch(_) {}
-                this.showMessage('Restore completed', 'success');
-            };
-            input.click();
-        } catch (error) {
-            this.showMessage(`Restore failed: ${error.message}`, 'error');
-        }
-    };
-}
+            // Refresh UI
+            try { updateMainHubSections(); } catch(_) {}
+            informationHub.showMessage('Restore completed', 'success');
+        };
+        input.click();
+    } catch (error) {
+        informationHub.showMessage(`Restore failed: ${error.message}`, 'error');
+    }
+};
 
 // Initialize the application (once)
 let informationHub;

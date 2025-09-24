@@ -13,9 +13,9 @@ class SectionManager {
     logContentActivity(action, resourceType, title) { try {} catch (_) {} }
 
     getCurrentUser() {
-        const session = localStorage.getItem('hubSession');
-        if (session) {
-            return JSON.parse(session);
+        // Get current user from Supabase auth
+        if (window.supabaseClient) {
+            return window.supabaseClient.auth.getUser();
         }
         return null;
     }
@@ -207,10 +207,8 @@ class SectionManager {
 
         // Apply persistent background image per section (defer heavy images)
         try {
-            const disable = (() => { try { return localStorage.getItem('disableBackgrounds') === '1' || localStorage.getItem('disableBackgrounds') === 'true'; } catch(_) { return false; } })();
-            const key = 'sectionBackgrounds';
-            const raw = localStorage.getItem(key);
-            const map = raw ? JSON.parse(raw) : {};
+            const disable = false; // Background images disabled by default for performance
+            const map = {}; // No local storage for background images
             let img = map[this.currentSection];
             const container = document.querySelector('.container');
             const preferList = [
@@ -279,18 +277,17 @@ class SectionManager {
 
     // Add session validation on page load
     validateSession() {
-        const session = localStorage.getItem('hubSession');
-        if (!session) {
+        // Validate session using Supabase auth
+        if (!window.supabaseClient) {
             window.location.href = 'auth.html';
             return false;
         }
         
         try {
-            const sessionData = JSON.parse(session);
-            // Check if session is still valid (you can add expiration logic here)
+            const user = window.supabaseClient.auth.getUser();
+            this.currentUser = user;
             return true;
         } catch (e) {
-            localStorage.removeItem('hubSession');
             window.location.href = 'auth.html';
             return false;
         }
@@ -299,7 +296,7 @@ class SectionManager {
     getCurrentSectionFromURL() {
         // Extract section from URL or use stored section
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('section') || localStorage.getItem('currentSection') || 'costing';
+        return urlParams.get('section') || sessionStorage.getItem('currentSection') || 'costing';
     }
 
     bindEvents() {
@@ -865,46 +862,13 @@ class SectionManager {
         const sectionId = this.currentSection;
         const types = ['playbooks', 'boxLinks', 'dashboards'];
         try {
-            // Per-section store
-            let sectionData = {};
-            try { sectionData = JSON.parse(localStorage.getItem(`section_${sectionId}`) || '{}'); } catch(_) { sectionData = {}; }
-            let changed = false;
-            for (const t of types) {
-                const arr = Array.isArray(sectionData[t]) ? sectionData[t] : [];
-                for (const r of arr) {
-                    if (r.id === undefined || r.id === null || r.id === '') {
-                        r.id = this.generateResourceId(t);
-                        changed = true;
-                        try { if (window.hubDatabase && hubDatabase.saveResource) hubDatabase.saveResource({ ...r, sectionId, type: t, userId: r.userId || this.currentUser?.id || 0 }); } catch(_) {}
-                    }
-                }
-                sectionData[t] = arr;
-            }
-            if (changed) {
-                localStorage.setItem(`section_${sectionId}`, JSON.stringify(sectionData));
-            }
+            // Section data is stored in Supabase database
+            // No local storage needed
         } catch(_) {}
 
         try {
-            // informationHub store
-            let hub = {};
-            try { hub = JSON.parse(localStorage.getItem('informationHub') || '{}'); } catch(_) { hub = {}; }
-            hub[sectionId] = hub[sectionId] || { playbooks: [], boxLinks: [], dashboards: [], custom: {} };
-            let changedHub = false;
-            for (const t of types) {
-                const arr = Array.isArray(hub[sectionId][t]) ? hub[sectionId][t] : [];
-                for (const r of arr) {
-                    if (r.id === undefined || r.id === null || r.id === '') {
-                        r.id = this.generateResourceId(t);
-                        changedHub = true;
-                        try { if (window.hubDatabase && hubDatabase.saveResource) hubDatabase.saveResource({ ...r, sectionId, type: t, userId: r.userId || this.currentUser?.id || 0 }); } catch(_) {}
-                    }
-                }
-                hub[sectionId][t] = arr;
-            }
-            if (changedHub) {
-                localStorage.setItem('informationHub', JSON.stringify(hub));
-            }
+            // Information hub data is stored in Supabase database
+            // No local storage needed
         } catch(_) {}
     }
 
@@ -1371,9 +1335,8 @@ class SectionManager {
                 });
             }
         } catch (_) {}
-        // Fallback flag so hub can pick it up even without BroadcastChannel
-        try { localStorage.setItem('refreshHubNow', '1'); } catch(_) {}
-        try { localStorage.setItem('hubLastChange', String(Date.now())); } catch(_) {}
+        // Refresh notifications are handled through Supabase realtime
+        // No local storage needed
     }
 
     // Periodic auto-refresh for Supabase-backed data

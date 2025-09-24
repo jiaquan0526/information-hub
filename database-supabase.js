@@ -1,5 +1,5 @@
-// Supabase Database System for Information Hub
-class SupabaseDatabase {
+// Database System for Information Hub - Supabase Implementation
+class HubDatabase {
     constructor() {
         this.supabase = null;
         this.init();
@@ -7,11 +7,21 @@ class SupabaseDatabase {
 
     async init() {
         try {
-            // Ensure Supabase client is available
+            // Wait for Supabase client to be available
+            let retries = 0;
+            const maxRetries = 100; // 20 seconds max wait
+            while (retries < maxRetries && !window.supabaseClient) {
+                console.log('Waiting for Supabase client...', retries + 1);
+                await new Promise(resolve => setTimeout(resolve, 200));
+                retries++;
+            }
+            
             if (!window.supabaseClient) {
-                console.error('Supabase client not initialized');
+                console.error('Supabase client not initialized after waiting');
+                console.error('Available window objects:', Object.keys(window).filter(k => k.includes('supabase')));
                 return false;
             }
+            
             this.supabase = window.supabaseClient;
             console.log('Supabase database initialized successfully');
             return true;
@@ -23,10 +33,9 @@ class SupabaseDatabase {
 
     // Helper method to get current user ID
     getCurrentUserId() {
-        const session = localStorage.getItem('hubSession');
-        if (session) {
-            const sessionData = JSON.parse(session);
-            return sessionData.userId;
+        if (window.supabaseClient) {
+            const user = window.supabaseClient.auth.getUser();
+            return user?.id || null;
         }
         return null;
     }
@@ -81,6 +90,27 @@ class SupabaseDatabase {
         } catch (error) {
             console.error('Error getting all users:', error);
             return [];
+        }
+    }
+
+    async updateUser(user) {
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .update({
+                    username: user.username,
+                    role: user.role || 'viewer',
+                    name: user.name,
+                    email: user.email,
+                    permissions: user.permissions || {}
+                })
+                .eq('id', user.id);
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error updating user:', error);
+            throw error;
         }
     }
 
@@ -149,6 +179,73 @@ class SupabaseDatabase {
         } catch (error) {
             console.error('Error getting all sections:', error);
             return [];
+        }
+    }
+
+    async createSection(section) {
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .insert({
+                    section_id: section.sectionId || section.id,
+                    name: section.name,
+                    icon: section.icon,
+                    color: section.color,
+                    config: {
+                        ...(section.config || {}),
+                        visible: section.visible !== false,
+                        intro: section.intro || '',
+                        order: section.order || 0
+                    },
+                    data: section.data || {}
+                });
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error creating section:', error);
+            throw error;
+        }
+    }
+
+    async updateSection(section) {
+        try {
+            const { data, error } = await this.supabase
+                .from('sections')
+                .update({
+                    name: section.name,
+                    icon: section.icon,
+                    color: section.color,
+                    config: {
+                        ...(section.config || {}),
+                        visible: section.visible !== false,
+                        intro: section.intro || '',
+                        order: section.order || 0
+                    },
+                    data: section.data || {}
+                })
+                .eq('section_id', section.sectionId || section.id);
+            
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error updating section:', error);
+            throw error;
+        }
+    }
+
+    async deleteSection(sectionId) {
+        try {
+            const { error } = await this.supabase
+                .from('sections')
+                .delete()
+                .eq('section_id', sectionId);
+            
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting section:', error);
+            throw error;
         }
     }
 
@@ -352,69 +449,6 @@ class SupabaseDatabase {
         }
     }
 
-    // Data Migration from IndexedDB
-    async migrateFromIndexedDB() {
-        try {
-            console.log('Starting migration from IndexedDB to Supabase...');
-            
-            // Check if migration already completed
-            const migrationDone = localStorage.getItem('supabaseMigrationDone');
-            if (migrationDone) {
-                console.log('Migration already completed');
-                return true;
-            }
-
-            // Migrate users
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            for (const user of users) {
-                await this.saveUser(user);
-            }
-
-            // Migrate sections
-            const sections = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            for (const [sectionId, sectionData] of Object.entries(sections)) {
-                await this.saveSection({
-                    sectionId: sectionId,
-                    name: sectionData.name,
-                    icon: sectionData.icon,
-                    color: sectionData.color,
-                    data: sectionData
-                });
-            }
-
-            // Migrate resources
-            for (const [sectionId, sectionData] of Object.entries(sections)) {
-                const resourceTypes = ['playbooks', 'boxLinks', 'dashboards'];
-                for (const type of resourceTypes) {
-                    if (sectionData[type]) {
-                        for (const resource of sectionData[type]) {
-                            await this.saveResource({
-                                ...resource,
-                                sectionId: sectionId,
-                                type: type,
-                                userId: 1 // Default to admin user
-                            });
-                        }
-                    }
-                }
-            }
-
-            // Migrate activities
-            const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-            for (const activity of activities) {
-                await this.saveActivity(activity);
-            }
-
-            // Mark migration as complete
-            localStorage.setItem('supabaseMigrationDone', 'true');
-            console.log('Migration completed successfully');
-            return true;
-        } catch (error) {
-            console.error('Migration failed:', error);
-            return false;
-        }
-    }
-
     // Export all data
     async exportAllData() {
         try {
@@ -473,98 +507,63 @@ class SupabaseDatabase {
             throw error;
         }
     }
-
-    // Raw state export (for backup)
-    async exportRawState() {
-        const data = await this.exportAllData();
-        let local = {};
-        try {
-            local = {
-                sectionOrder: JSON.parse(localStorage.getItem('sectionOrder') || 'null'),
-                hubUsers: JSON.parse(localStorage.getItem('hubUsers') || 'null'),
-                informationHub: JSON.parse(localStorage.getItem('informationHub') || 'null'),
-                hubActivities: JSON.parse(localStorage.getItem('hubActivities') || 'null')
-            };
-        } catch (_) {}
-        return { ...data, localStorage: local };
-    }
-
-    // Import raw state (for restore)
-    async importRawState(json) {
-        try {
-            // Clear existing data
-            await this.clearAllData();
-
-            // Restore data
-            if (json.users && Array.isArray(json.users)) {
-                for (const user of json.users) {
-                    await this.saveUser(user);
-                }
-            }
-
-            if (json.sections && Array.isArray(json.sections)) {
-                for (const section of json.sections) {
-                    await this.saveSection(section);
-                }
-            }
-
-            if (json.resources && Array.isArray(json.resources)) {
-                for (const resource of json.resources) {
-                    await this.saveResource(resource);
-                }
-            }
-
-            if (json.activities && Array.isArray(json.activities)) {
-                for (const activity of json.activities) {
-                    await this.saveActivity(activity);
-                }
-            }
-
-            // Restore localStorage config
-            if (json.localStorage) {
-                try { 
-                    if (json.localStorage.sectionOrder) 
-                        localStorage.setItem('sectionOrder', JSON.stringify(json.localStorage.sectionOrder)); 
-                } catch(_){}
-                try { 
-                    if (json.localStorage.hubUsers) 
-                        localStorage.setItem('hubUsers', JSON.stringify(json.localStorage.hubUsers)); 
-                } catch(_){}
-                try { 
-                    if (json.localStorage.informationHub) 
-                        localStorage.setItem('informationHub', JSON.stringify(json.localStorage.informationHub)); 
-                } catch(_){}
-                try { 
-                    if (json.localStorage.hubActivities) 
-                        localStorage.setItem('hubActivities', JSON.stringify(json.localStorage.hubActivities)); 
-                } catch(_){}
-            }
-
-            return true;
-        } catch (error) {
-            console.error('Import failed:', error);
-            throw error;
-        }
-    }
 }
 
 // Initialize database
-let supabaseDatabase;
-document.addEventListener('DOMContentLoaded', async () => {
-    supabaseDatabase = new SupabaseDatabase();
-    await supabaseDatabase.init();
-    
-    // Check if migration is needed
-    const migrationDone = localStorage.getItem('supabaseMigrationDone');
-    if (!migrationDone) {
-        await supabaseDatabase.migrateFromIndexedDB();
+let hubDatabase;
+
+async function initializeDatabase() {
+    try {
+        hubDatabase = new HubDatabase();
+        const success = await hubDatabase.init();
+        
+        if (success) {
+            // Make globally accessible
+            window.hubDatabase = hubDatabase;
+            window.hubDatabaseReady = true;
+            document.dispatchEvent(new Event('hubdb-ready'));
+            console.log('Database system ready!');
+        } else {
+            console.error('Database initialization failed');
+        }
+    } catch (error) {
+        console.error('Database initialization error:', error);
+    }
+}
+
+// Try to initialize immediately, then on DOM ready, then on window load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeDatabase);
+} else {
+    initializeDatabase();
+}
+
+// Also try on window load as fallback
+window.addEventListener('load', () => {
+    if (!window.hubDatabaseReady) {
+        console.log('Retrying database initialization on window load...');
+        initializeDatabase();
+    }
+});
+
+// Additional fallback - try every 2 seconds for 30 seconds
+let fallbackAttempts = 0;
+const fallbackInterval = setInterval(() => {
+    if (window.hubDatabaseReady) {
+        clearInterval(fallbackInterval);
+        return;
     }
     
-    // Make globally accessible
-    window.hubDatabase = supabaseDatabase;
-    window.hubDatabaseReady = true;
-    document.dispatchEvent(new Event('hubdb-ready'));
-});
+    fallbackAttempts++;
+    if (fallbackAttempts > 15) { // 30 seconds
+        clearInterval(fallbackInterval);
+        console.error('Database initialization failed after 30 seconds');
+        return;
+    }
+    
+    console.log('Fallback database initialization attempt', fallbackAttempts);
+    initializeDatabase();
+}, 2000);
 
 // Backward compatibility flag
 window.hubDatabaseReady = false;
