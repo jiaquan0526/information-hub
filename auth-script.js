@@ -171,21 +171,27 @@ class AuthSystem {
     async handleLogin() {
         try {
             console.log('Starting login process...');
+            this.showLoginProgress('Initializing...', 10);
+            
             if (!(await this.initSupabase())) { 
                 console.error('Supabase not initialized');
                 this.showMessage('Supabase not initialized', 'error'); 
+                this.hideLoginProgress();
                 return; 
             }
             console.log('Supabase initialized, attempting login...');
+            this.showLoginProgress('Connecting to server...', 30);
             
             const email = String(document.getElementById('username').value || '').trim();
             const password = String(document.getElementById('password').value || '').trim();
             console.log('Login attempt for email:', email);
+            this.showLoginProgress('Authenticating...', 50);
             
             const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
             if (error) { 
                 console.error('Login error:', error);
                 this.showMessage(error.message || 'Invalid email or password', 'error'); 
+                this.hideLoginProgress();
                 return; 
             }
             
@@ -193,33 +199,60 @@ class AuthSystem {
             if (!user) { 
                 console.error('No user returned from login');
                 this.showMessage('Login failed', 'error'); 
+                this.hideLoginProgress();
                 return; 
             }
             
             console.log('Login successful, creating session for user:', user.email);
+            this.showLoginProgress('Setting up your account...', 70);
             await this.createSessionFromSupabase(user);
             console.log('Session created, redirecting to hub...');
+            this.showLoginProgress('Almost ready...', 90);
             
             // Add a small delay before redirect to ensure session is saved
             setTimeout(() => {
                 console.log('Executing redirect to hub...');
-                this.redirectToHub();
+                this.showLoginProgress('Redirecting to hub...', 100);
+                setTimeout(() => {
+                    this.redirectToHub();
+                }, 500);
             }, 100);
         } catch (error) { 
             console.error('Login exception:', error);
             this.showMessage('Login failed: ' + error.message, 'error'); 
+            this.hideLoginProgress();
         }
     }
 
     async handleSignup() {
         try {
-            if (!(await this.initSupabase())) { this.showMessage('Supabase not initialized', 'error'); return; }
+            this.showLoginProgress('Initializing signup...', 10);
+            
+            if (!(await this.initSupabase())) { 
+                this.showMessage('Supabase not initialized', 'error'); 
+                this.hideLoginProgress();
+                return; 
+            }
+            
+            this.showLoginProgress('Validating information...', 30);
             const name = String(document.getElementById('signupName').value || '').trim();
             const email = String(document.getElementById('signupEmail').value || '').trim().toLowerCase();
             const password = String(document.getElementById('signupPassword').value || '').trim();
-            if (!name || !email || !password) { this.showMessage('All fields are required', 'error'); return; }
+            if (!name || !email || !password) { 
+                this.showMessage('All fields are required', 'error'); 
+                this.hideLoginProgress();
+                return; 
+            }
+            
+            this.showLoginProgress('Creating account...', 50);
             const { data, error } = await window.supabaseClient.auth.signUp({ email, password, options: { data: { name } } });
-            if (error) { this.showMessage(error.message || 'Signup failed', 'error'); return; }
+            if (error) { 
+                this.showMessage(error.message || 'Signup failed', 'error'); 
+                this.hideLoginProgress();
+                return; 
+            }
+            
+            this.showLoginProgress('Setting up permissions...', 70);
             const uid = data && data.user ? data.user.id : null;
             if (uid) {
                 // Assign default access to all visible sections in hub (from Supabase)
@@ -248,6 +281,7 @@ class AuthSystem {
                     canManageRoles: false
                 };
                 
+                this.showLoginProgress('Saving profile...', 90);
                 await window.supabaseClient.from('profiles').upsert({
                     id: uid,
                     email,
@@ -257,8 +291,16 @@ class AuthSystem {
                     permissions: permissions
                 });
             }
-            this.showMessage('Signup successful. Please verify your email if required.', 'success');
-        } catch (_) { this.showMessage('Signup failed', 'error'); }
+            
+            this.showLoginProgress('Signup complete!', 100);
+            setTimeout(() => {
+                this.hideLoginProgress();
+                this.showMessage('Signup successful. Please verify your email if required.', 'success');
+            }, 1000);
+        } catch (error) { 
+            this.hideLoginProgress();
+            this.showMessage('Signup failed: ' + error.message, 'error'); 
+        }
     }
 
     // Forgot password: send email, and handle recovery token
@@ -489,6 +531,55 @@ class AuthSystem {
         setTimeout(() => {
             messageDiv.remove();
         }, 3000);
+    }
+
+    showLoginProgress(message, percentage) {
+        // Remove existing progress
+        const existingProgress = document.getElementById('loginProgress');
+        if (existingProgress) {
+            existingProgress.remove();
+        }
+
+        // Create progress container
+        const progressDiv = document.createElement('div');
+        progressDiv.id = 'loginProgress';
+        progressDiv.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        `;
+
+        progressDiv.innerHTML = `
+            <div style="text-align: center; max-width: 400px; padding: 20px;">
+                <div style="margin-bottom: 20px;">
+                    <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #3498db; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                </div>
+                <h3 style="margin: 0 0 10px 0; font-size: 18px;">${message}</h3>
+                <div style="background: rgba(255, 255, 255, 0.2); border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden;">
+                    <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${percentage}%; transition: width 0.3s ease; border-radius: 10px;"></div>
+                </div>
+                <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.8;">${percentage}% Complete</p>
+            </div>
+        `;
+
+        document.body.appendChild(progressDiv);
+    }
+
+    hideLoginProgress() {
+        const progressDiv = document.getElementById('loginProgress');
+        if (progressDiv) {
+            progressDiv.remove();
+        }
     }
 }
 

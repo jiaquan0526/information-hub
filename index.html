@@ -401,6 +401,10 @@
                         <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
                         <h3>Loading from database...</h3>
                         <p>Fetching sections from Supabase database.</p>
+                        <div style="background: #f0f0f0; border-radius: 10px; height: 6px; margin: 15px auto; width: 200px; overflow: hidden;">
+                            <div id="hubProgressBar" style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px;"></div>
+                        </div>
+                        <p id="hubProgressText" style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Initializing...</p>
                     </div>
                 `;
             }
@@ -427,23 +431,27 @@
         // Function to load sections from Supabase database
         async function loadSectionsFromSupabase() {
             console.log('Loading sections from Supabase...');
+            updateHubProgress('Connecting to database...', 20);
             
             // Wait for Supabase client to be ready
             let retries = 0;
             const maxRetries = 50; // 5 seconds max wait
             
             while (retries < maxRetries && !window.supabaseClient) {
+                updateHubProgress('Waiting for connection...', 30 + (retries * 2));
                 await new Promise(resolve => setTimeout(resolve, 100));
                 retries++;
             }
             
             if (!window.supabaseClient) {
                 console.error('Supabase client not available after waiting');
-                showFallbackSections();
+                updateHubProgress('Connection failed', 100);
+                setTimeout(() => showFallbackSections(), 1000);
                 return;
             }
             
             try {
+                updateHubProgress('Fetching sections...', 60);
                 // Fetch sections from Supabase
                 const { data: sections, error } = await window.supabaseClient
                     .from('sections')
@@ -453,22 +461,42 @@
                 
                 if (error) {
                     console.error('Error fetching sections:', error);
-                    showFallbackSections();
+                    updateHubProgress('Error loading data', 100);
+                    setTimeout(() => showFallbackSections(), 1000);
                     return;
                 }
                 
                 if (!sections || sections.length === 0) {
                     console.log('No sections found in database');
-                    showEmptyState();
+                    updateHubProgress('No sections found', 100);
+                    setTimeout(() => showEmptyState(), 1000);
                     return;
                 }
                 
                 console.log('Loaded sections from Supabase:', sections);
-                renderSections(sections);
+                updateHubProgress('Rendering sections...', 90);
+                setTimeout(() => {
+                    renderSections(sections);
+                    updateHubProgress('Complete!', 100);
+                }, 500);
                 
             } catch (error) {
                 console.error('Error loading sections:', error);
-                showFallbackSections();
+                updateHubProgress('Error occurred', 100);
+                setTimeout(() => showFallbackSections(), 1000);
+            }
+        }
+        
+        // Function to update hub progress
+        function updateHubProgress(message, percentage) {
+            const progressBar = document.getElementById('hubProgressBar');
+            const progressText = document.getElementById('hubProgressText');
+            
+            if (progressBar) {
+                progressBar.style.width = percentage + '%';
+            }
+            if (progressText) {
+                progressText.textContent = message;
             }
         }
         
