@@ -639,7 +639,7 @@
                     .from('sections')
                     .select('section_id, name, icon, color, config')
                     .eq('config->>visible', 'true')
-                    .order('config->>order', { ascending: true });
+                    .order('name', { ascending: true });
                 
                 if (error) {
                     console.error('Error fetching sections:', error);
@@ -791,6 +791,22 @@
             console.log('Database connection failed, showing empty state');
             showEmptyState();
         }
+
+        // Hard failsafe: if still loading after 6s, show empty state and reveal UI
+        setTimeout(() => {
+            try {
+                const grid = document.querySelector('.hub-grid');
+                const loadingOverlay = document.getElementById('loadingScreen');
+                const main = document.getElementById('mainContent');
+                const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
+                if (stuck) {
+                    console.warn('Failsafe: showing empty state');
+                    showEmptyState();
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
+                    if (main) main.style.display = 'block';
+                }
+            } catch (_) {}
+        }, 6000);
             
             // Initialize basic functions
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
