@@ -206,23 +206,6 @@ class AuthSystem {
             console.log('Login successful, creating session for user:', user.email);
             this.showLoginProgress('Setting up your account...', 70);
             await this.createSessionFromSupabase(user);
-
-            // Confirm session with Supabase before redirecting
-            this.showLoginProgress('Confirming session...', 85);
-            let tries = 0;
-            let confirmed = false;
-            while (tries < 30) { // ~3s
-                try {
-                    const { data: { user: u2 }, error: e2 } = await window.supabaseClient.auth.getUser();
-                    if (u2 && !e2) { confirmed = true; break; }
-                } catch (_) {}
-                await new Promise(r => setTimeout(r, 100));
-                tries++;
-            }
-            if (!confirmed) {
-                console.warn('Session not confirmed in time, proceeding cautiously');
-            }
-
             console.log('Session created, redirecting to hub...');
             this.showLoginProgress('Almost ready...', 90);
             
@@ -232,8 +215,8 @@ class AuthSystem {
                 this.showLoginProgress('Redirecting to hub...', 100);
                 setTimeout(() => {
                     this.redirectToHub();
-                }, 300);
-            }, 150);
+                }, 500);
+            }, 100);
         } catch (error) { 
             console.error('Login exception:', error);
             this.showMessage('Login failed: ' + error.message, 'error'); 
@@ -448,9 +431,21 @@ class AuthSystem {
         }
     }
 
-    redirectToHub() {
-        // Set a flag to indicate fresh login
-        // Fresh login flag is managed by Supabase auth
+    async redirectToHub() {
+        try {
+            if (!window.supabaseClient) {
+                window.location.href = 'index.html';
+                return;
+            }
+            // Wait until session is confirmed to avoid redirect loops
+            let tries = 0;
+            while (tries < 30) { // up to ~3s
+                const { data: { user } } = await window.supabaseClient.auth.getUser();
+                if (user) break;
+                await new Promise(r => setTimeout(r, 100));
+                tries++;
+            }
+        } catch (_) {}
         console.log('Redirecting to hub...');
         window.location.href = 'index.html';
     }

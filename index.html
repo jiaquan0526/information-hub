@@ -54,6 +54,8 @@
                 { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
             );
             
+            // Guard to prevent fallback re-initialization with placeholders
+            window.SUPABASE_CLIENT_READY = true;
             console.log('✅ Supabase client initialized successfully');
         };
         
@@ -4973,7 +4975,8 @@ Permissions:
                 }
                 next();
             }
-            if (!(window.supabase && window.supabase.createClient)) { loadFallbacksIfNeeded(); } else { initClient(); }
+            // Use fallback loader only if client isn't already initialized correctly
+            if (!(window.supabase && window.supabase.createClient) || !window.SUPABASE_CLIENT_READY) { loadFallbacksIfNeeded(); } else { initClient(); }
 
             // Clean stale local data artifacts to ensure Supabase-only view
             (function clearLocalArtifacts(){

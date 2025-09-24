@@ -1266,7 +1266,7 @@ function initInformationHubOnce() {
 				console.error('Authentication check failed:', error);
 				// Retry briefly to allow session restoration
 				let authRetries = 0;
-				while (authRetries < 20) { // ~2s
+				while (authRetries < 50) { // ~5s
 					await new Promise(r => setTimeout(r, 100));
 					const { data: { user: u2 } } = await window.supabaseClient.auth.getUser();
 					if (u2) { break; }
