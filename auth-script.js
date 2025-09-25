@@ -456,9 +456,11 @@ class AuthSystem {
             if (!window.supabaseClient) return;
             const { data: { user } } = await window.supabaseClient.auth.getUser();
             if (!user) return;
-            // Session is managed by Supabase auth only
-            if (location.pathname.endsWith('auth.html')) return;
-            this.redirectToHub();
+            // Only redirect away from auth page if already signed in
+            if (location.pathname.endsWith('auth.html')) {
+                this.redirectToHub();
+            }
+            // On other pages (e.g., index.html, section.html), do not redirect
         } catch (e) {
             console.warn('Invalid existing session.', e);
             // Session is managed by Supabase auth

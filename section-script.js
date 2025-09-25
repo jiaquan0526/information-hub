@@ -6,6 +6,7 @@ class SectionManager {
         this.currentTab = 'playbooks';
         this.sectionConfig = this.loadSectionConfig();
         this._bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('hub-sync') : null;
+        this._initStarted = false;
         this.init();
     }
 
@@ -35,9 +36,18 @@ class SectionManager {
     }
 
     async init() {
+        if (this._initStarted) return; this._initStarted = true;
         const ok = await this.validateSession();
         if (!ok) return;
-        this.checkAccess();
+        const allowed = await this.checkAccess();
+        if (!allowed) {
+            try {
+                const loadingEl = document.getElementById('loadingScreen');
+                const contentEl = document.getElementById('mainContent');
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (contentEl) contentEl.style.display = 'block';
+            } catch (_) {}
+        }
         // Section session start
         this.sectionSessionStartMs = Date.now();
         // IDs are handled by Supabase; no local migrations
@@ -155,22 +165,23 @@ class SectionManager {
         } catch (_) { return b || a; }
     }
 
-    checkAccess() {
+    async checkAccess() {
         try {
-            if (!this.currentUser) { window.location.href = 'auth.html'; return; }
+            if (!this.currentUser) { window.location.href = 'auth.html'; return false; }
             const role = String(this.currentUser.role || '').toLowerCase();
             const perms = this.currentUser.permissions || {};
             const sections = Array.isArray(perms.sections) ? perms.sections : [];
             const canAll = !!perms.canEditAllSections || !!perms.canViewAllSections || sections.includes('*');
-            if (role === 'admin' || canAll) return;
+            if (role === 'admin' || canAll) return true;
             if (!sections.includes(this.currentSection)) {
-                alert('You do not have access to this section');
-                window.location.href = 'index.html';
-                return;
+                // Do not redirect back to hub; show a non-blocking message and continue with limited UI
+                try { this.showMessage('You do not have access to this section', 'error'); } catch(_) {}
+                return false;
             }
+            return true;
         } catch (_) {
             window.location.href = 'auth.html';
-            return;
+            return false;
         }
     }
 
