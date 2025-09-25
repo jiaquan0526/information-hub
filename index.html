@@ -3929,7 +3929,9 @@ Permissions:
                             
                             if (role === 'admin' || canAll || hasWildcardAccess) {
                                 // Admin or user with all access - show all sections
-                                visibleSections = sections.filter(s => s.config?.visible !== false).sort((a,b) => (s.config?.order||0)-(b.config?.order||0));
+                                visibleSections = sections
+                                    .filter(s => s.config?.visible !== false)
+                                    .sort((a,b) => (a.config?.order||0) - (b.config?.order||0));
                                 console.log('User has admin/all access, showing all sections:', visibleSections.length);
                             } else {
                                 // Regular user - filter by permissions
