@@ -815,7 +815,7 @@
             if (!hubGrid) return;
             
             const sectionsHtml = sections.map(section => `
-                <div class="hub-card" onclick="navigateToSection('${section.section_id}')">
+                <div class="hub-card" data-section-id="${section.section_id}" onclick="navigateToSection('${section.section_id}')">
                     <div class="card-icon" style="color: ${section.color || '#3498db'};">
                         <i class="${section.icon || 'fas fa-folder'}"></i>
                     </div>
@@ -938,6 +938,31 @@
             updateUserInterface(); 
             try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
             try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+        });
+
+        // Ensure global navigation helper exists
+        if (typeof window.navigateToSection !== 'function') {
+            window.navigateToSection = function(sectionId) {
+                try {
+                    if (!sectionId) return;
+                    const url = `section.html?section=${encodeURIComponent(sectionId)}`;
+                    window.location.href = url;
+                } catch (_) {}
+            };
+        }
+
+        // Robust click delegation for hub cards
+        document.addEventListener('click', (ev) => {
+            try {
+                const target = ev.target || ev.srcElement;
+                const card = target && target.closest ? target.closest('.hub-card') : null;
+                if (!card) return;
+                const sid = card.getAttribute('data-section-id');
+                if (sid && typeof window.navigateToSection === 'function') {
+                    ev.preventDefault();
+                    window.navigateToSection(sid);
+                }
+            } catch (_) {}
         });
 
         // Live refresh when section data changes in other tabs (e.g., Box Links rename)
