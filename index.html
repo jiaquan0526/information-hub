@@ -34,6 +34,48 @@
         
         // Wait for Supabase library to load
         const initSupabase = async () => {
+            // Fallback loader to ensure Supabase library is available even if the primary CDN fails
+            async function ensureSupabaseLibrary() {
+                if (window.supabase) return true;
+                return await new Promise((resolve) => {
+                    let resolved = false;
+                    const done = (ok) => { if (!resolved) { resolved = true; resolve(!!ok); } };
+                    
+                    // Try alternate UMD CDN first (unpkg)
+                    const existingAlt = document.querySelector('script[data-supabase-alt]');
+                    if (!existingAlt) {
+                        const s1 = document.createElement('script');
+                        s1.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+                        s1.async = true;
+                        s1.setAttribute('data-supabase-alt', '1');
+                        s1.onload = () => setTimeout(() => done(window.supabase), 0);
+                        s1.onerror = () => {
+                            // If UMD fails, try ESM import fallback
+                            const m = document.createElement('script');
+                            m.type = 'module';
+                            m.textContent = "import{createClient}from 'https://esm.sh/@supabase/supabase-js@2'; window.supabase={createClient}; window.dispatchEvent(new Event('supabase-ready'));";
+                            document.head.appendChild(m);
+                            window.addEventListener('supabase-ready', () => done(true), { once: true });
+                            // Hard timeout guard
+                            setTimeout(() => done(window.supabase), 2500);
+                        };
+                        document.head.appendChild(s1);
+                    }
+                    
+                    // If script tag already present, poll briefly
+                    let tries = 0;
+                    const poll = setInterval(() => {
+                        tries++;
+                        if (window.supabase || tries > 30) {
+                            clearInterval(poll);
+                            if (!resolved) done(window.supabase);
+                        }
+                    }, 100);
+                    // Final safety timeout
+                    setTimeout(() => { if (!resolved) done(window.supabase); }, 4000);
+                });
+            }
+
             let attempts = 0;
             while (!window.supabase && attempts < 50) {
                 console.log('Waiting for Supabase library...', attempts + 1);
@@ -42,8 +84,12 @@
             }
             
             if (!window.supabase) {
-                console.error('Supabase library failed to load');
-                return;
+                console.warn('Supabase library not available, attempting fallback loaders...');
+                const ok = await ensureSupabaseLibrary();
+                if (!ok) {
+                    console.error('Supabase library failed to load after fallbacks');
+                    return;
+                }
             }
             
             // Build CONFIG from meta/local if config.js is not present
@@ -842,6 +888,21 @@
                 if (loadingScreen) loadingScreen.style.display = 'none';
                 if (mainContent) mainContent.style.display = 'block';
                 if (typeof updateSectionStats === 'function') updateSectionStats();
+            } catch (_) {}
+        });
+
+        // Final window-load fallback to ensure UI becomes visible
+        window.addEventListener('load', () => {
+            try {
+                setTimeout(async () => {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen && getComputedStyle(loadingScreen).display !== 'none') {
+                        loadingScreen.style.display = 'none';
+                        if (mainContent) mainContent.style.display = 'block';
+                        try { if (typeof window.loadSectionsFromSupabase === 'function') await window.loadSectionsFromSupabase(); } catch (_) {}
+                    }
+                }, 1000);
             } catch (_) {}
         });
         
@@ -5198,6 +5259,28 @@ Permissions:
                         try { window.addEventListener('beforeunload', function(){ try { window.supabaseClient.removeChannel(ch); } catch(_) {} }, { once: true }); } catch(_) {}
                     }
                 } catch(_) {}
+        })();
+    </script>
+    <script>
+        // Ensure the loader function is exposed globally even if scripts load out of order
+        (function ensureLoadSectionsFromSupabaseBinding(){
+            try {
+                if (typeof window.loadSectionsFromSupabase === 'function') return;
+                if (typeof loadSectionsFromSupabase === 'function') {
+                    window.loadSectionsFromSupabase = loadSectionsFromSupabase;
+                    return;
+                }
+                var tries = 0;
+                var iv = setInterval(function(){
+                    try {
+                        if (typeof loadSectionsFromSupabase === 'function') {
+                            window.loadSectionsFromSupabase = loadSectionsFromSupabase;
+                            clearInterval(iv);
+                        }
+                        if (++tries > 200) clearInterval(iv);
+                    } catch(_) { if (++tries > 200) clearInterval(iv); }
+                }, 50);
+            } catch(_) {}
         })();
     </script>
 </body>
