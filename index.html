@@ -3920,7 +3920,17 @@ Permissions:
                 }
                 
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                    const sections = await hubDatabase.getAllSections();
+                    let sections = await hubDatabase.getAllSections();
+                    // Fallback: query Supabase directly if wrapper returned no rows
+                    if ((!sections || sections.length === 0) && window.supabaseClient) {
+                        try {
+                            const { data: directSections } = await window.supabaseClient
+                                .from('sections')
+                                .select('*')
+                                .order('name', { ascending: true });
+                            sections = Array.isArray(directSections) ? directSections : [];
+                        } catch (_) {}
+                    }
                     console.log('Loaded sections from database:', sections);
                     
                     if (sections && sections.length > 0) {
@@ -3929,6 +3939,20 @@ Permissions:
                         let user = null;
                         if (sessionRaw) {
                             try { user = JSON.parse(sessionRaw); } catch (_) {}
+                        }
+                        // Fallback: fetch profile from Supabase if no local session
+                        if (!user && window.supabaseClient) {
+                            try {
+                                const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                                if (authUser) {
+                                    const { data: profile } = await window.supabaseClient
+                                        .from('profiles')
+                                        .select('role, permissions')
+                                        .eq('id', authUser.id)
+                                        .single();
+                                    user = { role: (profile && profile.role) || 'viewer', permissions: (profile && profile.permissions) || {} };
+                                }
+                            } catch (_) {}
                         }
                         
                         // Filter sections based on user permissions
@@ -3959,6 +3983,13 @@ Permissions:
                             // No user logged in - show all sections (for public access)
                             visibleSections = sections.filter(s => s.config?.visible !== false).sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
                             console.log('No user logged in, showing all sections:', visibleSections.length);
+                        }
+                        // Final fallback: if permissions filtered everything but data exists, show visible sections
+                        if (visibleSections.length === 0 && sections.length > 0) {
+                            try {
+                                visibleSections = sections.filter(s => s.config?.visible !== false).sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
+                                console.log('Permissions filtered all sections; falling back to visible sections:', visibleSections.length);
+                            } catch (_) {}
                         }
                     } else {
                         console.warn('No sections found in database');
