@@ -1597,29 +1597,49 @@
         
         window.openAdminPanel = async function() {
             try {
-            console.log('showAdminPanel called');
-                // Get current user from Supabase
-                const { data: { user }, error } = await supabase.auth.getUser();
-                if (error || !user) {
+                console.log('showAdminPanel called');
+                // Use the initialized Supabase client
+                if (!window.supabaseClient) {
                     alert('Please log in to access admin panel.');
                     return;
                 }
-            console.log('User role:', user.role);
-            
-            if (user.role !== 'admin' && user.role !== 'manager') {
-                alert('Only administrators and managers can access the admin panel.');
-                return;
-            }
-            
-            console.log('Opening admin panel modal...');
-            
+                const { data: { user } } = await window.supabaseClient.auth.getUser();
+                if (!user) {
+                    alert('Please log in to access admin panel.');
+                    return;
+                }
+                // Load role/permissions from profiles
+                let role = 'viewer';
+                let permissions = {};
+                try {
+                    const { data: profile } = await window.supabaseClient
+                        .from('profiles')
+                        .select('role, permissions')
+                        .eq('id', user.id)
+                        .single();
+                    if (profile) {
+                        role = profile.role || role;
+                        permissions = (profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
+                    }
+                } catch (e) { console.warn('Profile fetch failed', e); }
+
+                const isAdmin = String(role||'').toLowerCase() === 'admin';
+                const isManager = String(role||'').toLowerCase() === 'manager';
+                const canManageUsers = isAdmin || isManager || permissions.canManageUsers === true;
+                const canManageSections = isAdmin || permissions.canEditAllSections === true;
+                if (!(canManageUsers || canManageSections)) {
+                    alert('Only administrators and managers can access the admin panel.');
+                    return;
+                }
+
+                console.log('Opening admin panel modal...');
                 // Show the admin panel modal ASAP
-            const adminModal = document.getElementById('adminPanelModal');
+                const adminModal = document.getElementById('adminPanelModal');
                 if (!adminModal) {
                     alert('Admin panel not found on the page.');
                     return;
                 }
-            adminModal.style.display = 'block';
+                adminModal.style.display = 'block';
                 adminModal.style.zIndex = '9999';
                 
                 // Defer data loading to avoid blocking UI and reduce errors
@@ -1630,36 +1650,28 @@
                     try { if (typeof loadAuditLog === 'function') loadAuditLog(); } catch (e) { console.error('loadAuditLog error', e); }
                 }, 0);
                 
-            // After modal is visible, manage Assignments/Manage Sections tabs by role
+                // After modal is visible, manage Assignments/Manage Sections tabs by role
                 const assignmentsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
                 const assignmentsContent = document.getElementById('assignments-tab');
                 const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                 const manageSectionsContent = document.getElementById('sections-tab');
                 setTimeout(() => { try {
-                    const currentRaw = localStorage.getItem('hubSession');
-                    let current = {};
-                    try { current = currentRaw ? JSON.parse(currentRaw) : {}; } catch (_) {}
-                    if (current.role === 'manager') {
-                    if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
-                    if (assignmentsContent) assignmentsContent.style.display = 'none';
-                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = 'none';
-                    if (manageSectionsContent) manageSectionsContent.style.display = 'none';
-                } else {
-                    if (assignmentsNavTab) assignmentsNavTab.style.display = '';
-                    if (assignmentsContent) assignmentsContent.style.display = '';
-                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = '';
-                    if (manageSectionsContent) manageSectionsContent.style.display = '';
-                }
+                    // Users tab
+                    if (assignmentsNavTab) assignmentsNavTab.style.display = canManageUsers ? '' : 'none';
+                    if (assignmentsContent) assignmentsContent.style.display = canManageUsers ? '' : 'none';
+                    // Sections tab
+                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = canManageSections ? '' : 'none';
+                    if (manageSectionsContent) manageSectionsContent.style.display = canManageSections ? '' : 'none';
                 } catch (e) { console.error('role-based tab visibility error', e); } }, 0);
-            
-            // Ensure scrolling works
-            setTimeout(() => {
-                const adminContent = adminModal.querySelector('.admin-content');
-                if (adminContent) {
-                    adminContent.style.overflowY = 'auto';
-                    adminContent.style.maxHeight = '70vh';
-                }
-            }, 100);
+                
+                // Ensure scrolling works
+                setTimeout(() => {
+                    const adminContent = adminModal.querySelector('.admin-content');
+                    if (adminContent) {
+                        adminContent.style.overflowY = 'auto';
+                        adminContent.style.maxHeight = '70vh';
+                    }
+                }, 100);
             } catch (e) {
                 console.error('Error showing admin panel:', e);
                 alert('Failed to open User Management. Please refresh and try again.');
