@@ -547,6 +547,7 @@
             const mainContent = document.getElementById('mainContent');
             
             if (loadingScreen) loadingScreen.style.display = 'none';
+            try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
             if (mainContent) mainContent.style.display = 'block';
             
             // Show loading message while waiting for database
@@ -600,6 +601,7 @@
                             const loadingScreen = document.getElementById('loadingScreen');
                             const mainContent = document.getElementById('mainContent');
                             if (loadingScreen) loadingScreen.style.display = 'none';
+                            try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
                             if (mainContent) mainContent.style.display = 'block';
                         } catch (_) {}
                         await loadSectionsFromSupabase();
@@ -876,7 +878,7 @@
             // Initialize basic functions
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
             try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
-        });
+        
         
         
         
@@ -890,6 +892,18 @@
                 if (typeof updateSectionStats === 'function') updateSectionStats();
             } catch (_) {}
         });
+
+        // Show hub as soon as database is ready, then build sections
+        document.addEventListener('hubdb-ready', () => {
+            try {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
+                if (mainContent) mainContent.style.display = 'block';
+                if (typeof updateMainHubSections === 'function') updateMainHubSections();
+            } catch(_) {}
+        }, { once: true });
 
         // Final window-load fallback to ensure UI becomes visible
         window.addEventListener('load', () => {
@@ -4085,6 +4099,13 @@ Permissions:
             
             // Replace grid content all at once to prevent flashing
             hubGrid.innerHTML = newContent;
+            // Ensure the main UI is visible once content is ready
+            try {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'block';
+            } catch (_) {}
             
             // Stats for currently built sections
             updateSectionStats();
