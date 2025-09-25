@@ -1,7 +1,7 @@
 // Section Page JavaScript - Handles individual section functionality
 class SectionManager {
     constructor() {
-        this.currentUser = this.getCurrentUser();
+        this.currentUser = null;
         this.currentSection = this.getCurrentSectionFromURL();
         this.currentTab = 'playbooks';
         this.sectionConfig = this.loadSectionConfig();
@@ -12,18 +12,31 @@ class SectionManager {
     // Content activity logger (no-op without Supabase auth)
     logContentActivity(action, resourceType, title) { try {} catch (_) {} }
 
-    getCurrentUser() {
-        // Get current user from Supabase auth
-        if (window.supabaseClient) {
-            return window.supabaseClient.auth.getUser();
-        }
-        return null;
+    async getCurrentUser() {
+        try {
+            if (!window.supabaseClient || !window.supabaseClient.auth) return null;
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            if (!user) return null;
+            let role = 'viewer';
+            let permissions = { sections: ['*'], canViewAllSections: true, canEditAllSections: false };
+            try {
+                const { data: profile } = await window.supabaseClient
+                    .from('profiles')
+                    .select('role, permissions')
+                    .eq('id', user.id)
+                    .single();
+                if (profile) {
+                    role = profile.role || role;
+                    permissions = (profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : permissions;
+                }
+            } catch (_) {}
+            return { id: user.id, email: user.email, role, permissions };
+        } catch (_) { return null; }
     }
 
     async init() {
-        if (!this.validateSession()) {
-            return;
-        }
+        const ok = await this.validateSession();
+        if (!ok) return;
         this.checkAccess();
         // Section session start
         this.sectionSessionStartMs = Date.now();
@@ -143,19 +156,20 @@ class SectionManager {
     }
 
     checkAccess() {
-        if (!this.currentUser) {
+        try {
+            if (!this.currentUser) { window.location.href = 'auth.html'; return; }
+            const role = String(this.currentUser.role || '').toLowerCase();
+            const perms = this.currentUser.permissions || {};
+            const sections = Array.isArray(perms.sections) ? perms.sections : [];
+            const canAll = !!perms.canEditAllSections || !!perms.canViewAllSections || sections.includes('*');
+            if (role === 'admin' || canAll) return;
+            if (!sections.includes(this.currentSection)) {
+                alert('You do not have access to this section');
+                window.location.href = 'index.html';
+                return;
+            }
+        } catch (_) {
             window.location.href = 'auth.html';
-            return;
-        }
-
-        // Admins or users with global edit can always view sections
-        if (this.currentUser.role === 'admin' || this.currentUser.permissions?.canEditAllSections) {
-            return;
-        }
-
-        if (!this.currentUser.permissions.sections.includes(this.currentSection)) {
-            alert('You do not have access to this section');
-            window.location.href = 'index.html';
             return;
         }
     }
@@ -167,7 +181,7 @@ class SectionManager {
         try {
             if (window.hubDatabase && window.hubDatabaseReady) {
                 const sections = await hubDatabase.getAllSections();
-                sectionConfig = sections.find(s => s.id === this.currentSection) || null;
+                sectionConfig = sections.find(s => (s.section_id === this.currentSection || s.id === this.currentSection)) || null;
                 console.log('Loaded section config from Supabase:', sectionConfig);
             } else {
                 console.log('Database not ready, using fallback config');
@@ -276,18 +290,20 @@ class SectionManager {
     }
 
     // Add session validation on page load
-    validateSession() {
+    async validateSession() {
         // Validate session using Supabase auth
-        if (!window.supabaseClient) {
-            window.location.href = 'auth.html';
-            return false;
-        }
-        
         try {
-            const user = window.supabaseClient.auth.getUser();
-            this.currentUser = user;
+            if (!window.supabaseClient) {
+                window.location.href = 'auth.html';
+                return false;
+            }
+            this.currentUser = await this.getCurrentUser();
+            if (!this.currentUser) {
+                window.location.href = 'auth.html';
+                return false;
+            }
             return true;
-        } catch (e) {
+        } catch (_) {
             window.location.href = 'auth.html';
             return false;
         }
