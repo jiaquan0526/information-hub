@@ -2384,14 +2384,14 @@ Permissions:
             select.innerHTML = '<option value="">Select a user</option>';
             let users = [];
             try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    users = await hubDatabase.getAllUsers();
-                } else if (window.supabaseClient) {
+                if (window.supabaseClient) {
                     const { data } = await window.supabaseClient
                         .from('profiles')
                         .select('id, username, role, email, permissions')
                         .order('created_at', { ascending: false });
                     users = Array.isArray(data) ? data : [];
+                } else if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
                 }
             } catch (e) { console.error('loadPermissionUserList error:', e); }
 
@@ -2399,7 +2399,10 @@ Permissions:
             let currentUser = null;
             try { const sess = localStorage.getItem('hubSession'); currentUser = sess ? JSON.parse(sess) : null; } catch(_) {}
             if (currentUser && typeof canManageUser === 'function') {
-                try { users = users.filter(u => canManageUser(currentUser, u)); } catch(_) {}
+                try {
+                    const manageable = users.filter(u => canManageUser(currentUser, u));
+                    if (manageable.length > 0) users = manageable; // only apply if not empty
+                } catch(_) {}
             }
 
             if (!Array.isArray(users) || users.length === 0) {
@@ -2415,7 +2418,10 @@ Permissions:
             });
 
             // Auto-load permissions for the first selectable user
-            try { if (select.value) await loadUserPermissions(); } catch(_) {}
+            try {
+                if (!select.value && users[0] && users[0].id) select.value = String(users[0].id);
+                if (select.value) await loadUserPermissions();
+            } catch(_) {}
         };
         
         window.updateSectionPermission = function(section) {
