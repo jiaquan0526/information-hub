@@ -2362,7 +2362,7 @@ Permissions:
             const sectionNames = await getSectionDisplayNames();
             
             // Update the permission form HTML to include all available sections
-            updatePermissionFormHTML(sections, sectionNames);
+            await updatePermissionFormHTML(sections, sectionNames);
             
             sections.forEach(section => {
                 const sectionCheckbox = document.getElementById(`section-${section}`);
@@ -2981,7 +2981,16 @@ Permissions:
             try {
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
                     const sections = await hubDatabase.getAllSections();
-                    return sections.filter(s => s && s.visible !== false).map(s => s.section_id || s.id);
+                    return sections.filter(s => s && (s.config?.visible !== false)).map(s => s.section_id || s.id);
+                } else if (window.supabaseClient) {
+                    const { data } = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id, config');
+                    const list = Array.isArray(data) ? data : [];
+                    return list
+                        .filter(row => (row && row.config && typeof row.config === 'object') ? (row.config.visible !== false) : true)
+                        .map(row => row.section_id)
+                        .filter(Boolean);
                 }
             } catch (error) {
                 console.error('Error loading sections from database:', error);
@@ -3033,7 +3042,7 @@ Permissions:
         }
         
         // Function to update permission form HTML with dynamic sections
-        function updatePermissionFormHTML(sections, sectionNames) {
+        async function updatePermissionFormHTML(sections, sectionNames) {
             console.log('updatePermissionFormHTML called with sections:', sections);
             console.log('updatePermissionFormHTML called with sectionNames:', sectionNames);
             
@@ -3046,7 +3055,7 @@ Permissions:
             }
             
             // Enforce filtering again based on current user's assignable sections
-            const allowed = getAssignableSectionsForCurrentUser();
+            const allowed = await getAssignableSectionsForCurrentUser();
             const filteredSections = sections.filter(s => allowed.includes(s));
             
             // Clear existing checkboxes
