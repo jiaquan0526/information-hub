@@ -1128,10 +1128,40 @@
                 if (raw.includes('playbook')) return 'playbooks';
                 if (raw.includes('box')) return 'boxLinks';
                 if (raw.includes('dash')) return 'dashboards';
-                if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards') return raw === 'boxlinks' ? 'boxLinks' : raw;
-                return '';
+                if (raw.includes('report')) return 'reports';
+                if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards' || raw === 'reports') return raw === 'boxlinks' ? 'boxLinks' : raw;
+                try { return normalizeTypeId(raw); } catch(_) { return raw; }
             };
-            const mapUiToDbType = (ui) => ui === 'playbooks' ? 'playbook' : ui === 'boxLinks' ? 'link' : ui === 'dashboards' ? 'dashboard' : null;
+            const mapUiToDbType = (ui) => ui === 'playbooks' ? 'playbook' : ui === 'boxLinks' ? 'link' : ui === 'dashboards' ? 'dashboard' : ui === 'reports' ? 'report' : null;
+
+            function resolveDbTypeForUiType(sectionId, uiTid) {
+                try {
+                    const cfg = sectionConfigById.get(sectionId);
+                    const normTid = normUiType(uiTid);
+                    if (cfg && Array.isArray(cfg.types)) {
+                        const typeDef = cfg.types.find(t => {
+                            const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
+                            const tname = String(t && t.name ? t.name : '').trim();
+                            try {
+                                return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false);
+                            } catch(_) {
+                                return tid.toLowerCase() === normTid;
+                            }
+                        });
+                        if (typeDef) {
+                            const candidates = [typeDef.dbType, typeDef.resourceType, typeDef.type]
+                                .map(v => v == null ? '' : String(v).trim())
+                                .filter(Boolean);
+                            if (candidates.length > 0) return candidates[0].toLowerCase();
+                        }
+                    }
+                    const fallback = mapUiToDbType(normTid);
+                    if (fallback) return fallback;
+                    return normTid;
+                } catch(_) {
+                    return mapUiToDbType(uiTid) || null;
+                }
+            }
 
             function updateCountDom(sectionId, tid, count) {
                 try {
@@ -1145,7 +1175,7 @@
 
             await Promise.all(sections.map(async (sectionId) => {
                 // Determine types for this section (from Supabase config if available)
-                let typesList = ['playbooks','box-links','dashboards'];
+                let typesList = ['playbooks','box-links','dashboards','reports'];
                 try {
                     const cfg = sectionConfigById.get(sectionId);
                     if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
@@ -1156,7 +1186,7 @@
 
                 // Query Supabase counts per type and update DOM
                 await Promise.all(normalizedTypes.map(async (tid) => {
-                    const dbType = mapUiToDbType(tid);
+                    const dbType = resolveDbTypeForUiType(sectionId, tid);
                     if (!dbType || !window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
                     try {
                         const { count, error } = await window.supabaseClient
@@ -3627,6 +3657,7 @@ Permissions:
                     <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> Playbooks</span>
                     <span><i class="fas fa-link"></i> <span id="${section.id}-boxlinks">0</span> Box Links</span>
                     <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
+                    <span><i class="fas fa-file-alt"></i> <span id="${section.id}-reports">0</span> Reports</span>
                 </div>
             </div>`;
             hubGrid.insertAdjacentHTML('beforeend', cardHTML);
@@ -3954,6 +3985,7 @@ Permissions:
                 if (t === 'playbooks' || t === 'playbook') return 'playbooks';
                 if (t === 'box-links' || t === 'boxlinks' || t === 'boxlink' || t === 'box') return 'boxLinks';
                 if (t === 'dashboards' || t === 'dashboard') return 'dashboards';
+                if (t === 'reports' || t === 'report') return 'reports';
                 return t;
             } catch (_) { return String(raw || '').toLowerCase(); }
         }
@@ -4185,10 +4217,7 @@ Permissions:
                                 icon: String(t.icon || '').trim()
                             }));
                         }
-                        if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
-                            const visibleTypes = cfg.types.filter(t => !t.hidden);
-                            typesList = visibleTypes.map(t => ({ id: String(t.id || '').trim() || 'type', name: String(t.name || t.id || 'Type').trim() }));
-                        }
+                        // (deduped) keep single mapping preserving optional icon if provided in config
                     } catch (_) {}
                 // Do not auto-augment; mirror only the configured tabs (or defaults).
 
