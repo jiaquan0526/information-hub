@@ -1115,16 +1115,41 @@ class SectionManager {
             if (!window.supabaseClient) return;
             const { data, error } = await window.supabaseClient
                 .from('sections')
-                .select('config')
+                .select('name, icon, image, config')
                 .eq('section_id', this.currentSection)
                 .single();
             if (error) return;
+            // Update config for types/categories
             const cfg = (data && data.config && typeof data.config === 'object') ? data.config : null;
             if (cfg) {
                 this.sectionConfig = cfg;
-                this.renderDynamicUI();
-                this.renderCurrentTab();
             }
+            // Update header name and icon if available
+            try {
+                if (data && (data.name || data.icon || data.image)) {
+                    const nameEl = document.getElementById('sectionName');
+                    const iconEl = document.getElementById('sectionIcon');
+                    if (nameEl && data.name) nameEl.textContent = data.name;
+                    if (iconEl) {
+                        if (data.image) {
+                            try {
+                                iconEl.outerHTML = `<img id="sectionIcon" src="${data.image}" style="width:22px;height:22px;object-fit:contain;margin-right:8px;" />`;
+                            } catch (_) {
+                                iconEl.className = this.normalizeIconClass(data.icon || 'fa-solid fa-table-cells-large');
+                            }
+                        } else if (data.icon) {
+                            iconEl.className = this.normalizeIconClass(data.icon);
+                        }
+                    }
+                    // Update document title with section name
+                    if (data.name) {
+                        document.title = `${data.name} - Information Hub`;
+                    }
+                }
+            } catch (_) {}
+            // Re-render UI with any config changes
+            this.renderDynamicUI();
+            this.renderCurrentTab();
         } catch (_) {}
     }
 
