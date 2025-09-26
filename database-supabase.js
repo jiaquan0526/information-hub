@@ -32,12 +32,14 @@ class HubDatabase {
     }
 
     // Helper method to get current user ID
-    getCurrentUserId() {
-        if (window.supabaseClient) {
-            const user = window.supabaseClient.auth.getUser();
-            return user?.id || null;
+    async getCurrentUserId() {
+        try {
+            if (!window.supabaseClient || !window.supabaseClient.auth) return null;
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            return user ? user.id : null;
+        } catch (_) {
+            return null;
         }
-        return null;
     }
 
     // User Management
@@ -278,6 +280,7 @@ class HubDatabase {
     // Resource Management
     async saveResource(resource) {
         try {
+            const currentUserId = await this.getCurrentUserId();
             const { data, error } = await this.supabase
                 .from('resources')
                 .upsert({
@@ -289,7 +292,7 @@ class HubDatabase {
                     description: resource.description,
                     tags: resource.tags || [],
                     extra: resource.extra || {},
-                    created_by: resource.userId || this.getCurrentUserId()
+                    created_by: resource.userId || currentUserId || null
                 });
             
             if (error) throw error;
@@ -382,10 +385,11 @@ class HubDatabase {
     // Activity Management
     async saveActivity(activity) {
         try {
+            const currentUserId = await this.getCurrentUserId();
             const { data, error } = await this.supabase
                 .from('activities')
                 .insert({
-                    user_id: activity.userId || this.getCurrentUserId(),
+                    user_id: activity.userId || currentUserId || null,
                     action: activity.action,
                     resource_id: activity.resourceId,
                     section_id: activity.sectionId,
@@ -484,22 +488,22 @@ class HubDatabase {
     // Clear all data (admin only)
     async clearAllData() {
         try {
-            const userId = this.getCurrentUserId();
+            const userId = await this.getCurrentUserId();
             if (!userId) throw new Error('Not authenticated');
-
+            
             // Check if user is admin
             const user = await this.getUser(userId);
             if (!user || user.role !== 'admin') {
                 throw new Error('Only admins can clear all data');
             }
-
+            
             // Delete in reverse order of dependencies
             await this.supabase.from('views').delete().neq('id', '00000000-0000-0000-0000-000000000000');
             await this.supabase.from('activities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
             await this.supabase.from('resources').delete().neq('id', '00000000-0000-0000-0000-000000000000');
             await this.supabase.from('sections').delete().neq('section_id', '');
             // Note: Don't delete profiles as they're linked to auth.users
-
+            
             console.log('All data cleared successfully');
             return true;
         } catch (error) {
