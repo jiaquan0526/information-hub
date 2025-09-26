@@ -4318,19 +4318,19 @@ Permissions:
                                 ${allSections.map(section => `
                                     <label class="section-checkbox">
                                         <input type="checkbox" 
-                                               value="${section.id}" 
-                                               ${userSections.includes(section.id) ? 'checked' : ''}
-                                               onchange="updateUserSectionAccess(${user.id}, '${section.id}', this.checked)">
+                                               value="${section.section_id}" 
+                                               ${userSections.includes(section.section_id) ? 'checked' : ''}
+                                               onchange="updateUserSectionAccess('${user.id}', '${section.section_id}', this.checked)">
                                         <i class="${section.icon}"></i>
-                                        <span>${section.name}</span>
+                                        <span>${section.name || section.section_id}</span>
                                     </label>
                                 `).join('')}
                             </div>
                             <div class="assignment-actions">
-                                <button class="btn btn-sm btn-primary" onclick="selectAllSections(${user.id})">
+                                <button class="btn btn-sm btn-primary" onclick="selectAllSections('${user.id}')">
                                     Select All
                                 </button>
-                                <button class="btn btn-sm btn-secondary" onclick="clearAllSections(${user.id})">
+                                <button class="btn btn-sm btn-secondary" onclick="clearAllSections('${user.id}')">
                                     Clear All
                                 </button>
                             </div>
@@ -4344,10 +4344,11 @@ Permissions:
         window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
             
-            // Get user from database
-            const { data: user, error: userError } = await supabase
-                .from('users')
-                .select('*')
+            if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+            // Get user from database (profiles)
+            const { data: user, error: userError } = await window.supabaseClient
+                .from('profiles')
+                .select('id, username, permissions')
                 .eq('id', userId)
                 .single();
             
@@ -4358,9 +4359,9 @@ Permissions:
             
             // Initialize permissions if not exists
             if (!user.permissions) {
-                user.permissions = { sections: [] };
+                user.permissions = { sections: [], editableSections: [] };
             }
-            if (!user.permissions.sections) {
+            if (!Array.isArray(user.permissions.sections)) {
                 user.permissions.sections = [];
             }
             
@@ -4375,8 +4376,8 @@ Permissions:
             
             // Save updated user to Supabase database
             try {
-                const { error: updateError } = await supabase
-                    .from('users')
+                const { error: updateError } = await window.supabaseClient
+                    .from('profiles')
                     .update({ permissions: user.permissions })
                     .eq('id', userId);
                 
@@ -4385,11 +4386,7 @@ Permissions:
                 }
                 
                 console.log('User section access updated in Supabase:', user);
-                
-                // Update UI for current user
-                await updateUserInterface();
-                
-                // Show success message
+                try { await InformationHub.loadExportOptions?.(); } catch(_) {}
                 alert(`Section access updated for ${user.username}. Changes saved to database.`);
             } catch (error) {
                 console.error('Error updating user section access in Supabase:', error);
@@ -4401,7 +4398,8 @@ Permissions:
         
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
-            const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            const list = await (async () => { try { return window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : []; } catch(_) { return []; } })();
+            const allSections = list.map(s => s.section_id);
             for (const sectionId of allSections) {
                 const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
                 if (checkbox && !checkbox.checked) {
@@ -4413,7 +4411,8 @@ Permissions:
         
         // Clear all sections for a user
         window.clearAllSections = async function(userId) {
-            const allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            const list = await (async () => { try { return window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : []; } catch(_) { return []; } })();
+            const allSections = list.map(s => s.section_id);
             for (const sectionId of allSections) {
                 const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
                 if (checkbox && checkbox.checked) {

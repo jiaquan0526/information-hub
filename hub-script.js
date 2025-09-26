@@ -956,7 +956,7 @@ class InformationHub {
                 }
             } catch (_) { sections = []; }
             const list = (Array.isArray(sections) ? sections : [])
-                .map(s => ({ id: s.id, sectionId: s.id, name: s.name || s.id }))
+                .map(s => ({ id: s.section_id, sectionId: s.section_id, name: s.name || s.section_id }))
                 .sort((a,b) => String(a.name).localeCompare(String(b.name)));
             const secSelect = document.getElementById('sectionExportSelect');
             if (secSelect) {
