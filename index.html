@@ -2376,6 +2376,47 @@ Permissions:
                 }
             });
         };
+
+        // Populate Permissions tab user dropdown (Supabase fallback included)
+        window.loadPermissionUserList = async function() {
+            const select = document.getElementById('permissionUserSelect');
+            if (!select) return;
+            select.innerHTML = '<option value="">Select a user</option>';
+            let users = [];
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    users = await hubDatabase.getAllUsers();
+                } else if (window.supabaseClient) {
+                    const { data } = await window.supabaseClient
+                        .from('profiles')
+                        .select('id, username, role, email, permissions')
+                        .order('created_at', { ascending: false });
+                    users = Array.isArray(data) ? data : [];
+                }
+            } catch (e) { console.error('loadPermissionUserList error:', e); }
+
+            // Filter by manageability if helper and session exist
+            let currentUser = null;
+            try { const sess = localStorage.getItem('hubSession'); currentUser = sess ? JSON.parse(sess) : null; } catch(_) {}
+            if (currentUser && typeof canManageUser === 'function') {
+                try { users = users.filter(u => canManageUser(currentUser, u)); } catch(_) {}
+            }
+
+            if (!Array.isArray(users) || users.length === 0) {
+                select.innerHTML += '<option disabled>(no users)</option>';
+                return;
+            }
+
+            users.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.textContent = `${u.username || u.email || u.id} (${String(u.role || 'user').toUpperCase()})`;
+                select.appendChild(opt);
+            });
+
+            // Auto-load permissions for the first selectable user
+            try { if (select.value) await loadUserPermissions(); } catch(_) {}
+        };
         
         window.updateSectionPermission = function(section) {
             const editCheckbox = document.getElementById(`edit-${section}`);
@@ -2478,7 +2519,7 @@ Permissions:
             if (!usersList) return;
             
             // Check if user is authenticated
-            const { data: { user }, error } = await supabase.auth.getUser();
+            const { data: { user }, error } = await (window.supabaseClient ? window.supabaseClient.auth.getUser() : { data: { user: null }, error: new Error('No client') });
             if (error || !user) { 
                 usersList.innerHTML = '<div class="empty">Please log in.</div>'; 
                 return; 
