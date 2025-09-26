@@ -302,9 +302,30 @@ class SectionManager {
 
     // Add session validation on page load
     async validateSession() {
-        // Validate session using Supabase auth
+        // Validate session using Supabase auth (wait for client/session to be ready)
         try {
+            let tries = 0;
+            while (tries < 100 && (!window.supabaseClient || !window.supabaseClient.auth)) {
+                await new Promise(r => setTimeout(r, 100));
+                tries++;
+            }
             if (!window.supabaseClient) {
+                window.location.href = 'auth.html';
+                return false;
+            }
+            // Give the session a moment to restore
+            let user = null;
+            let authTries = 0;
+            while (authTries < 50 && !user) {
+                try {
+                    const { data: { user: u } } = await window.supabaseClient.auth.getUser();
+                    user = u || null;
+                    if (user) break;
+                } catch (_) {}
+                await new Promise(r => setTimeout(r, 100));
+                authTries++;
+            }
+            if (!user) {
                 window.location.href = 'auth.html';
                 return false;
             }
