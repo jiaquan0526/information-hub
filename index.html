@@ -3113,16 +3113,17 @@ Permissions:
             const fullName = document.getElementById('editUserFullName').value;
             const email = document.getElementById('editUserEmail').value;
             const roleSelect = document.getElementById('editUserRole');
-            const role = roleSelect.value; // admins can change; managers see disabled select same value
-            
-			// Get selected sections (iterate all available DB sections shown in the form)
+            const role = roleSelect.value;
+
+			// Collect selected permissions from the modal (support both id schemes)
 			const selectedSections = [];
+            const selectedEditableSections = [];
 			const availableSections = await getAllAvailableSections();
 			availableSections.forEach(section => {
-				const checkbox = document.getElementById(`editSection-${section}`);
-				if (checkbox && checkbox.checked) {
-					selectedSections.push(section);
-				}
+                const accessCb = document.getElementById(`section-${section}`) || document.getElementById(`editSection-${section}`);
+                const editCb = document.getElementById(`edit-${section}`);
+                if (accessCb && accessCb.checked) selectedSections.push(section);
+                if (editCb && editCb.checked) selectedEditableSections.push(section);
 			});
             
             // Load users from Supabase
@@ -3174,7 +3175,7 @@ Permissions:
             if (!users[userIndex].permissions) {
                 users[userIndex].permissions = {};
             }
-            const roleChanged = (targetUser.role || 'viewer') !== role;
+            const roleChanged = (String(targetUser.role || 'viewer').toLowerCase()) !== String(role).toLowerCase();
             if (roleChanged) {
                 const defaults = {
                     admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
@@ -3185,7 +3186,9 @@ Permissions:
                 const normalizedRole = String(role).toLowerCase().replace('manager','editor').replace('user','viewer');
                 users[userIndex].permissions = { ...defaults[normalizedRole] };
             }
+            users[userIndex].permissions = users[userIndex].permissions || {};
             users[userIndex].permissions.sections = selectedSections;
+            users[userIndex].permissions.editableSections = selectedEditableSections;
             
             // Save updated user to Supabase
             try {
@@ -3247,7 +3250,7 @@ Permissions:
             loadUsersList();
             
             // Show success message
-            alert('User updated successfully! Changes will take effect on next login.');
+            try { informationHub.showMessage('User updated successfully', 'success'); } catch(_) { alert('User updated successfully!'); }
             
             console.log('User updated:', users[userIndex]);
         };
