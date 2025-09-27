@@ -3928,11 +3928,39 @@ Permissions:
             
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    // Update each section's order in Supabase
-                    for (const section of sectionOrder) {
-                        await hubDatabase.updateSection(section);
+                    // Update each section's order in Supabase via wrapper; fallback to direct Supabase if wrapper fails
+                    try {
+                        for (const section of sectionOrder) {
+                            await hubDatabase.updateSection(section);
+                        }
+                        console.log('Section order saved to Supabase (wrapper)');
+                    } catch (wrapperErr) {
+                        console.warn('Wrapper order save failed, attempting direct Supabase batch update', wrapperErr);
+                        if (!window.supabaseClient) throw wrapperErr;
+                        let failures = 0;
+                        for (const section of sectionOrder) {
+                            try {
+                                const nextConfig = { ...(section.config || {}), order: section.order || 0, intro: section.intro || '', visible: section.visible !== false };
+                                const { data: updated, error } = await window.supabaseClient
+                                    .from('sections')
+                                    .update({ config: nextConfig })
+                                    .eq('section_id', section.id)
+                                    .select('section_id')
+                                    .maybeSingle();
+                                if (error || !updated) {
+                                    failures++;
+                                    console.warn('Direct order update failed for', section.id, error || 'no row');
+                                }
+                            } catch (rowErr) {
+                                failures++;
+                                console.warn('Direct order update exception for', section.id, rowErr);
+                            }
+                        }
+                        if (failures > 0) {
+                            throw new Error('Order update failed for ' + failures + ' section(s)');
+                        }
+                        console.log('Section order saved to Supabase (direct fallback)');
                     }
-                    console.log('Section order saved to Supabase');
                     
                     // Section order is managed in Supabase database
                     updateMainHubSections();
@@ -3942,7 +3970,8 @@ Permissions:
                 }
             } catch (error) {
                 console.error('Error saving section order to Supabase:', error);
-                alert('Failed to save section order: ' + error.message);
+                const detail = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Unknown error';
+                alert('Failed to save section order: ' + detail);
             }
         };
         
