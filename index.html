@@ -382,6 +382,13 @@
                                     
                                     <div class="permission-section">
                                         <h5>Section Access & Edit Permissions</h5>
+                                        <div class="bulk-permission-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;">
+                                            <button class="btn btn-secondary" onclick="toggleAllAccess(true)"><i class="fas fa-check-square"></i> Access: All</button>
+                                            <button class="btn btn-secondary" onclick="toggleAllAccess(false)"><i class="far fa-square"></i> Access: None</button>
+                                            <span style="opacity:.4">|</span>
+                                            <button class="btn btn-secondary" onclick="toggleAllEdit(true)"><i class="fas fa-pen-square"></i> Edit: All</button>
+                                            <button class="btn btn-secondary" onclick="toggleAllEdit(false)"><i class="far fa-square"></i> Edit: None</button>
+                                        </div>
                                         <div id="sectionCheckboxes" class="section-permissions"></div>
                                     </div>
                                     
@@ -2529,6 +2536,41 @@ Permissions:
                 sectionCheckbox.checked = true;
             }
         };
+
+		// Bulk toggles for permissions tab
+		window.toggleAllAccess = function(value) {
+			try {
+				const container = document.getElementById('sectionCheckboxes');
+				if (!container) return;
+				const inputs = container.querySelectorAll('input[id^="section-"]');
+				inputs.forEach(inp => {
+					inp.checked = !!value;
+					// If turning off access, also turn off edit for that section
+					if (!value) {
+						const section = inp.id.replace('section-', '');
+						const edit = document.getElementById(`edit-${section}`);
+						if (edit) edit.checked = false;
+					}
+				});
+			} catch(_) {}
+		};
+
+		window.toggleAllEdit = function(value) {
+			try {
+				const container = document.getElementById('sectionCheckboxes');
+				if (!container) return;
+				const inputs = container.querySelectorAll('input[id^="edit-"]');
+				inputs.forEach(inp => {
+					inp.checked = !!value;
+					// If enabling edit, ensure access is also enabled
+					if (value) {
+						const section = inp.id.replace('edit-', '');
+						const access = document.getElementById(`section-${section}`);
+						if (access) access.checked = true;
+					}
+				});
+			} catch(_) {}
+		};
         
 		window.saveUserPermissions = async function() {
 			if (!currentEditingUser) return;
