@@ -1087,6 +1087,15 @@ if (typeof window.showEditUserModal !== 'function') {
                     </div>
                 </div>`;
             document.body.appendChild(modal);
+            try {
+                const m = document.getElementById('editUserModal');
+                if (m) {
+                    m.style.display = 'block';
+                    m.style.zIndex = '10005';
+                    const content = m.querySelector('.modal-content');
+                    if (content) content.style.zIndex = '10006';
+                }
+            } catch(_) {}
 
             window.saveUserEdits = async function(targetId) {
                 try {

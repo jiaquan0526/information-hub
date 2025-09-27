@@ -3048,6 +3048,15 @@ Permissions:
             
             // Add modal to page
             document.body.insertAdjacentHTML('beforeend', modalHTML);
+            try {
+                const m = document.getElementById('editUserModal');
+                if (m) {
+                    m.style.display = 'block';
+                    m.style.zIndex = '10005';
+                    const content = m.querySelector('.modal-content');
+                    if (content) content.style.zIndex = '10006';
+                }
+            } catch(_) {}
             
 			// Load sections for the modal (show all sections from DB, not role-filtered)
 			try {
