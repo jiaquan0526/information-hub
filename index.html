@@ -1656,10 +1656,9 @@
                 const roleLower = String(role||'').toLowerCase();
                 const isAdmin = roleLower === 'admin';
                 const isEditor = roleLower === 'editor' || roleLower === 'manager'; // backward-compatible
-                const canManageUsers = isAdmin || permissions.canManageUsers === true;
-                const canManageSections = isAdmin || permissions.canEditAllSections === true || (Array.isArray(permissions.editableSections) && permissions.editableSections.length > 0);
-                if (!(canManageUsers || canManageSections)) {
-                    alert('Only administrators or editors with permissions can access the admin panel.');
+                // Strict role-based gating: only admins and editors/managers can open the admin panel
+                if (!(isAdmin || isEditor)) {
+                    alert('Only administrators or editors can access the admin panel.');
                     return;
                 }
 
@@ -1676,25 +1675,56 @@
                 // Defer data loading to avoid blocking UI and reduce errors
                 setTimeout(() => {
                     try { if (typeof renderCurrentUserSummary === 'function') renderCurrentUserSummary(); } catch (e) { console.error('renderCurrentUserSummary error', e); }
-                    try { if (typeof loadUsersList === 'function') loadUsersList(); } catch (e) { console.error('loadUsersList error', e); }
-                    try { if (typeof loadPermissionUserList === 'function') loadPermissionUserList(); } catch (e) { console.error('loadPermissionUserList error', e); }
-                    try { if (typeof loadAuditLog === 'function') loadAuditLog(); } catch (e) { console.error('loadAuditLog error', e); }
+                    // Only admins load Users/Permissions/Audit data
+                    if (isAdmin) {
+                        try { if (typeof loadUsersList === 'function') loadUsersList(); } catch (e) { console.error('loadUsersList error', e); }
+                        try { if (typeof loadPermissionUserList === 'function') loadPermissionUserList(); } catch (e) { console.error('loadPermissionUserList error', e); }
+                        try { if (typeof loadAuditLog === 'function') loadAuditLog(); } catch (e) { console.error('loadAuditLog error', e); }
+                    }
                 }, 0);
                 
                 // After modal is visible, manage Assignments/Manage Sections tabs by role
+                const usersNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('users')\"]");
+                const usersContent = document.getElementById('users-tab');
+                const permissionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('permissions')\"]");
+                const permissionsContent = document.getElementById('permissions-tab');
+                const auditNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('audit')\"]");
+                const auditContent = document.getElementById('audit-tab');
                 const assignmentsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
                 const assignmentsContent = document.getElementById('assignments-tab');
                 const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                 const manageSectionsContent = document.getElementById('sections-tab');
+                const exportNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('export')\"]");
+                const exportContent = document.getElementById('export-tab');
+
                 setTimeout(() => { try {
-                    // Users tab (admin only or explicit permission)
-                    if (assignmentsNavTab) assignmentsNavTab.style.display = canManageUsers ? '' : 'none';
-                    if (assignmentsContent) assignmentsContent.style.display = canManageUsers ? '' : 'none';
-                    // Sections tab (admin, or editors with editableSections)
-                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = canManageSections ? '' : 'none';
-                    if (manageSectionsContent) manageSectionsContent.style.display = canManageSections ? '' : 'none';
+                    // Admin-only tabs
+                    const showAdminOnly = isAdmin ? '' : 'none';
+                    if (usersNavTab) usersNavTab.style.display = showAdminOnly;
+                    if (usersContent) usersContent.style.display = showAdminOnly;
+                    if (permissionsNavTab) permissionsNavTab.style.display = showAdminOnly;
+                    if (permissionsContent) permissionsContent.style.display = showAdminOnly;
+                    if (auditNavTab) auditNavTab.style.display = showAdminOnly;
+                    if (auditContent) auditContent.style.display = showAdminOnly;
+                    if (assignmentsNavTab) assignmentsNavTab.style.display = showAdminOnly;
+                    if (assignmentsContent) assignmentsContent.style.display = showAdminOnly;
+                    if (exportNavTab) exportNavTab.style.display = showAdminOnly;
+                    if (exportContent) exportContent.style.display = showAdminOnly;
+
+                    // Sections tab for admins and editors/managers
+                    const showSections = (isAdmin || isEditor) ? '' : 'none';
+                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = showSections;
+                    if (manageSectionsContent) manageSectionsContent.style.display = showSections;
+
+                    // If not admin, ensure Sections becomes the active view
+                    if (!isAdmin) {
+                        try { if (typeof switchAdminTab === 'function') switchAdminTab('sections'); } catch(_) {}
+                        if (usersContent && usersContent.classList.contains('active')) usersContent.classList.remove('active');
+                        if (manageSectionsContent) manageSectionsContent.classList.add('active');
+                    }
+
                     // Preload sections list when allowed
-                    if (canManageSections && typeof loadSectionsList === 'function') {
+                    if ((isAdmin || isEditor) && typeof loadSectionsList === 'function') {
                         try { loadSectionsList(); } catch (_) {}
                     }
                 } catch (e) { console.error('role-based tab visibility error', e); } }, 0);
@@ -3069,6 +3099,30 @@ Permissions:
                         .filter(Boolean);
                     // Safe fallback: if still empty, provide a sensible default set so UI can render
                     if (!ids || ids.length === 0) {
+                        // Try to derive from user profiles' permissions
+                        let derived = [];
+                        try {
+                            if (window.hubDatabase && window.hubDatabaseReady) {
+                                const users = await hubDatabase.getAllUsers();
+                                const set = new Set();
+                                (users || []).forEach(u => {
+                                    const arr = Array.isArray(u?.permissions?.sections) ? u.permissions.sections : [];
+                                    arr.forEach(id => { if (id) set.add(id); });
+                                });
+                                derived = Array.from(set);
+                            } else if (window.supabaseClient) {
+                                const { data: profiles } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('permissions');
+                                const set = new Set();
+                                (profiles || []).forEach(p => {
+                                    const arr = Array.isArray(p?.permissions?.sections) ? p.permissions.sections : [];
+                                    arr.forEach(id => { if (id) set.add(id); });
+                                });
+                                derived = Array.from(set);
+                            }
+                        } catch(_) {}
+                        if (Array.isArray(derived) && derived.length > 0) return derived;
                         return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
                     }
                     return ids;
@@ -3082,6 +3136,20 @@ Permissions:
                         .map(row => row.section_id)
                         .filter(Boolean);
                     if (!ids || ids.length === 0) {
+                        // Try to derive from user profiles' permissions
+                        let derived = [];
+                        try {
+                            const { data: profiles } = await window.supabaseClient
+                                .from('profiles')
+                                .select('permissions');
+                            const set = new Set();
+                            (profiles || []).forEach(p => {
+                                const arr = Array.isArray(p?.permissions?.sections) ? p.permissions.sections : [];
+                                arr.forEach(id => { if (id) set.add(id); });
+                            });
+                            derived = Array.from(set);
+                        } catch(_) {}
+                        if (Array.isArray(derived) && derived.length > 0) return derived;
                         return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
                     }
                     return ids;
