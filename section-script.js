@@ -1070,7 +1070,7 @@ class SectionManager {
 
     goBackToHub() {
         // Signal hub to refresh stats immediately on return
-        this._notifyHub({ type: 'NAV_BACK' });
+        this._notifyHub({ type: 'NAV_BACK', action: 'return', reason: 'tabs_or_counts_may_have_changed' });
         const go = () => { window.location.href = 'index.html'; };
         try {
             if (document.startViewTransition) {

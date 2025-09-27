@@ -909,6 +909,8 @@
                 const mainContent = document.getElementById('mainContent');
                 if (loadingScreen) loadingScreen.style.display = 'none';
                 if (mainContent) mainContent.style.display = 'block';
+                // Ensure hub cards reflect latest section config (tabs) on return
+                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                 if (typeof updateSectionStats === 'function') updateSectionStats();
             } catch (_) {}
         });
@@ -1013,8 +1015,12 @@
                         const msg = event && event.data ? event.data : {};
                         if (msg && msg.source === 'section') {
                             console.log('Hub received sync message:', msg);
-                            updateSectionStats();
-                            if (msg.type === 'SECTION_CUSTOMIZE') updateMainHubSections();
+                            // If section customized or returning from section view, rebuild cards to reflect new tabs
+                            if (msg.type === 'SECTION_CUSTOMIZE' || msg.type === 'NAV_BACK') {
+                                try { updateMainHubSections(); } catch(_) {}
+                            } else {
+                                updateSectionStats();
+                            }
                             try { rotateInfoBar(); } catch(_) {}
                         }
                     } catch (_) {}
