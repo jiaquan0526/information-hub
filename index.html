@@ -2396,26 +2396,43 @@ Permissions:
                 return;
             }
             
-            // Load users from Supabase
-            let users = [];
+            // Load the selected user's latest profile directly from Supabase for freshest permissions
+            let selectedProfile = null;
             try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    users = await hubDatabase.getAllUsers();
-                    console.log('Loaded users for permissions from Supabase:', users);
-                } else {
-                    console.log('Database not ready for permissions');
-                    return;
+                if (window.supabaseClient) {
+                    const { data, error } = await window.supabaseClient
+                        .from('profiles')
+                        .select('id, username, role, permissions')
+                        .eq('id', userId)
+                        .single();
+                    if (error) { throw error; }
+                    selectedProfile = data || null;
                 }
-            } catch (error) {
-                console.error('Error loading users for permissions:', error);
+            } catch (e) {
+                console.warn('Direct profile fetch failed, falling back to cached list', e);
+                // Fallback: use hubDatabase list if available
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady) {
+                        const users = await hubDatabase.getAllUsers();
+                        selectedProfile = users.find(u => String(u.id) === String(userId)) || null;
+                    }
+                } catch(_) {}
+            }
+
+            if (!selectedProfile) {
+                console.log('Selected profile not found');
+                document.getElementById('userPermissionForm').style.display = 'none';
                 return;
             }
-            
-            const user = users.find(u => u.id == userId);
-            if (!user) return;
-            
-            currentEditingUser = user;
-            document.getElementById('selectedUserName').textContent = `${user.username} (${user.role}) Permissions`;
+
+            // Normalize role and permissions for safety
+            const role = (selectedProfile.role || 'user').toLowerCase();
+            const perm = selectedProfile.permissions && typeof selectedProfile.permissions === 'object' ? selectedProfile.permissions : {};
+            const userSections = Array.isArray(perm.sections) ? perm.sections : [];
+            const userEditable = Array.isArray(perm.editableSections) ? perm.editableSections : [];
+
+            currentEditingUser = { ...selectedProfile, role, permissions: { ...perm, sections: userSections, editableSections: userEditable } };
+            document.getElementById('selectedUserName').textContent = `${selectedProfile.username || selectedProfile.email || selectedProfile.id} (${role}) Permissions`;
             document.getElementById('userPermissionForm').style.display = 'block';
             
             // Load all available sections; filtering will be applied in the renderer
@@ -2430,10 +2447,10 @@ Permissions:
                 const editCheckbox = document.getElementById(`edit-${section}`);
                 
                 if (sectionCheckbox) {
-                    sectionCheckbox.checked = user.permissions.sections.includes(section);
+                    sectionCheckbox.checked = userSections.includes(section);
                 }
                 if (editCheckbox) {
-                    editCheckbox.checked = user.permissions.editableSections.includes(section);
+                    editCheckbox.checked = userEditable.includes(section);
                 }
             });
         };
