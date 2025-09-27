@@ -3117,7 +3117,10 @@ Permissions:
                     }
                 }
                 if (!Array.isArray(all) || all.length === 0) return [];
-                if (role === 'admin') return all;
+                // Full access cases
+                if (role === 'admin' || permissions.canEditAllSections === true || permissions.canViewAllSections === true) return all;
+                // Wildcard access
+                if (Array.isArray(permissions.sections) && permissions.sections.includes('*')) return all;
                 // Editors/managers: can assign sections they are allowed to edit; fallback to view sections
                 const editable = Array.isArray(permissions.editableSections) ? permissions.editableSections : [];
                 const viewable = Array.isArray(permissions.sections) ? permissions.sections : [];
