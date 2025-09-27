@@ -2701,35 +2701,40 @@ Permissions:
 		// Bulk toggles for permissions tab
 		window.toggleAllAccess = function(value) {
 			try {
-				const container = document.getElementById('sectionCheckboxes');
+				const container = document.getElementById('editUserSectionCheckboxes') || document.getElementById('sectionCheckboxes');
 				if (!container) return;
-				const inputs = container.querySelectorAll('input[id^="section-"]');
-				inputs.forEach(inp => {
+				// Support both admin permissions panel (section-*) and edit modal (editSection-*)
+				const accessInputs = container.querySelectorAll('input[id^="section-"], input[id^="editSection-"]');
+				accessInputs.forEach(inp => {
 					inp.checked = !!value;
-					// If turning off access, also turn off edit for that section
 					if (!value) {
-						const section = inp.id.replace('section-', '');
+						const id = String(inp.id || '');
+						const section = id.startsWith('editSection-') ? id.replace('editSection-', '') : id.replace('section-', '');
 						const edit = document.getElementById(`edit-${section}`);
 						if (edit) edit.checked = false;
 					}
 				});
+				// Re-render chips in edit modal if present
+				try { if (typeof renderEditChips === 'function') renderEditChips(); } catch(_) {}
 			} catch(_) {}
 		};
 
 		window.toggleAllEdit = function(value) {
 			try {
-				const container = document.getElementById('sectionCheckboxes');
+				const container = document.getElementById('editUserSectionCheckboxes') || document.getElementById('sectionCheckboxes');
 				if (!container) return;
-				const inputs = container.querySelectorAll('input[id^="edit-"]');
+				const inputs = container.querySelectorAll('input[id^="edit-"], input[id^="editSection-"]');
 				inputs.forEach(inp => {
 					inp.checked = !!value;
-					// If enabling edit, ensure access is also enabled
 					if (value) {
-						const section = inp.id.replace('edit-', '');
-						const access = document.getElementById(`section-${section}`);
+						const id = String(inp.id || '');
+						const section = id.startsWith('editSection-') ? id.replace('editSection-', '') : id.replace('edit-', '');
+						const access = document.getElementById(`section-${section}`) || document.getElementById(`editSection-${section}`);
 						if (access) access.checked = true;
 					}
 				});
+				// Re-render chips in edit modal if present
+				try { if (typeof renderEditChips === 'function') renderEditChips(); } catch(_) {}
 			} catch(_) {}
 		};
         

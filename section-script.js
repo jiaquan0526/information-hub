@@ -201,6 +201,23 @@ class SectionManager {
             console.error('Error loading section data from Supabase:', error);
         }
 
+        // Fallback: fetch the single section row directly to get the display name ASAP
+        if (!sectionConfig) {
+            try {
+                if (window.supabaseClient) {
+                    const { data, error } = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id, name, icon, image, config, description')
+                        .eq('section_id', this.currentSection)
+                        .single();
+                    if (!error && data) {
+                        sectionConfig = data;
+                        console.log('Loaded section via direct Supabase fallback:', sectionConfig);
+                    }
+                }
+            } catch (_) {}
+        }
+
         if (!sectionConfig) {
             // No named defaults; show section id and a generic icon
             sectionConfig = { name: this.currentSection, icon: 'fas fa-th-large', intro: '' };
@@ -208,7 +225,7 @@ class SectionManager {
 
         const nameEl = document.getElementById('sectionName');
         const iconEl = document.getElementById('sectionIcon');
-        if (nameEl) nameEl.textContent = sectionConfig.name || this.currentSection;
+        if (nameEl) nameEl.textContent = (sectionConfig.name && String(sectionConfig.name).trim()) ? sectionConfig.name : this.currentSection;
         if (iconEl) {
             if (sectionConfig.image) {
                 try {
@@ -220,7 +237,7 @@ class SectionManager {
                 iconEl.className = this.normalizeIconClass(sectionConfig.icon || 'fa-solid fa-table-cells-large');
             }
         }
-        document.title = `${sectionConfig.name || this.currentSection} - Information Hub`;
+        document.title = `${(sectionConfig.name && String(sectionConfig.name).trim()) ? sectionConfig.name : this.currentSection} - Information Hub`;
 
         // Intro text
         const introEl = document.getElementById('sectionIntro');
@@ -1101,24 +1118,52 @@ class SectionManager {
 
     async saveSectionConfig(cfg) {
         this.sectionConfig = cfg;
-        // Primary: use DB wrapper; Fallback: direct Supabase upsert
+        // Primary: use DB wrapper; Fallback: direct Supabase upsert; Finally: verify read-back
         try {
-            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
-                await hubDatabase.saveSectionConfig(this.currentSection, cfg);
-            } else {
-                if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            let writeOk = false;
+            let lastErr = null;
+            // Attempt wrapper update first
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
+                    const res = await hubDatabase.saveSectionConfig(this.currentSection, cfg);
+                    writeOk = true; // wrapper throws on error
+                }
+            } catch (we) {
+                lastErr = we;
+            }
+            // Fallback to direct upsert when wrapper not available or failed
+            if (!writeOk) {
+                if (!window.supabaseClient) throw (lastErr || new Error('Supabase unavailable'));
                 const payload = { section_id: this.currentSection, config: cfg };
-                const { error } = await window.supabaseClient
+                const { error: upErr } = await window.supabaseClient
                     .from('sections')
                     .upsert(payload, { onConflict: 'section_id' });
-                if (error) throw error;
+                if (upErr) throw upErr;
+                writeOk = true;
             }
+            // Verify persisted value matches (best-effort)
+            try {
+                const { data: verifyRow } = await window.supabaseClient
+                    .from('sections')
+                    .select('config')
+                    .eq('section_id', this.currentSection)
+                    .single();
+                if (verifyRow && verifyRow.config) {
+                    // Minimal structural check
+                    const a = JSON.stringify(cfg);
+                    const b = JSON.stringify(verifyRow.config);
+                    if (a !== b) {
+                        console.warn('Section config verify mismatch; DB value differs. DB:', verifyRow.config);
+                    }
+                }
+            } catch (_) {}
             // Write a fast local cache so hub can reflect immediately if DB is slow
             try { localStorage.setItem(`section_config_${this.currentSection}`, JSON.stringify(cfg)); } catch(_) {}
             this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
             return true;
         } catch (e) {
-            try { this.showMessage('Failed to save section config', 'error'); } catch(_) {}
+            const detail = (e && (e.message || e.details || e.code)) ? (e.message || e.details || e.code) : 'Unknown error';
+            this.showMessage(`Failed to save section config: ${detail}`, 'error');
             return false;
         }
     }
