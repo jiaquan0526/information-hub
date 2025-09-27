@@ -3090,14 +3090,51 @@ Permissions:
         
         // Function to get sections the CURRENT USER can assign - SUPABASE ONLY
         async function getAssignableSectionsForCurrentUser() {
-            const session = localStorage.getItem('hubSession');
-            const currentUser = session ? JSON.parse(session) : null;
-            const all = await getAllAvailableSections();
-            if (!currentUser) return all;
-            if (currentUser.role === 'admin') return all;
-            // Managers can only assign within their own accessible sections
-            const ownSections = (currentUser.permissions && currentUser.permissions.sections) ? currentUser.permissions.sections : [];
-            return all.filter(s => ownSections.includes(s));
+            try {
+                const all = await getAllAvailableSections();
+                // Prefer live profile from Supabase
+                let role = null;
+                let permissions = {};
+                if (window.supabaseClient) {
+                    try {
+                        const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                        if (authUser) {
+                            const { data: profile } = await window.supabaseClient
+                                .from('profiles')
+                                .select('role, permissions')
+                                .eq('id', authUser.id)
+                                .single();
+                            if (profile) {
+                                role = String(profile.role || '').toLowerCase();
+                                permissions = (profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
+                            }
+                        }
+                    } catch (_) {}
+                }
+                // Fallback to local session if needed
+                if (!role) {
+                    const raw = localStorage.getItem('hubSession');
+                    if (raw) {
+                        try {
+                            const sess = JSON.parse(raw);
+                            role = String(sess.role || '').toLowerCase();
+                            permissions = sess.permissions || {};
+                        } catch (_) {}
+                    }
+                }
+                if (!Array.isArray(all) || all.length === 0) return [];
+                if (role === 'admin') return all;
+                // Editors/managers: can assign sections they are allowed to edit; fallback to view sections
+                const editable = Array.isArray(permissions.editableSections) ? permissions.editableSections : [];
+                const viewable = Array.isArray(permissions.sections) ? permissions.sections : [];
+                const allowed = (editable.length > 0 ? editable : viewable);
+                if (!Array.isArray(allowed) || allowed.length === 0) return [];
+                const allowedSet = new Set(allowed);
+                return all.filter(s => allowedSet.has(s));
+            } catch (e) {
+                console.error('getAssignableSectionsForCurrentUser failed', e);
+                return [];
+            }
         }
         
         // Function to get section display names - SUPABASE ONLY
