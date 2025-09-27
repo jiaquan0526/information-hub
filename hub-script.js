@@ -1028,6 +1028,95 @@ window.editUser = async (userId) => {
     }
 };
 
+// Lightweight in-app Edit User panel (used if index.html's implementation isn't available)
+if (typeof window.showEditUserModal !== 'function') {
+    window.showEditUserModal = function(user) {
+        try {
+            const existing = document.getElementById('editUserModal');
+            if (existing) existing.remove();
+
+            const me = (window.informationHub && informationHub.currentUser) ? informationHub.currentUser : null;
+            const isAdmin = String(me?.role || '').toLowerCase() === 'admin';
+
+            const modal = document.createElement('div');
+            modal.id = 'editUserModal';
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content edit-user-modal" style="max-width:700px; width:95%;">
+                    <div class="modal-header">
+                        <h2 style="display:flex;align-items:center;gap:10px;">Edit User <span class="role-badge" style="font-size:12px;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3f51b5;border:1px solid #dce1ff;">${(user.role||'viewer').toUpperCase()}</span></h2>
+                        <span class="close" onclick="(function(){ const m=document.getElementById('editUserModal'); if(m) m.remove(); })()">&times;</span>
+                    </div>
+                    <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:flex-start;">
+                        <div class="user-basic-info" style="display:flex;flex-direction:column;gap:10px;">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" id="editUserName" value="${user.username || ''}" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label>Full Name</label>
+                                <input type="text" id="editUserFullName" value="${user.name || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="editUserEmail" value="${user.email || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Role</label>
+                                <select id="editUserRole" ${isAdmin ? '' : 'disabled'}>
+                                    <option value="admin" ${String(user.role||'').toLowerCase()==='admin'?'selected':''}>Admin</option>
+                                    <option value="editor" ${String(user.role||'').toLowerCase()==='editor'?'selected':''}>Editor</option>
+                                    <option value="viewer" ${String(user.role||'').toLowerCase()==='viewer'?'selected':''}>Viewer</option>
+                                </select>
+                                ${isAdmin ? '' : '<small style="color:#666;">Only admins can change roles</small>'}
+                            </div>
+                            <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                                <input type="checkbox" id="editUserDisabled" ${(user.permissions && user.permissions.disabled) ? 'checked' : ''}>
+                                <label for="editUserDisabled">Deactivated (prevent login)</label>
+                            </div>
+                        </div>
+                        <div class="section-permissions-container" style="display:flex;flex-direction:column;gap:10px;">
+                            <h3 style="margin:0;">Section Permissions</h3>
+                            <div style="color:#666;">Use the dedicated permissions tab to manage sections.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" onclick="window.saveUserEdits && window.saveUserEdits('${user.id}')">Save Changes</button>
+                        <button class="btn btn-secondary" onclick="(function(){ const m=document.getElementById('editUserModal'); if(m) m.remove(); })()">Cancel</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+
+            window.saveUserEdits = async function(targetId) {
+                try {
+                    if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+                    const fullName = (document.getElementById('editUserFullName')?.value || '').trim();
+                    const email = (document.getElementById('editUserEmail')?.value || '').trim();
+                    const roleSel = document.getElementById('editUserRole');
+                    const role = (roleSel && !roleSel.disabled) ? roleSel.value : (user.role || 'viewer');
+                    const disabledCb = document.getElementById('editUserDisabled');
+                    const perms = Object.assign({}, user.permissions || {});
+                    perms.disabled = !!(disabledCb && disabledCb.checked);
+
+                    const { error: upErr } = await window.supabaseClient
+                        .from('profiles')
+                        .update({ name: fullName, role, email, permissions: perms })
+                        .eq('id', targetId);
+                    if (upErr) { alert('Update failed: ' + upErr.message); return; }
+                    try { informationHub.showMessage('User updated', 'success'); } catch (_) {}
+                    try { await informationHub.loadUsersList(); } catch (_) {}
+                    const m = document.getElementById('editUserModal'); if (m) m.remove();
+                } catch (e) {
+                    alert('Save failed');
+                }
+            };
+        } catch (e) {
+            alert('Unable to open edit panel');
+        }
+    };
+}
+
 window.deleteUser = async (userId) => {
     try {
         if (!confirm('Disable this user? They will keep their auth account but be marked disabled in profiles.')) return;

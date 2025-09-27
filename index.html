@@ -1140,10 +1140,18 @@
                 sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
             }
 
-            // Load section configs from Supabase once (optional)
+            // Load section configs (prefer wrapper; fallback to any helper)
             const sectionConfigById = new Map();
             try {
-                if (window.fetchSections) {
+                // Primary: hubDatabase wrapper (includes config)
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    const rows = await hubDatabase.getAllSections();
+                    (rows || []).forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
+                }
+            } catch (_) {}
+            try {
+                // Optional: supplemental fetchSections helper
+                if (sectionConfigById.size === 0 && window.fetchSections) {
                     const list = await window.fetchSections();
                     (list || []).forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
                 }
@@ -2931,21 +2939,37 @@ Permissions:
         
         // Show edit user modal
         window.showEditUserModal = async function(user) {
-            // Get current user session
-            const session = localStorage.getItem('hubSession');
-            const currentUser = session ? JSON.parse(session) : null;
-            
-            // Determine role options based on current user's role
+            // Resolve current user's role via Supabase first, fallback to hub state
+            let currentRole = 'viewer';
+            try {
+                if (window.supabaseClient && typeof window.supabaseClient.auth.getUser === 'function') {
+                    const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                    if (me && me.id) {
+                        const { data: prof } = await window.supabaseClient
+                            .from('profiles')
+                            .select('role')
+                            .eq('id', me.id)
+                            .single();
+                        if (prof && prof.role) currentRole = String(prof.role).toLowerCase();
+                    }
+                }
+            } catch (_) {}
+            if (!currentRole || currentRole === 'viewer') {
+                try { currentRole = String(window.informationHub?.currentUser?.role || '').toLowerCase() || currentRole; } catch(_) {}
+            }
+            if (!currentRole || currentRole === 'viewer') {
+                try { const sess = JSON.parse(localStorage.getItem('hubSession') || 'null'); if (sess && sess.role) currentRole = String(sess.role).toLowerCase(); } catch(_) {}
+            }
+
+            // Determine role options based on current role
             let roleOptions = '';
-            if (currentUser && currentUser.role === 'admin') {
-                // Admin can change to any role
+            if (currentRole === 'admin') {
                 roleOptions = `
                     <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
                     <option value="editor" ${user.role === 'editor' ? 'selected' : ''}>Editor</option>
                     <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
                 `;
             } else {
-                // Non-admins cannot change roles - show current role as readonly
                 roleOptions = `
                     <option value="${user.role}" selected>${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</option>
                 `;
@@ -2979,10 +3003,10 @@ Permissions:
                                 </div>
                                 <div class="form-group">
                                     <label for="editUserRole">Role</label>
-                                    <select id="editUserRole" ${currentUser && currentUser.role !== 'admin' ? 'disabled' : ''}>
+                                    <select id="editUserRole" ${currentRole === 'admin' ? '' : 'disabled'}>
                                         ${roleOptions}
                                     </select>
-                                    ${currentUser && currentUser.role !== 'admin' ? '<small style="color: #666;">Only admins can change roles</small>' : ''}
+                                    ${currentRole === 'admin' ? '' : '<small style="color: #666;">Only admins can change roles</small>'}
                                 </div>
                                 <div class="form-group" style="display:flex;align-items:center;gap:8px;">
                                     <input type="checkbox" id="editUserDisabled" ${(user.permissions && user.permissions.disabled) ? 'checked' : ''}>

@@ -1100,14 +1100,27 @@ class SectionManager {
     }
 
     async saveSectionConfig(cfg) {
+        this.sectionConfig = cfg;
+        // Primary: use DB wrapper; Fallback: direct Supabase upsert
         try {
-            this.sectionConfig = cfg;
-            if (!window.supabaseClient) return;
-            const payload = { section_id: this.currentSection, config: cfg };
-            const { error } = await window.supabaseClient.from('sections').upsert(payload, { onConflict: 'section_id' });
-            if (error) throw error;
+            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
+                await hubDatabase.saveSectionConfig(this.currentSection, cfg);
+            } else {
+                if (!window.supabaseClient) throw new Error('Supabase unavailable');
+                const payload = { section_id: this.currentSection, config: cfg };
+                const { error } = await window.supabaseClient
+                    .from('sections')
+                    .upsert(payload, { onConflict: 'section_id' });
+                if (error) throw error;
+            }
+            // Write a fast local cache so hub can reflect immediately if DB is slow
+            try { localStorage.setItem(`section_config_${this.currentSection}`, JSON.stringify(cfg)); } catch(_) {}
             this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
-        } catch (_) {}
+            return true;
+        } catch (e) {
+            try { this.showMessage('Failed to save section config', 'error'); } catch(_) {}
+            return false;
+        }
     }
 
     async _refreshSectionConfigFromDb() {
@@ -1359,7 +1372,7 @@ class SectionManager {
             showAlert('Added a new type row', 'info');
         });
 
-        modal.querySelector('#saveCfgBtn').addEventListener('click', () => {
+        modal.querySelector('#saveCfgBtn').addEventListener('click', async () => {
             // Collect
             const rows = Array.from(typeList.querySelectorAll('.type-row'));
             const types = rows.map(r => ({
@@ -1385,15 +1398,12 @@ class SectionManager {
             const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
             const validTypes = types.map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon }));
             const cfgNew = { types: validTypes, categories };
-            try {
-                this.saveSectionConfig(cfgNew);
-                this.renderDynamicUI();
-                this.renderCurrentTab();
-                this.showMessage('Section customized', 'success');
-                modal.remove();
-            } catch (e) {
-                showAlert('Failed to save configuration', 'error');
-            }
+            const ok = await this.saveSectionConfig(cfgNew);
+            if (!ok) { showAlert('Failed to save configuration', 'error'); return; }
+            this.renderDynamicUI();
+            this.renderCurrentTab();
+            this.showMessage('Section customized', 'success');
+            modal.remove();
         });
     }
 
