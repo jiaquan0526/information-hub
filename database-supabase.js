@@ -82,13 +82,16 @@ class HubDatabase {
 
     async getAllUsers() {
         try {
-            const { data, error } = await this.supabase
-                .from('profiles')
-                .select('*')
-                .order('username', { ascending: true });
-            
-            if (error) throw error;
-            return data || [];
+            // Prefer username, fallback to name, then no ordering
+            let resp = await this.supabase.from('profiles').select('*').order('username', { ascending: true });
+            if (resp.error) {
+                resp = await this.supabase.from('profiles').select('*').order('name', { ascending: true });
+            }
+            if (resp.error) {
+                resp = await this.supabase.from('profiles').select('*');
+            }
+            if (resp.error) throw resp.error;
+            return resp.data || [];
         } catch (error) {
             console.error('Error getting all users:', error);
             return [];
@@ -171,13 +174,16 @@ class HubDatabase {
 
     async getAllSections() {
         try {
-            const { data, error } = await this.supabase
-                .from('sections')
-                .select('*')
-                .order('name', { ascending: true });
-            
-            if (error) throw error;
-            return data || [];
+            // Prefer name, fallback to section_id, then no ordering
+            let resp = await this.supabase.from('sections').select('*').order('name', { ascending: true });
+            if (resp.error) {
+                resp = await this.supabase.from('sections').select('*').order('section_id', { ascending: true });
+            }
+            if (resp.error) {
+                resp = await this.supabase.from('sections').select('*');
+            }
+            if (resp.error) throw resp.error;
+            return resp.data || [];
         } catch (error) {
             console.error('Error getting all sections:', error);
             return [];
@@ -321,14 +327,17 @@ class HubDatabase {
 
     async getResourcesBySection(sectionId) {
         try {
-            const { data, error } = await this.supabase
-                .from('resources')
-                .select('*')
-                .eq('section_id', sectionId)
-                .order('title', { ascending: true });
-            
-            if (error) throw error;
-            return data || [];
+            // Prefer created_at desc, fallback to title asc, then no ordering
+            let query = this.supabase.from('resources').select('*').eq('section_id', sectionId);
+            let resp = await query.order('created_at', { ascending: false });
+            if (resp.error) {
+                resp = await query.order('title', { ascending: true });
+            }
+            if (resp.error) {
+                resp = await this.supabase.from('resources').select('*').eq('section_id', sectionId);
+            }
+            if (resp.error) throw resp.error;
+            return resp.data || [];
         } catch (error) {
             console.error('Error getting resources by section:', error);
             return [];
@@ -337,15 +346,17 @@ class HubDatabase {
 
     async getResourcesByType(sectionId, type) {
         try {
-            const { data, error } = await this.supabase
-                .from('resources')
-                .select('*')
-                .eq('section_id', sectionId)
-                .eq('type', type)
-                .order('title', { ascending: true });
-            
-            if (error) throw error;
-            return data || [];
+            // Prefer created_at desc, fallback to title asc, then no ordering
+            let base = this.supabase.from('resources').select('*').eq('section_id', sectionId).eq('type', type);
+            let resp = await base.order('created_at', { ascending: false });
+            if (resp.error) {
+                resp = await base.order('title', { ascending: true });
+            }
+            if (resp.error) {
+                resp = await this.supabase.from('resources').select('*').eq('section_id', sectionId).eq('type', type);
+            }
+            if (resp.error) throw resp.error;
+            return resp.data || [];
         } catch (error) {
             console.error('Error getting resources by type:', error);
             return [];
@@ -369,13 +380,16 @@ class HubDatabase {
 
     async getAllResources() {
         try {
-            const { data, error } = await this.supabase
-                .from('resources')
-                .select('*')
-                .order('title', { ascending: true });
-            
-            if (error) throw error;
-            return data || [];
+            // Prefer created_at desc, fallback to title asc, then no ordering
+            let resp = await this.supabase.from('resources').select('*').order('created_at', { ascending: false });
+            if (resp.error) {
+                resp = await this.supabase.from('resources').select('*').order('title', { ascending: true });
+            }
+            if (resp.error) {
+                resp = await this.supabase.from('resources').select('*');
+            }
+            if (resp.error) throw resp.error;
+            return resp.data || [];
         } catch (error) {
             console.error('Error getting all resources:', error);
             return [];
