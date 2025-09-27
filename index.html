@@ -334,6 +334,9 @@
                     <div class="admin-tab" onclick="switchAdminTab('export')">
                         <i class="fas fa-download"></i> Export Data
                     </div>
+                    <div class="admin-tab" onclick="switchAdminTab('diagnostics')">
+                        <i class="fas fa-stethoscope"></i> Diagnostics
+                    </div>
                 </div>
 
                 <div class="admin-view-controls" style="display:flex;align-items:center;gap:12px;justify-content:flex-end;margin:8px 0 4px;">
@@ -428,6 +431,16 @@
                         <div id="auditLog" class="audit-log"></div>
                     </div>
                     
+                    <div id="diagnostics-tab" class="admin-tab-content">
+                        <div class="admin-section-header">
+                            <h3>Admin Diagnostics</h3>
+                            <button class="btn btn-primary" onclick="runAdminDiagnostics()">
+                                <i class="fas fa-play"></i> Run Checks
+                            </button>
+                        </div>
+                        <div id="diagnosticsOutput" class="diagnostics-output" style="padding:10px;border:1px solid #eee;border-radius:8px;background:#fafafa;min-height:60px;"></div>
+                    </div>
+
                     <div id="sections-tab" class="admin-tab-content">
                         <div class="admin-section-header">
                             <h3>Section Management</h3>
@@ -1703,6 +1716,8 @@
                 const manageSectionsContent = document.getElementById('sections-tab');
                 const exportNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('export')\"]");
                 const exportContent = document.getElementById('export-tab');
+                const diagNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('diagnostics')\"]");
+                const diagContent = document.getElementById('diagnostics-tab');
 
                 setTimeout(() => { try {
                     // Admin-only tabs
@@ -1717,6 +1732,8 @@
                     if (assignmentsContent) assignmentsContent.style.display = showAdminOnly;
                     if (exportNavTab) exportNavTab.style.display = showAdminOnly;
                     if (exportContent) exportContent.style.display = showAdminOnly;
+                    if (diagNavTab) diagNavTab.style.display = showAdminOnly;
+                    if (diagContent) diagContent.style.display = showAdminOnly;
 
                     // Sections tab for admins and editors/managers
                     const showSections = (isAdmin || isEditor) ? '' : 'none';
@@ -1773,6 +1790,7 @@
                             if (tabId === 'users' && typeof loadUsersList === 'function') loadUsersList();
                             if (tabId === 'permissions' && typeof loadPermissionUserList === 'function') loadPermissionUserList();
                             if (tabId === 'audit' && typeof loadAuditLog === 'function') loadAuditLog();
+                            if (tabId === 'assignments' && typeof loadSectionAssignments === 'function') loadSectionAssignments();
                             if (tabId === 'sections') {
                                 // If DB not ready yet, load once ready
                                 const ensureSections = async () => {
@@ -1792,6 +1810,60 @@
                 }
             };
         }
+
+        // Admin diagnostics runner
+        window.runAdminDiagnostics = async function() {
+            const out = document.getElementById('diagnosticsOutput');
+            const log = (msg) => { if (out) out.innerHTML += `<div>${msg}</div>`; };
+            if (out) out.innerHTML = '';
+            try {
+                log('<b>1) Supabase client</b>');
+                if (!window.supabaseClient) { log('❌ Not initialized'); return; } else { log('✅ Initialized'); }
+
+                log('<b>2) Auth user</b>');
+                const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                if (!me) { log('❌ Not authenticated'); return; } else { log(`✅ ${me.email || me.id}`); }
+
+                log('<b>3) Profile (role/permissions)</b>');
+                const { data: myProfile } = await window.supabaseClient
+                    .from('profiles')
+                    .select('id, role, permissions')
+                    .eq('id', me.id)
+                    .single();
+                if (!myProfile) { log('❌ Profile not found'); return; } else { log(`✅ Role: ${myProfile.role}`); }
+
+                log('<b>4) Sections read</b>');
+                const { data: secs, error: sErr } = await window.supabaseClient
+                    .from('sections')
+                    .select('section_id, name, config')
+                    .order('name', { ascending: true });
+                if (sErr) { log('❌ ' + sErr.message); } else { log('✅ ' + (secs?.length || 0) + ' rows'); }
+
+                log('<b>5) No-op profile update (self)</b>');
+                const { error: uErr } = await window.supabaseClient
+                    .from('profiles')
+                    .update({ permissions: myProfile.permissions || {} })
+                    .eq('id', me.id);
+                if (uErr) { log('❌ ' + uErr.message); } else { log('✅ OK'); }
+
+                log('<b>6) Temp section create/delete</b>');
+                const tempId = 'diag-' + Math.random().toString(36).slice(2, 8);
+                const { error: cErr } = await window.supabaseClient
+                    .from('sections')
+                    .insert({ section_id: tempId, name: 'Diagnostics Temp', icon: 'fas fa-cube', config: { visible: false, order: 999 } });
+                if (cErr) { log('⚠️ Create failed: ' + cErr.message); }
+                const { error: dErr } = await window.supabaseClient
+                    .from('sections')
+                    .delete()
+                    .eq('section_id', tempId);
+                if (dErr) { log('⚠️ Delete failed: ' + dErr.message); }
+                if (!cErr && !dErr) log('✅ Create/Delete');
+
+                log('<b>Done.</b>');
+            } catch (e) {
+                log('❌ Exception: ' + (e?.message || e));
+            }
+        };
         
         window.exportAllData = async function() {
             if (window.excelExporter && excelExporter.exportToExcel) {
@@ -2101,24 +2173,39 @@ Permissions:
         window.openAddUserModal = async function() {
             try {
                 // Get current user from Supabase
-                const { data: { user }, error } = await supabase.auth.getUser();
+                const { data: { user }, error } = await (window.supabaseClient ? window.supabaseClient.auth.getUser() : { data: { user: null }, error: new Error('No client') });
                 if (error || !user) {
                     alert('Please log in to add users.');
                     return;
                 }
                 
                 // Get full user profile to check role
-                const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
-                    .from('users')
-                    .select('*')
+                const { data: profile, error: profileError } = await window.supabaseClient
+                    .from('profiles')
+                    .select('id, role, permissions')
                     .eq('id', user.id)
                     .single();
                 
-                if (profileError || !profile || (profile.role !== 'admin' && profile.permissions?.canManageUsers !== true)) {
+                if (profileError || !profile || (String(profile.role||'').toLowerCase() !== 'admin' && profile.permissions?.canManageUsers !== true)) {
                     return alert('Only administrators or permitted editors can add users.');
                 }
                 const modal = document.getElementById('addUserModal');
-                if (modal) modal.style.display = 'block';
+                if (modal) {
+                    // Re-layout form for clarity
+                    const body = modal.querySelector('.modal-body');
+                    if (body) {
+                        body.style.display = 'block';
+                    }
+                    const form = modal.querySelector('#addUserForm');
+                    if (form) {
+                        form.style.display = 'grid';
+                        form.style.gridTemplateColumns = '1fr 1fr';
+                        form.style.gap = '10px 16px';
+                        const actions = form.querySelector('.form-actions');
+                        if (actions) { actions.style.gridColumn = '1 / -1'; }
+                    }
+                    modal.style.display = 'block';
+                }
             } catch (e) { alert('Unable to open Add User form: ' + e.message); }
         };
 
@@ -2131,8 +2218,8 @@ Permissions:
                 const name = (document.getElementById('newName')?.value || '').trim();
                 const email = (document.getElementById('newEmail')?.value || '').trim();
                 const role = (document.getElementById('newRole')?.value || 'user').toLowerCase();
-                if (!username || !password || !role) {
-                    alert('Please fill in username, password, and role.');
+                if (!email || !password || !role) {
+                    alert('Please fill in email, password, and role.');
                     return false;
                 }
                 const defaults = {
@@ -2140,26 +2227,45 @@ Permissions:
                     editor: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: [], editableSections: [] },
                     user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: [], editableSections: [] }
                 };
-                const newUser = {
-                    id: Date.now(),
-                    username,
-                    password,
-                    name: name || username,
-                    email: email || '',
+                if (!window.supabaseClient) { alert('Supabase not initialized'); return false; }
+
+                // If a profile with this email already exists, just update role/permissions
+                const { data: existingProfiles } = await window.supabaseClient
+                    .from('profiles')
+                    .select('id, email, username')
+                    .eq('email', email)
+                    .limit(1);
+                let targetUserId = existingProfiles && existingProfiles[0] ? existingProfiles[0].id : null;
+
+                // If not existing, create auth user via signUp (may require email confirmation settings)
+                if (!targetUserId) {
+                    const { data: signUpData, error: signUpErr } = await window.supabaseClient.auth.signUp({
+                        email,
+                        password,
+                        options: { data: { username: username || email.split('@')[0], name } }
+                    });
+                    if (signUpErr) { alert('Sign up failed: ' + signUpErr.message); return false; }
+                    targetUserId = signUpData?.user?.id || null;
+                    if (!targetUserId) {
+                        alert('Sign up created user without id. Check email confirmation settings.');
+                        return false;
+                    }
+                }
+
+                // Upsert profile with role and permissions
+                const profilePayload = {
+                    id: targetUserId,
+                    username: username || email.split('@')[0],
                     role,
-                    permissions: defaults[role] || defaults.user,
-                    createdAt: new Date().toISOString()
+                    name: name || username || email.split('@')[0],
+                    email,
+                    permissions: defaults[role] || defaults.user
                 };
-                const users = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllUsers() : [];
-                if (users.some(u => (u.username || '').toLowerCase() === username.toLowerCase())) {
-                    alert('Username already exists.');
-                    return false;
-                }
-                users.push(newUser);
-                // Save to Supabase database
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    await hubDatabase.saveUser(newUser);
-                }
+                const { error: upsertErr } = await window.supabaseClient
+                    .from('profiles')
+                    .upsert(profilePayload, { onConflict: 'id' });
+                if (upsertErr) { alert('Profile save failed: ' + upsertErr.message); return false; }
+
                 try { if (typeof loadUsersList === 'function') loadUsersList(); } catch(_){}
                 const modal = document.getElementById('addUserModal');
                 if (modal) modal.style.display = 'none';
@@ -2849,33 +2955,54 @@ Permissions:
                 <div id="editUserModal" class="modal" style="display: block;">
                     <div class="modal-content edit-user-modal">
                         <div class="modal-header">
-                            <h2>Edit User: ${user.name}</h2>
+                            <h2 style="display:flex;align-items:center;gap:10px;">
+                                Edit User
+                                <span class="role-badge" style="font-size:12px;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3f51b5;border:1px solid #dce1ff;">${(user.role||'user').toUpperCase()}</span>
+                                <span style="font-size:12px;color:#666;">${user.email || ''}</span>
+                            </h2>
                             <span class="close" onclick="closeModal('editUserModal')">&times;</span>
                         </div>
-                        <div class="modal-body edit-user-body">
-                            <div class="user-basic-info">
+                        <div class="modal-body edit-user-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:flex-start;">
+                            <div class="user-basic-info" style="display:flex;flex-direction:column;gap:10px;">
                                 <div class="form-group">
-                                    <label for="editUserName">Username:</label>
+                                    <label for="editUserName">Username</label>
                                     <input type="text" id="editUserName" value="${user.username}" readonly>
                                 </div>
                                 <div class="form-group">
-                                    <label for="editUserFullName">Full Name:</label>
-                                    <input type="text" id="editUserFullName" value="${user.name}">
+                                    <label for="editUserFullName">Full Name</label>
+                                    <input type="text" id="editUserFullName" value="${user.name || ''}">
                                 </div>
                                 <div class="form-group">
-                                    <label for="editUserEmail">Email:</label>
-                                    <input type="email" id="editUserEmail" value="${user.email}">
+                                    <label for="editUserEmail">Email</label>
+                                    <input type="email" id="editUserEmail" value="${user.email || ''}">
                                 </div>
                                 <div class="form-group">
-                                    <label for="editUserRole">Role:</label>
+                                    <label for="editUserRole">Role</label>
                                     <select id="editUserRole" ${currentUser && currentUser.role === 'manager' ? 'disabled' : ''}>
                                         ${roleOptions}
                                     </select>
                                     ${currentUser && currentUser.role === 'manager' ? '<small style="color: #666;">Managers cannot change user roles</small>' : ''}
                                 </div>
+                                <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                                    <input type="checkbox" id="editUserDisabled" ${(user.permissions && user.permissions.disabled) ? 'checked' : ''}>
+                                    <label for="editUserDisabled">Deactivated (prevent login)</label>
+                                </div>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+                                    <button class="btn btn-secondary" type="button" onclick="sendPasswordReset('${user.email || ''}')"><i class="fas fa-envelope"></i> Send Password Reset</button>
+                                    <button class="btn btn-secondary" type="button" onclick="document.getElementById('editUserDisabled').checked = !document.getElementById('editUserDisabled').checked"><i class="fas fa-user-slash"></i> Toggle Deactivate</button>
+                                </div>
                             </div>
-                            <div class="section-permissions-container">
-                                <h3>Section Access Permissions</h3>
+                            <div class="section-permissions-container" style="display:flex;flex-direction:column;gap:10px;">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                    <h3 style="margin:0;">Section Permissions</h3>
+                                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                        <button class="btn btn-sm btn-secondary" type="button" onclick="toggleAllAccess(true)">Access: All</button>
+                                        <button class="btn btn-sm btn-secondary" type="button" onclick="toggleAllAccess(false)">Access: None</button>
+                                        <button class="btn btn-sm btn-secondary" type="button" onclick="toggleAllEdit(true)">Edit: All</button>
+                                        <button class="btn btn-sm btn-secondary" type="button" onclick="toggleAllEdit(false)">Edit: None</button>
+                                    </div>
+                                </div>
+                                <div id="selectedSectionChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
                                 <div class="section-checkboxes" id="editUserSectionCheckboxes">
                                     <!-- Sections will be loaded here -->
                                 </div>
@@ -2902,15 +3029,28 @@ Permissions:
                     sectionCheckboxes.innerHTML = sections.map(section => {
                         const hasAccess = user.permissions && user.permissions.sections && user.permissions.sections.includes(section);
                         return `
-                            <label class="section-checkbox">
-                                <input type="checkbox" 
-                                       value="${section}" 
+                            <label class=\"section-checkbox\">
+                                <input type=\"checkbox\" 
+                                       value=\"${section}\" 
                                        ${hasAccess ? 'checked' : ''}
-                                       id="editSection-${section}">
+                                       id=\"editSection-${section}\">
                                 <span>${sectionNames[section] || section}</span>
                             </label>
                         `;
                     }).join('');
+                    // Render chips for selected
+                    const chipBox = document.getElementById('selectedSectionChips');
+                    if (chipBox) {
+                        const renderChips = () => {
+                            const nowSelected = sections.filter(x => document.getElementById(`editSection-${x}`)?.checked);
+                            chipBox.innerHTML = nowSelected.map(x => `<span style=\"display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #ddd;border-radius:999px;background:#fff;\">${sectionNames[x]||x}<button type=\"button\" onclick=\"(function(){const cb=document.getElementById('editSection-${x}');if(cb){cb.checked=false;}document.querySelector('#editUserModal .btn.btn-primary').scrollIntoView({behavior:'smooth',block:'nearest'});})()\" style=\"border:none;background:transparent;color:#888;cursor:pointer\">×</button></span>`).join('');
+                        };
+                        renderChips();
+                        sections.forEach(s => {
+                            const cb = document.getElementById(`editSection-${s}`);
+                            if (cb) cb.addEventListener('change', renderChips);
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Error loading sections for edit modal:', error);
@@ -2982,6 +3122,14 @@ Permissions:
             users[userIndex].email = email;
             users[userIndex].role = role;
             users[userIndex].updatedAt = new Date().toISOString();
+            // Deactivate flag
+            try {
+                const deact = document.getElementById('editUserDisabled');
+                if (deact) {
+                    users[userIndex].permissions = users[userIndex].permissions || {};
+                    users[userIndex].permissions.disabled = !!deact.checked;
+                }
+            } catch(_) {}
             
             // Update permissions
             if (!users[userIndex].permissions) {
@@ -3001,8 +3149,25 @@ Permissions:
             // Save updated user to Supabase
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    await hubDatabase.updateUser(users[userIndex]);
-                    console.log('User updated in Supabase:', users[userIndex]);
+                    try {
+                        await hubDatabase.updateUser(users[userIndex]);
+                        console.log('User updated in Supabase (wrapper):', users[userIndex]);
+                    } catch (wrapperErr) {
+                        console.warn('Wrapper update failed, trying direct profile update', wrapperErr);
+                        if (!window.supabaseClient) throw wrapperErr;
+                        const { error: upErr } = await window.supabaseClient
+                            .from('profiles')
+                            .update({
+                                username: users[userIndex].username,
+                                role: users[userIndex].role,
+                                name: users[userIndex].name,
+                                email: users[userIndex].email,
+                                permissions: users[userIndex].permissions
+                            })
+                            .eq('id', userId);
+                        if (upErr) throw upErr;
+                        console.log('User updated via direct Supabase');
+                    }
                     
                     // Update local storage for consistency
                     // Save to Supabase database - users are automatically saved when modified
@@ -3071,10 +3236,20 @@ Permissions:
                 return;
             }
             
-            if (confirm('Are you sure you want to delete this user?')) {
+            if (confirm('Are you sure you want to delete this user? This removes their profile (not auth account).')) {
                 // Delete user from Supabase database
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    await hubDatabase.deleteUser(userId);
+                    try {
+                        await hubDatabase.deleteUser(userId);
+                    } catch (wrapperErr) {
+                        console.warn('Wrapper delete failed, trying direct Supabase delete', wrapperErr);
+                        if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+                        const { error: delErr } = await window.supabaseClient
+                            .from('profiles')
+                            .delete()
+                            .eq('id', userId);
+                        if (delErr) { alert('Delete failed: ' + delErr.message); return; }
+                    }
                 } else {
                     alert('Database unavailable – cannot delete.');
                     return;
