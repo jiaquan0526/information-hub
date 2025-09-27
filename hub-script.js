@@ -1004,10 +1004,14 @@ window.editUser = async (userId) => {
             .eq('id', userId)
             .single();
         if (error) { alert('Failed to load user'); return; }
+        // Prefer in-app panel/modal if available
+        if (typeof window.showEditUserModal === 'function') {
+            return window.showEditUserModal(prof);
+        }
+        // Fallback to prompts (admin/editor/viewer only)
         const name = prompt('Full name:', prof.name || '') ?? (prof.name || '');
         const roleInput = prompt('Role (admin/editor/viewer):', prof.role || 'viewer') || prof.role || 'viewer';
         const role = ['admin','editor','viewer'].includes(roleInput) ? roleInput : (prof.role || 'viewer');
-        // Keep existing permissions; optional tweak for disabled flag
         const perms = prof.permissions || {};
         if (perms.disabled === true) {
             if (confirm('User is disabled. Re-enable this user?')) { delete perms.disabled; }
