@@ -1027,11 +1027,11 @@
         // Admin: Get current user from Supabase
         async function currentUser() {
             try {
-                const { data: { user }, error } = await supabase.auth.getUser();
+                const { data: { user }, error } = await (window.supabaseClient ? window.supabaseClient.auth.getUser() : { data: { user: null }, error: new Error('No client') });
                 if (error || !user) return null;
                 
                 // Get full user profile from database
-                const { data: profile, error: profileError } = await supabase
+                const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
                     .from('users')
                     .select('*')
                     .eq('id', user.id)
@@ -1211,7 +1211,7 @@
         window.recordContentActivity = async function({ action, section, type, title }) {
             try {
                 // Get current user from Supabase
-                const { data: { user }, error } = await supabase.auth.getUser();
+                const { data: { user }, error } = await (window.supabaseClient ? window.supabaseClient.auth.getUser() : { data: { user: null }, error: new Error('No client') });
                 const username = user?.user_metadata?.username || user?.email || 'Unknown';
                 
                 const entry = {
@@ -1654,11 +1654,11 @@
                 } catch (e) { console.warn('Profile fetch failed', e); }
 
                 const isAdmin = String(role||'').toLowerCase() === 'admin';
-                const isManager = String(role||'').toLowerCase() === 'manager';
-                const canManageUsers = isAdmin || isManager || permissions.canManageUsers === true;
-                const canManageSections = isAdmin || isManager || permissions.canEditAllSections === true;
+                const isEditor = String(role||'').toLowerCase() === 'editor';
+                const canManageUsers = isAdmin || permissions.canManageUsers === true;
+                const canManageSections = isAdmin || permissions.canEditAllSections === true || (Array.isArray(permissions.editableSections) && permissions.editableSections.length > 0);
                 if (!(canManageUsers || canManageSections)) {
-                    alert('Only administrators and managers can access the admin panel.');
+                    alert('Only administrators or editors with permissions can access the admin panel.');
                     return;
                 }
 
@@ -1686,10 +1686,10 @@
                 const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                 const manageSectionsContent = document.getElementById('sections-tab');
                 setTimeout(() => { try {
-                    // Users tab
+                    // Users tab (admin only or explicit permission)
                     if (assignmentsNavTab) assignmentsNavTab.style.display = canManageUsers ? '' : 'none';
                     if (assignmentsContent) assignmentsContent.style.display = canManageUsers ? '' : 'none';
-                    // Sections tab
+                    // Sections tab (admin, or editors with editableSections)
                     if (manageSectionsNavTab) manageSectionsNavTab.style.display = canManageSections ? '' : 'none';
                     if (manageSectionsContent) manageSectionsContent.style.display = canManageSections ? '' : 'none';
                     // Preload sections list when allowed
@@ -2029,14 +2029,14 @@ Permissions:
                 }
                 
                 // Get full user profile to check role
-                const { data: profile, error: profileError } = await supabase
+                const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
                     .from('users')
                     .select('*')
                     .eq('id', user.id)
                     .single();
                 
-                if (profileError || !profile || (profile.role !== 'admin' && profile.role !== 'manager')) {
-                    return alert('Only administrators and managers can add users.');
+                if (profileError || !profile || (profile.role !== 'admin' && profile.permissions?.canManageUsers !== true)) {
+                    return alert('Only administrators or permitted editors can add users.');
                 }
                 const modal = document.getElementById('addUserModal');
                 if (modal) modal.style.display = 'block';
@@ -2057,9 +2057,9 @@ Permissions:
                     return false;
                 }
                 const defaults = {
-                    admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
-                    manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'] },
-                    user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'] }
+                    admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
+                    editor: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: [], editableSections: [] },
+                    user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: [], editableSections: [] }
                 };
                 const newUser = {
                     id: Date.now(),
@@ -2094,7 +2094,7 @@ Permissions:
         
         // Role hierarchy management functions
         window.canManageUser = function(currentUser, targetUser) {
-            // Admin can manage everyone (managers and users)
+            // Admin can manage everyone
             if (currentUser.role === 'admin') {
                 return true;
             }
@@ -2104,13 +2104,8 @@ Permissions:
                 return false;
             }
             
-            // Managers can only manage users (not other managers or admins)
-            if (currentUser.role === 'manager' && targetUser.role === 'user') {
-                return true;
-            }
-            
-            // Managers cannot manage other managers or admins
-            if (currentUser.role === 'manager' && (targetUser.role === 'manager' || targetUser.role === 'admin')) {
+            // Editors cannot manage roles; only admins manage users
+            if (currentUser.role === 'editor') {
                 return false;
             }
             
@@ -2128,9 +2123,9 @@ Permissions:
                 return false;
             }
             
-            // Managers can only change user roles to user role (no role changes)
-            if (currentUser.role === 'manager') {
-                return false; // Managers cannot change roles at all
+            // Editors cannot change roles at all
+            if (currentUser.role === 'editor') {
+                return false;
             }
             
             return false;
@@ -2182,14 +2177,14 @@ Permissions:
                 console.log('Admin button found:', !!adminBtn);
                 console.log('User role:', user.role);
                 
-                if (user.role === 'admin' || user.role === 'manager') {
+                if (user.role === 'admin' || user.role === 'editor') {
                     // Show admin panel button for admins and managers
                     if (adminBtn) {
                         adminBtn.style.display = 'inline-flex';
                         if (user.role === 'admin') {
                             adminBtn.style.background = '#4CAF50';
                         } else {
-                            adminBtn.style.background = '#ff9800'; // Orange for managers
+                            adminBtn.style.background = '#ff9800'; // Orange for editors
                         }
                         console.log('Admin button should now be visible for', user.role);
                     }
@@ -2201,7 +2196,7 @@ Permissions:
                             console.log('Admin quick access shown for admin');
                         } else {
                             adminQuickAccess.style.display = 'none';
-                            console.log('Admin quick access hidden for manager');
+                            console.log('Admin quick access hidden for editor');
                         }
                     }
                     
@@ -2216,8 +2211,8 @@ Permissions:
                     const assignmentsContent = document.getElementById('assignments-tab');
                     const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                     const manageSectionsContent = document.getElementById('sections-tab');
-                    if (user.role === 'manager') {
-                        // Managers: hide Assignments, allow Manage Sections
+                    if (user.role === 'editor') {
+                        // Editors: hide Assignments, allow Manage Sections if permitted
                         if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
                         if (assignmentsContent) assignmentsContent.style.display = 'none';
                         if (manageSectionsNavTab) manageSectionsNavTab.style.display = '';
