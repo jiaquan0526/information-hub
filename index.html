@@ -1653,8 +1653,9 @@
                     }
                 } catch (e) { console.warn('Profile fetch failed', e); }
 
-                const isAdmin = String(role||'').toLowerCase() === 'admin';
-                const isEditor = String(role||'').toLowerCase() === 'editor';
+                const roleLower = String(role||'').toLowerCase();
+                const isAdmin = roleLower === 'admin';
+                const isEditor = roleLower === 'editor' || roleLower === 'manager'; // backward-compatible
                 const canManageUsers = isAdmin || permissions.canManageUsers === true;
                 const canManageSections = isAdmin || permissions.canEditAllSections === true || (Array.isArray(permissions.editableSections) && permissions.editableSections.length > 0);
                 if (!(canManageUsers || canManageSections)) {
@@ -2211,7 +2212,7 @@ Permissions:
                     const assignmentsContent = document.getElementById('assignments-tab');
                     const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                     const manageSectionsContent = document.getElementById('sections-tab');
-                    if (user.role === 'editor') {
+                    if (String(user.role||'').toLowerCase() === 'editor' || String(user.role||'').toLowerCase() === 'manager') {
                         // Editors: hide Assignments, allow Manage Sections if permitted
                         if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
                         if (assignmentsContent) assignmentsContent.style.display = 'none';
@@ -4313,6 +4314,17 @@ Permissions:
                 if (window.hubDatabase && window.hubDatabaseReady) {
                     users = await hubDatabase.getAllUsers();
                     allSections = await hubDatabase.getAllSections();
+                    // Fallback: query Supabase directly if wrapper returned no rows
+                    if ((!allSections || allSections.length === 0) && window.supabaseClient) {
+                        try {
+                            const { data: directSections } = await window.supabaseClient
+                                .from('sections')
+                                .select('section_id, name, icon')
+                                .order('name', { ascending: true });
+                            allSections = Array.isArray(directSections) ? directSections : [];
+                            console.log('Fallback loaded sections directly:', allSections.length);
+                        } catch (_) {}
+                    }
                     console.log('Loaded users from Supabase:', users);
                     console.log('Loaded sections from Supabase:', allSections);
                 } else {
@@ -4326,6 +4338,13 @@ Permissions:
                 return;
             }
             
+            // Defensive defaults
+            users = Array.isArray(users) ? users : [];
+            allSections = Array.isArray(allSections) ? allSections : [];
+            if (allSections.length === 0) {
+                assignmentsList.innerHTML = '<div class="empty">No sections found. Create sections first in Manage Sections.</div>';
+                return;
+            }
             assignmentsList.innerHTML = users.map(user => {
                 const userSections = user.permissions && user.permissions.sections ? user.permissions.sections : [];
                 
