@@ -4330,7 +4330,7 @@ Permissions:
                 const userSections = user.permissions && user.permissions.sections ? user.permissions.sections : [];
                 
                 return `
-                    <div class="assignment-card">
+                    <div class="assignment-card" data-user-id="${user.id}">
                         <div class="user-info">
                             <h4>${user.name} (${user.username})</h4>
                             <span class="user-role">${user.role}</span>
@@ -4368,6 +4368,19 @@ Permissions:
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
             
             if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+            // Enforce that only admins or users with canManageUsers can change others
+            try {
+                const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                if (!me) return alert('Not authenticated');
+                const { data: myProfile } = await window.supabaseClient
+                    .from('profiles')
+                    .select('role, permissions')
+                    .eq('id', me.id)
+                    .single();
+                const myRole = String(myProfile?.role || '').toLowerCase();
+                const canManageUsers = myRole === 'admin' || !!myProfile?.permissions?.canManageUsers;
+                if (!canManageUsers) return alert('You do not have permission to modify section assignments');
+            } catch (_) { /* fail closed handled above */ }
             // Get user from database (profiles)
             const { data: user, error: userError } = await window.supabaseClient
                 .from('profiles')
@@ -4423,8 +4436,9 @@ Permissions:
         window.selectAllSections = async function(userId) {
             const list = await (async () => { try { return window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : []; } catch(_) { return []; } })();
             const allSections = list.map(s => s.section_id);
+            const card = document.querySelector(`.assignment-card[data-user-id="${userId}"]`);
             for (const sectionId of allSections) {
-                const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
+                const checkbox = card ? card.querySelector(`input[type="checkbox"][value="${sectionId}"]`) : document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
                 if (checkbox && !checkbox.checked) {
                     checkbox.checked = true;
                     await updateUserSectionAccess(userId, sectionId, true);
@@ -4436,8 +4450,9 @@ Permissions:
         window.clearAllSections = async function(userId) {
             const list = await (async () => { try { return window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : []; } catch(_) { return []; } })();
             const allSections = list.map(s => s.section_id);
+            const card = document.querySelector(`.assignment-card[data-user-id="${userId}"]`);
             for (const sectionId of allSections) {
-                const checkbox = document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
+                const checkbox = card ? card.querySelector(`input[type="checkbox"][value="${sectionId}"]`) : document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
                 if (checkbox && checkbox.checked) {
                     checkbox.checked = false;
                     await updateUserSectionAccess(userId, sectionId, false);
