@@ -2530,61 +2530,51 @@ Permissions:
             }
         };
         
-        window.saveUserPermissions = async function() {
-            if (!currentEditingUser) return;
-            
-		// Save against all sections shown in the form (not role-filtered)
-		const sections = await getAllAvailableSections();
-            const newSections = [];
-            const newEditableSections = [];
-            
-            sections.forEach(section => {
-                const sectionCheckbox = document.getElementById(`section-${section}`);
-                const editCheckbox = document.getElementById(`edit-${section}`);
-                
-                if (sectionCheckbox && sectionCheckbox.checked) {
-                    newSections.push(section);
-                }
-                if (editCheckbox && editCheckbox.checked) {
-                    newEditableSections.push(section);
-                }
-            });
-            
-            // Update user permissions in Supabase
-            try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    // Update the user's permissions
-                    currentEditingUser.permissions.sections = newSections;
-                    currentEditingUser.permissions.editableSections = newEditableSections;
-                    currentEditingUser.updatedAt = new Date().toISOString();
-                    
-                    // Save to Supabase
-                    await hubDatabase.updateUser(currentEditingUser);
-                    console.log('User permissions updated in Supabase:', currentEditingUser);
-                    
-                    // Update local storage for consistency
-            const users = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllUsers() : [];
-            const userIndex = users.findIndex(u => u.id === currentEditingUser.id);
-            if (userIndex !== -1) {
-                        users[userIndex] = currentEditingUser;
-                        // Save to Supabase database - users are automatically saved when modified
-                    }
-                } else {
-                    alert('Database not ready. Please try again.');
-                    return;
-                }
-            } catch (error) {
-                console.error('Error updating user permissions in Supabase:', error);
-                alert('Failed to save permissions: ' + error.message);
-                return;
-            }
-                
-            // If editing the currently logged-in user, refresh the header/permissions from Supabase
-            try { if (typeof updateUserInterface === 'function') updateUserInterface(); } catch(_) {}
-                
-                alert('User permissions updated successfully!');
-                loadUsersList();
-        };
+		window.saveUserPermissions = async function() {
+			if (!currentEditingUser) return;
+			
+			// Save against all sections shown in the form (not role-filtered)
+			const sections = await getAllAvailableSections();
+			const newSections = [];
+			const newEditableSections = [];
+			
+			sections.forEach(section => {
+				const sectionCheckbox = document.getElementById(`section-${section}`);
+				const editCheckbox = document.getElementById(`edit-${section}`);
+				if (sectionCheckbox && sectionCheckbox.checked) newSections.push(section);
+				if (editCheckbox && editCheckbox.checked) newEditableSections.push(section);
+			});
+
+			// Build next permissions payload based on currentEditingUser
+			const existingPerm = currentEditingUser.permissions && typeof currentEditingUser.permissions === 'object' ? currentEditingUser.permissions : {};
+			const nextPermissions = { ...existingPerm, sections: newSections, editableSections: newEditableSections };
+
+			// Update only the permissions column directly via Supabase to avoid payload mismatches
+			try {
+				if (!window.supabaseClient) throw new Error('Supabase not initialized');
+				const { error } = await window.supabaseClient
+					.from('profiles')
+					.update({ permissions: nextPermissions })
+					.eq('id', currentEditingUser.id);
+				if (error) throw error;
+			} catch (error) {
+				console.error('Error updating user permissions in Supabase:', error);
+				const detail = (error && (error.message || error.details || error.code)) ? (' ' + (error.message || error.details || error.code)) : '';
+				alert('Failed to save permissions:' + detail);
+				return;
+			}
+			
+			// Reflect changes in memory
+			try {
+				currentEditingUser = { ...currentEditingUser, permissions: nextPermissions };
+			} catch(_) {}
+			
+			// If editing the currently logged-in user, refresh the header/permissions from Supabase
+			try { if (typeof updateUserInterface === 'function') updateUserInterface(); } catch(_) {}
+				
+			alert('User permissions updated successfully!');
+			loadUsersList();
+		};
         
         window.resetUserPermissions = function() {
             if (currentEditingUser) {
