@@ -2548,19 +2548,29 @@ Permissions:
 			// Build next permissions payload based on currentEditingUser
 			const existingPerm = currentEditingUser.permissions && typeof currentEditingUser.permissions === 'object' ? currentEditingUser.permissions : {};
 			const nextPermissions = { ...existingPerm, sections: newSections, editableSections: newEditableSections };
+            
+            // Debug: log exact payload and target id
+            try {
+                console.log('DEBUG saveUserPermissions → target', { userId: currentEditingUser.id, role: currentEditingUser.role });
+                console.log('DEBUG saveUserPermissions → payload', nextPermissions);
+            } catch(_) {}
 
 			// Update only the permissions column directly via Supabase to avoid payload mismatches
 			try {
 				if (!window.supabaseClient) throw new Error('Supabase not initialized');
-				const { error } = await window.supabaseClient
+				const { data: updated, error } = await window.supabaseClient
 					.from('profiles')
 					.update({ permissions: nextPermissions })
-					.eq('id', currentEditingUser.id);
+					.eq('id', currentEditingUser.id)
+					.select('id')
+					.maybeSingle();
 				if (error) throw error;
+				try { console.log('DEBUG saveUserPermissions → updated row', updated); } catch(_) {}
+				if (!updated) throw new Error('No row updated. Likely blocked by RLS or ID mismatch.');
 			} catch (error) {
 				console.error('Error updating user permissions in Supabase:', error);
 				const detail = (error && (error.message || error.details || error.code)) ? (' ' + (error.message || error.details || error.code)) : '';
-				alert('Failed to save permissions:' + detail);
+				alert('Failed to save permissions:' + detail + (currentEditingUser?.id ? (' (userId=' + currentEditingUser.id + ')') : ''));
 				return;
 			}
 			
