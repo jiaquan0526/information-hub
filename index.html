@@ -2428,7 +2428,15 @@ Permissions:
 
             // Filter by manageability if helper and session exist
             let currentUser = null;
-            try { const sess = localStorage.getItem('hubSession'); currentUser = sess ? JSON.parse(sess) : null; } catch(_) {}
+            try {
+                if (window.supabaseClient) {
+                    const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                    if (me) {
+                        const { data: profile } = await window.supabaseClient.from('profiles').select('id, role, username, permissions').eq('id', me.id).single();
+                        currentUser = profile || null;
+                    }
+                }
+            } catch(_) {}
             if (currentUser && typeof canManageUser === 'function') {
                 try {
                     const manageable = users.filter(u => canManageUser(currentUser, u));
@@ -2523,22 +2531,8 @@ Permissions:
                 return;
             }
                 
-                // If editing the currently logged-in user, update the session too
-                const session = localStorage.getItem('hubSession');
-                if (session) {
-                    const sessionData = JSON.parse(session);
-                    if (sessionData.userId === currentEditingUser.id) {
-                        sessionData.permissions = {
-                            ...sessionData.permissions,
-                            sections: newSections,
-                            editableSections: newEditableSections
-                        };
-                        localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                        if (typeof updateUserInterface === 'function') {
-                            try { updateUserInterface(); } catch (e) {}
-                        }
-                    }
-                }
+            // If editing the currently logged-in user, refresh the header/permissions from Supabase
+            try { if (typeof updateUserInterface === 'function') updateUserInterface(); } catch(_) {}
                 
                 alert('User permissions updated successfully!');
                 loadUsersList();
