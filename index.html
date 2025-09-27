@@ -294,8 +294,8 @@
                         <label>Role *</label>
                         <select id="newRole" required>
                             <option value="admin">Admin</option>
-                            <option value="manager">Manager</option>
-                            <option value="user" selected>User</option>
+                            <option value="editor">Editor</option>
+                            <option value="viewer" selected>Viewer</option>
                         </select>
                     </div>
                     <div class="form-actions" style="display:flex; gap:10px; justify-content:flex-end;">
@@ -1195,7 +1195,7 @@
 
             await Promise.all(sections.map(async (sectionId) => {
                 // Determine types for this section (from Supabase config if available)
-                let typesList = ['playbooks','box-links','dashboards','reports'];
+                let typesList = ['playbooks','box-links','dashboards'];
                 try {
                     const cfg = sectionConfigById.get(sectionId);
                     if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
@@ -1675,8 +1675,8 @@
 
                 const roleLower = String(role||'').toLowerCase();
                 const isAdmin = roleLower === 'admin';
-                const isEditor = roleLower === 'editor' || roleLower === 'manager'; // backward-compatible
-                // Strict role-based gating: only admins and editors/managers can open the admin panel
+                const isEditor = roleLower === 'editor';
+                // Strict role-based gating: only admins and editors can open the admin panel
                 if (!(isAdmin || isEditor)) {
                     alert('Only administrators or editors can access the admin panel.');
                     return;
@@ -2362,7 +2362,7 @@ Permissions:
                 console.log('Admin button found:', !!adminBtn);
                 console.log('User role:', user.role);
                 
-                if (String(user.role||'').toLowerCase() === 'admin' || String(user.role||'').toLowerCase() === 'manager' || String(user.role||'').toLowerCase() === 'editor') {
+                if (String(user.role||'').toLowerCase() === 'admin' || String(user.role||'').toLowerCase() === 'editor') {
                     // Show admin panel button for admins and managers
                     if (adminBtn) {
                         adminBtn.style.display = 'inline-flex';
@@ -2396,7 +2396,7 @@ Permissions:
                     const assignmentsContent = document.getElementById('assignments-tab');
                     const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                     const manageSectionsContent = document.getElementById('sections-tab');
-                    if (String(user.role||'').toLowerCase() === 'editor' || String(user.role||'').toLowerCase() === 'manager') {
+                    if (String(user.role||'').toLowerCase() === 'editor') {
                         // Editors: hide Assignments, allow Manage Sections if permitted
                         if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
                         if (assignmentsContent) assignmentsContent.style.display = 'none';
@@ -2813,13 +2813,13 @@ Permissions:
             // Normalize permissions
             const defaults = {
                 admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
-                manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
-                user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
+                editor: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
+                viewer: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
             };
             users = users.map(u => ({
                 ...u,
-                role: (u.role || 'user').toLowerCase(),
-                permissions: u.permissions ? { sections: u.permissions.sections || [], editableSections: u.permissions.editableSections || [] , ...u.permissions } : defaults[(u.role || 'user').toLowerCase()] || defaults.user
+                role: (u.role || 'viewer').toLowerCase().replace('manager','editor').replace('user','viewer'),
+                permissions: u.permissions ? { sections: u.permissions.sections || [], editableSections: u.permissions.editableSections || [] , ...u.permissions } : defaults[(u.role || 'viewer').toLowerCase().replace('manager','editor').replace('user','viewer')] || defaults.viewer
             }));
             
             // Text filter
@@ -2833,7 +2833,7 @@ Permissions:
                 );
             }
 
-            // Filter by role hierarchy (admins see all; managers see only users)
+            // Filter by role hierarchy (admins see all)
             const manageableUsers = users.filter(u => canManageUser(currentUser, u));
             
             if (manageableUsers.length === 0) {
@@ -2935,18 +2935,13 @@ Permissions:
                 // Admin can change to any role
                 roleOptions = `
                     <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
-                    <option value="manager" ${user.role === 'manager' ? 'selected' : ''}>Manager</option>
-                    <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
-                `;
-            } else if (currentUser && currentUser.role === 'manager') {
-                // Manager cannot change roles - show current role as readonly
-                roleOptions = `
-                    <option value="${user.role}" selected>${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</option>
+                    <option value="editor" ${user.role === 'editor' ? 'selected' : ''}>Editor</option>
+                    <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
                 `;
             } else {
-                // Default fallback
+                // Non-admins cannot change roles - show current role as readonly
                 roleOptions = `
-                    <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+                    <option value="${user.role}" selected>${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</option>
                 `;
             }
             
@@ -2978,10 +2973,10 @@ Permissions:
                                 </div>
                                 <div class="form-group">
                                     <label for="editUserRole">Role</label>
-                                    <select id="editUserRole" ${currentUser && currentUser.role === 'manager' ? 'disabled' : ''}>
+                                    <select id="editUserRole" ${currentUser && currentUser.role !== 'admin' ? 'disabled' : ''}>
                                         ${roleOptions}
                                     </select>
-                                    ${currentUser && currentUser.role === 'manager' ? '<small style="color: #666;">Managers cannot change user roles</small>' : ''}
+                                    ${currentUser && currentUser.role !== 'admin' ? '<small style="color: #666;">Only admins can change roles</small>' : ''}
                                 </div>
                                 <div class="form-group" style="display:flex;align-items:center;gap:8px;">
                                     <input type="checkbox" id="editUserDisabled" ${(user.permissions && user.permissions.disabled) ? 'checked' : ''}>
@@ -4216,7 +4211,6 @@ Permissions:
                     <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> Playbooks</span>
                     <span><i class="fas fa-link"></i> <span id="${section.id}-boxlinks">0</span> Box Links</span>
                     <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
-                    <span><i class="fas fa-file-alt"></i> <span id="${section.id}-reports">0</span> Reports</span>
                 </div>
             </div>`;
             hubGrid.insertAdjacentHTML('beforeend', cardHTML);
@@ -4538,13 +4532,12 @@ Permissions:
         };
         
         // Helpers for dynamic card tab rendering (mirror section page)
-        function normalizeTypeId(raw) {
+            function normalizeTypeId(raw) {
             try {
                 const t = String(raw || '').toLowerCase().trim();
                 if (t === 'playbooks' || t === 'playbook') return 'playbooks';
                 if (t === 'box-links' || t === 'boxlinks' || t === 'boxlink' || t === 'box') return 'boxLinks';
                 if (t === 'dashboards' || t === 'dashboard') return 'dashboards';
-                if (t === 'reports' || t === 'report') return 'reports';
                 return t;
             } catch (_) { return String(raw || '').toLowerCase(); }
         }
@@ -4553,7 +4546,6 @@ Permissions:
             if (t === 'playbooks') return 'fas fa-book';
             if (t === 'boxLinks') return 'fas fa-link';
             if (t === 'dashboards') return 'fas fa-chart-bar';
-            if (t === 'reports') return 'fas fa-file-alt';
             return 'fas fa-folder';
         }
 
@@ -4750,11 +4742,10 @@ Permissions:
             for (const section of visibleSections) {
                 try {
                     // Build types list to mirror the section detail tabs
-                    let typesList = [
+            let typesList = [
                         { id: 'playbooks', name: 'Playbooks' },
                         { id: 'box-links', name: 'Box Links' },
-                        { id: 'dashboards', name: 'Dashboards' },
-                        { id: 'reports', name: 'Reports' }
+                        { id: 'dashboards', name: 'Dashboards' }
                     ];
                     try {
                         // Get config from Supabase database

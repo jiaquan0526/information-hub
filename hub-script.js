@@ -257,7 +257,7 @@ class InformationHub {
         const exportBtn = document.getElementById('exportBtn');
         if (exportBtn) {
             const role = (this.currentUser.role || '').toLowerCase();
-            if (role === 'admin' || role === 'manager') {
+            if (role === 'admin' || role === 'editor') {
                 exportBtn.style.display = 'inline-flex';
             } else {
                 exportBtn.style.display = 'none';
@@ -949,7 +949,6 @@ class InformationHub {
             const myRole = String(me?.role || '').toLowerCase();
             const filtered = users.filter(u => {
                 if (myRole === 'admin') return true;
-                if (myRole === 'manager') return String(u.id) === String(me?.userId || me?.id);
                 return String(u.id) === String(me?.userId || me?.id);
             });
             if (userSelect) {
