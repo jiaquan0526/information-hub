@@ -2389,8 +2389,8 @@ Permissions:
             document.getElementById('userPermissionForm').style.display = 'block';
             
             // Load all available sections; filtering will be applied in the renderer
-            const sections = await getAllAvailableSections();
-            const sectionNames = await getSectionDisplayNames();
+		const sections = await getAllAvailableSections();
+		const sectionNames = await getSectionDisplayNames();
             
             // Update the permission form HTML to include all available sections
             await updatePermissionFormHTML(sections, sectionNames);
@@ -2486,7 +2486,8 @@ Permissions:
         window.saveUserPermissions = async function() {
             if (!currentEditingUser) return;
             
-            const sections = await getAssignableSectionsForCurrentUser();
+		// Save against all sections shown in the form (not role-filtered)
+		const sections = await getAllAvailableSections();
             const newSections = [];
             const newEditableSections = [];
             
@@ -2761,10 +2762,10 @@ Permissions:
             // Add modal to page
             document.body.insertAdjacentHTML('beforeend', modalHTML);
             
-            // Load sections for the modal
-            try {
-                const sections = await getAssignableSectionsForCurrentUser();
-                const sectionNames = await getSectionDisplayNames();
+			// Load sections for the modal (show all sections from DB, not role-filtered)
+			try {
+				const sections = await getAllAvailableSections();
+				const sectionNames = await getSectionDisplayNames();
                 const sectionCheckboxes = document.getElementById('editUserSectionCheckboxes');
                 
                 if (sectionCheckboxes) {
@@ -2805,15 +2806,15 @@ Permissions:
             const roleSelect = document.getElementById('editUserRole');
             const role = roleSelect.value; // admins can change; managers see disabled select same value
             
-            // Get selected sections
-            const selectedSections = [];
-            const assignableSections = await getAssignableSectionsForCurrentUser();
-            assignableSections.forEach(section => {
-                const checkbox = document.getElementById(`editSection-${section}`);
-                if (checkbox && checkbox.checked) {
-                    selectedSections.push(section);
-                }
-            });
+			// Get selected sections (iterate all available DB sections shown in the form)
+			const selectedSections = [];
+			const availableSections = await getAllAvailableSections();
+			availableSections.forEach(section => {
+				const checkbox = document.getElementById(`editSection-${section}`);
+				if (checkbox && checkbox.checked) {
+					selectedSections.push(section);
+				}
+			});
             
             // Load users from Supabase
             let users = [];
@@ -3220,18 +3221,8 @@ Permissions:
                 return;
             }
             
-            // Enforce filtering again based on current user's assignable sections (with safe fallback)
-            let filteredSections = Array.isArray(sections) ? sections.slice() : [];
-            try {
-                const allowed = await getAssignableSectionsForCurrentUser();
-                if (Array.isArray(allowed) && allowed.length > 0) {
-                    filteredSections = filteredSections.filter(s => allowed.includes(s));
-                }
-            } catch (_) {}
-            // If filtering produced none but we had input sections, fall back to the input list
-            if ((!filteredSections || filteredSections.length === 0) && Array.isArray(sections) && sections.length > 0) {
-                filteredSections = sections.slice();
-            }
+		// Show all provided sections in the Permissions tab (no role-based filtering here)
+		const filteredSections = Array.isArray(sections) ? sections.slice() : [];
             
             // Clear existing checkboxes
             sectionCheckboxes.innerHTML = '';
