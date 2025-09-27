@@ -1656,7 +1656,7 @@
                 const isAdmin = String(role||'').toLowerCase() === 'admin';
                 const isManager = String(role||'').toLowerCase() === 'manager';
                 const canManageUsers = isAdmin || isManager || permissions.canManageUsers === true;
-                const canManageSections = isAdmin || permissions.canEditAllSections === true;
+                const canManageSections = isAdmin || isManager || permissions.canEditAllSections === true;
                 if (!(canManageUsers || canManageSections)) {
                     alert('Only administrators and managers can access the admin panel.');
                     return;
@@ -1692,6 +1692,10 @@
                     // Sections tab
                     if (manageSectionsNavTab) manageSectionsNavTab.style.display = canManageSections ? '' : 'none';
                     if (manageSectionsContent) manageSectionsContent.style.display = canManageSections ? '' : 'none';
+                    // Preload sections list when allowed
+                    if (canManageSections && typeof loadSectionsList === 'function') {
+                        try { loadSectionsList(); } catch (_) {}
+                    }
                 } catch (e) { console.error('role-based tab visibility error', e); } }, 0);
                 
                 // Ensure scrolling works
@@ -2213,10 +2217,11 @@ Permissions:
                     const manageSectionsNavTab = document.querySelector(".admin-tab[onclick=\"switchAdminTab('sections')\"]");
                     const manageSectionsContent = document.getElementById('sections-tab');
                     if (user.role === 'manager') {
+                        // Managers: hide Assignments, allow Manage Sections
                         if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
                         if (assignmentsContent) assignmentsContent.style.display = 'none';
-                        if (manageSectionsNavTab) manageSectionsNavTab.style.display = 'none';
-                        if (manageSectionsContent) manageSectionsContent.style.display = 'none';
+                        if (manageSectionsNavTab) manageSectionsNavTab.style.display = '';
+                        if (manageSectionsContent) manageSectionsContent.style.display = '';
                     } else {
                         if (assignmentsNavTab) assignmentsNavTab.style.display = '';
                         if (assignmentsContent) assignmentsContent.style.display = '';
@@ -3512,6 +3517,29 @@ Permissions:
                     } else {
                         await hubDatabase.createSection(target);
                         console.log('Section created in Supabase:', target);
+                        // Ensure creator can view new section
+                        try {
+                            const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                            if (authUser) {
+                                // Load profile
+                                const { data: profile } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('permissions, username')
+                                    .eq('id', authUser.id)
+                                    .single();
+                                const perms = (profile && profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
+                                const current = Array.isArray(perms.sections) ? perms.sections.slice() : [];
+                                if (!current.includes(target.id)) {
+                                    current.push(target.id);
+                                    const next = { ...perms, sections: current };
+                                    await window.supabaseClient
+                                        .from('profiles')
+                                        .update({ permissions: next })
+                                        .eq('id', authUser.id);
+                                    console.log('Granted creator access to new section:', target.id);
+                                }
+                            }
+                        } catch (grantErr) { console.warn('Could not grant creator access', grantErr); }
                     }
                     
                     // Update local sectionOrder array
