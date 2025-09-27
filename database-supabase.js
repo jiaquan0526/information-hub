@@ -85,7 +85,7 @@ class HubDatabase {
             const { data, error } = await this.supabase
                 .from('profiles')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('username', { ascending: true });
             
             if (error) throw error;
             return data || [];
@@ -174,7 +174,7 @@ class HubDatabase {
             const { data, error } = await this.supabase
                 .from('sections')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('name', { ascending: true });
             
             if (error) throw error;
             return data || [];
@@ -325,7 +325,7 @@ class HubDatabase {
                 .from('resources')
                 .select('*')
                 .eq('section_id', sectionId)
-                .order('created_at', { ascending: false });
+                .order('title', { ascending: true });
             
             if (error) throw error;
             return data || [];
@@ -342,7 +342,7 @@ class HubDatabase {
                 .select('*')
                 .eq('section_id', sectionId)
                 .eq('type', type)
-                .order('created_at', { ascending: false });
+                .order('title', { ascending: true });
             
             if (error) throw error;
             return data || [];
@@ -372,7 +372,7 @@ class HubDatabase {
             const { data, error } = await this.supabase
                 .from('resources')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('title', { ascending: true });
             
             if (error) throw error;
             return data || [];
