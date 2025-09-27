@@ -3165,14 +3165,16 @@ Permissions:
             if (!users[userIndex].permissions) {
                 users[userIndex].permissions = {};
             }
-            const roleChanged = (targetUser.role || 'user') !== role;
+            const roleChanged = (targetUser.role || 'viewer') !== role;
             if (roleChanged) {
                 const defaults = {
                     admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
-                    manager: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
-                    user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
+                    editor: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning','operations','quality'], editableSections: ['costing','supply-planning','operations','quality'] },
+                    viewer: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
                 };
-                users[userIndex].permissions = { ...defaults[role] };
+                // Map any legacy roles if present
+                const normalizedRole = String(role).toLowerCase().replace('manager','editor').replace('user','viewer');
+                users[userIndex].permissions = { ...defaults[normalizedRole] };
             }
             users[userIndex].permissions.sections = selectedSections;
             
