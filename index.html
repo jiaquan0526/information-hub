@@ -3188,9 +3188,18 @@ Permissions:
                 return;
             }
             
-            // Enforce filtering again based on current user's assignable sections
-            const allowed = await getAssignableSectionsForCurrentUser();
-            const filteredSections = sections.filter(s => allowed.includes(s));
+            // Enforce filtering again based on current user's assignable sections (with safe fallback)
+            let filteredSections = Array.isArray(sections) ? sections.slice() : [];
+            try {
+                const allowed = await getAssignableSectionsForCurrentUser();
+                if (Array.isArray(allowed) && allowed.length > 0) {
+                    filteredSections = filteredSections.filter(s => allowed.includes(s));
+                }
+            } catch (_) {}
+            // If filtering produced none but we had input sections, fall back to the input list
+            if ((!filteredSections || filteredSections.length === 0) && Array.isArray(sections) && sections.length > 0) {
+                filteredSections = sections.slice();
+            }
             
             // Clear existing checkboxes
             sectionCheckboxes.innerHTML = '';
