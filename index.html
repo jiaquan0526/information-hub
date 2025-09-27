@@ -2178,11 +2178,11 @@ Permissions:
                 console.log('Admin button found:', !!adminBtn);
                 console.log('User role:', user.role);
                 
-                if (user.role === 'admin' || user.role === 'editor') {
+                if (String(user.role||'').toLowerCase() === 'admin' || String(user.role||'').toLowerCase() === 'manager' || String(user.role||'').toLowerCase() === 'editor') {
                     // Show admin panel button for admins and managers
                     if (adminBtn) {
                         adminBtn.style.display = 'inline-flex';
-                        if (user.role === 'admin') {
+                        if (String(user.role||'').toLowerCase() === 'admin') {
                             adminBtn.style.background = '#4CAF50';
                         } else {
                             adminBtn.style.background = '#ff9800'; // Orange for editors
@@ -2192,7 +2192,7 @@ Permissions:
                     
                     // Show admin quick access only for admins
                     if (adminQuickAccess) {
-                        if (user.role === 'admin') {
+                        if (String(user.role||'').toLowerCase() === 'admin') {
                             adminQuickAccess.style.display = 'block';
                             console.log('Admin quick access shown for admin');
                         } else {
