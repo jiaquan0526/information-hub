@@ -3884,8 +3884,30 @@ Permissions:
             
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    await hubDatabase.deleteSection(sectionId);
-                    console.log('Section deleted from Supabase:', sectionId);
+                    try {
+                        await hubDatabase.deleteSection(sectionId);
+                        console.log('Section deleted from Supabase (wrapper):', sectionId);
+                    } catch (wrapperErr) {
+                        console.warn('Wrapper delete failed, attempting direct Supabase delete', wrapperErr);
+                        if (!window.supabaseClient) throw wrapperErr;
+                        // Delete dependent resources first to avoid FK constraints, then delete the section
+                        try {
+                            const { error: resErr } = await window.supabaseClient
+                                .from('resources')
+                                .delete()
+                                .eq('section_id', sectionId);
+                            if (resErr) console.warn('Resource delete returned error (continuing):', resErr);
+                        } catch (resEx) { console.warn('Resource delete exception (continuing):', resEx); }
+                        const { data: deleted, error: secErr } = await window.supabaseClient
+                            .from('sections')
+                            .delete()
+                            .eq('section_id', sectionId)
+                            .select('section_id')
+                            .maybeSingle();
+                        if (secErr) throw secErr;
+                        if (!deleted) throw new Error('No section row deleted');
+                        console.log('Section deleted via direct Supabase:', sectionId);
+                    }
                     
                     // Remove from local sectionOrder array
                     const idx = sectionOrder.findIndex(s => s.id === sectionId);
@@ -3915,7 +3937,8 @@ Permissions:
                 }
             } catch (error) {
                 console.error('Error deleting section from Supabase:', error);
-                alert('Failed to delete section: ' + error.message);
+                const detail = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Unknown error';
+                alert('Failed to delete section: ' + detail);
             }
         };
         
