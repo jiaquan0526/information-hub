@@ -3549,8 +3549,23 @@ Permissions:
                 
                 try {
                     if (window.hubDatabase && window.hubDatabaseReady) {
-                        await hubDatabase.updateSection(section);
-                        console.log('Section visibility updated in Supabase:', section);
+                        try {
+                            await hubDatabase.updateSection(section);
+                            console.log('Section visibility updated in Supabase (wrapper):', section);
+                        } catch (wrapperErr) {
+                            console.warn('Wrapper update failed, trying direct Supabase update', wrapperErr);
+                            if (!window.supabaseClient) throw wrapperErr;
+                            const nextConfig = { ...(section.config || {}), visible: isVisible, intro: section.intro || '', order: section.order || 0 };
+                            const { data: updated, error } = await window.supabaseClient
+                                .from('sections')
+                                .update({ config: nextConfig })
+                                .eq('section_id', sectionId)
+                                .select('section_id')
+                                .maybeSingle();
+                            if (error) throw error;
+                            if (!updated) throw new Error('No section row updated');
+                            console.log('Section visibility updated via direct Supabase:', { sectionId, visible: isVisible });
+                        }
                         
                         // Update local storage
                         // Section order is managed in Supabase database
@@ -3571,7 +3586,8 @@ Permissions:
                     }
                 } catch (error) {
                     console.error('Error updating section visibility:', error);
-                    alert('Failed to update visibility: ' + error.message);
+                    const detail = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Unknown error';
+                    alert('Failed to update visibility: ' + detail);
                     if (checkbox) checkbox.checked = !isVisible; // Revert checkbox
                 }
             } catch (e) {
