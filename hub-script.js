@@ -845,6 +845,21 @@ class InformationHub {
     }
 
     async addUser() {
+        // Prefer in-app panel/modal if available
+        try {
+            if (typeof window.openAddUserModal === 'function') {
+                return window.openAddUserModal();
+            }
+        } catch (_) {}
+        try {
+            const modal = document.getElementById('addUserModal');
+            if (modal) {
+                modal.style.display = 'block';
+                return;
+            }
+        } catch (_) {}
+
+        // Fallback to prompts only if panel is unavailable
         try {
             if (!window.supabaseClient) { this.showMessage('Supabase not initialized', 'error'); return; }
             const email = prompt('Enter email for the new user:');
