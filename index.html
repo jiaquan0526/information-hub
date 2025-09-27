@@ -2388,8 +2388,8 @@ Permissions:
             document.getElementById('selectedUserName').textContent = `${user.username} (${user.role}) Permissions`;
             document.getElementById('userPermissionForm').style.display = 'block';
             
-            // Load current permissions using dynamic sections (filtered by current user's rights)
-            const sections = await getAssignableSectionsForCurrentUser();
+            // Load all available sections; filtering will be applied in the renderer
+            const sections = await getAllAvailableSections();
             const sectionNames = await getSectionDisplayNames();
             
             // Update the permission form HTML to include all available sections
@@ -3058,28 +3058,38 @@ Permissions:
                         try {
                             const { data } = await window.supabaseClient
                                 .from('sections')
-                                .select('section_id, config')
-                                .order('name', { ascending: true });
+                                .select('section_id, config');
                             sections = Array.isArray(data) ? data : [];
                         } catch (_) {}
                     }
-                    return (sections || [])
+                    const ids = (sections || [])
                         .filter(s => s && (s.config?.visible !== false))
-                        .map(s => s.section_id || s.id);
+                        .map(s => s.section_id || s.id)
+                        .filter(Boolean);
+                    // Safe fallback: if still empty, provide a sensible default set so UI can render
+                    if (!ids || ids.length === 0) {
+                        return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
+                    }
+                    return ids;
                 } else if (window.supabaseClient) {
                     const { data } = await window.supabaseClient
                         .from('sections')
                         .select('section_id, config');
                     const list = Array.isArray(data) ? data : [];
-                    return list
+                    const ids = list
                         .filter(row => (row && row.config && typeof row.config === 'object') ? (row.config.visible !== false) : true)
                         .map(row => row.section_id)
                         .filter(Boolean);
+                    if (!ids || ids.length === 0) {
+                        return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
+                    }
+                    return ids;
                 }
             } catch (error) {
                 console.error('Error loading sections from database:', error);
             }
-            return [];
+            // Ultimate fallback if everything fails
+            return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
         }
         
         // Function to get sections the CURRENT USER can assign - SUPABASE ONLY
@@ -3153,12 +3163,34 @@ Permissions:
                     (sections || []).forEach(section => {
                         names[section.section_id || section.id] = section.name;
                     });
+                    // Provide defaults for known section ids if names are missing
+                    if (Object.keys(names).length === 0) {
+                        return {
+                            'costing': 'Costing',
+                            'supply-planning': 'Supply Planning',
+                            'operations': 'Operations',
+                            'quality': 'Quality',
+                            'hr': 'HR',
+                            'it': 'IT',
+                            'sales': 'Sales',
+                            'compliance': 'Compliance'
+                        };
+                    }
                     return names;
                 }
             } catch (error) {
                 console.error('Error loading section names from database:', error);
             }
-            return {};
+            return {
+                'costing': 'Costing',
+                'supply-planning': 'Supply Planning',
+                'operations': 'Operations',
+                'quality': 'Quality',
+                'hr': 'HR',
+                'it': 'IT',
+                'sales': 'Sales',
+                'compliance': 'Compliance'
+            };
         }
         
         // Function to refresh permission forms when sections change
