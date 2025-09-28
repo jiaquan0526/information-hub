@@ -1818,7 +1818,7 @@
                     try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
                     try {
                         const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
-                        if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
+                        if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); }
                         else { loadSectionAssignments(); }
                     } catch(_) { loadSectionAssignments(); }
                 }
@@ -3429,7 +3429,7 @@ Permissions:
                 try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
                 try {
                     const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
-                    if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
+                    if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); }
                     else { loadSectionAssignments(); }
                 } catch(_) { loadSectionAssignments(); }
             }
@@ -5071,6 +5071,7 @@ Permissions:
              __assignmentsCache = { users, sectionIds, sectionNames };
              try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
              renderAssignmentsList();
++            setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0);
               __assignmentsLoaded = true;
               try { console.log('[Assignments] load complete'); } catch(_) {}
               __assignmentsLoading = false;
