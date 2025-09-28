@@ -3115,16 +3115,28 @@ Permissions:
             const roleSelect = document.getElementById('editUserRole');
             const role = roleSelect.value;
 
-			// Collect selected permissions from the modal (support both id schemes)
+			// Collect selected permissions from the modal by reading existing checkboxes in the DOM
+			// This avoids waiting on any network call that could cause a pending state
 			const selectedSections = [];
             const selectedEditableSections = [];
-			const availableSections = await getAllAvailableSections();
-			availableSections.forEach(section => {
-                const accessCb = document.getElementById(`section-${section}`) || document.getElementById(`editSection-${section}`);
-                const editCb = document.getElementById(`edit-${section}`);
-                if (accessCb && accessCb.checked) selectedSections.push(section);
-                if (editCb && editCb.checked) selectedEditableSections.push(section);
-			});
+            try {
+                document.querySelectorAll('#editUserModal input[id^="editSection-"]').forEach(cb => {
+                    if (cb && cb.checked) {
+                        const section = cb.id.replace('editSection-','');
+                        if (section) selectedSections.push(section);
+                    }
+                });
+                document.querySelectorAll('#editUserModal input[id^="edit-"]').forEach(cb => {
+                    if (cb && cb.checked) {
+                        const section = cb.id.replace('edit-','');
+                        if (section) selectedEditableSections.push(section);
+                    }
+                });
+            } catch(_) {}
+
+            // Put Save button into loading state
+            let saveBtn = null;
+            try { saveBtn = document.querySelector('#editUserModal .btn.btn-primary'); if (saveBtn) { saveBtn.disabled = true; saveBtn.dataset._oldText = saveBtn.textContent; saveBtn.textContent = 'Saving…'; } } catch(_) {}
             
             // Load users from Supabase
             let users = [];
@@ -3190,16 +3202,21 @@ Permissions:
             users[userIndex].permissions.sections = selectedSections;
             users[userIndex].permissions.editableSections = selectedEditableSections;
             
-            // Save updated user to Supabase
+            // Save updated user to Supabase (with timeout guard)
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
                     try {
-                        await hubDatabase.updateUser(users[userIndex]);
+                        const updatePromise = hubDatabase.updateUser(users[userIndex]);
+                        const withTimeout = Promise.race([
+                            updatePromise,
+                            new Promise((_, rej) => setTimeout(() => rej(new Error('Request timeout while updating user')), 15000))
+                        ]);
+                        await withTimeout;
                         console.log('User updated in Supabase (wrapper):', users[userIndex]);
                     } catch (wrapperErr) {
                         console.warn('Wrapper update failed, trying direct profile update', wrapperErr);
                         if (!window.supabaseClient) throw wrapperErr;
-                        const { error: upErr } = await window.supabaseClient
+                        const directPromise = window.supabaseClient
                             .from('profiles')
                             .update({
                                 username: users[userIndex].username,
@@ -3209,6 +3226,10 @@ Permissions:
                                 permissions: users[userIndex].permissions
                             })
                             .eq('id', userId);
+                        const { error: upErr } = await Promise.race([
+                            directPromise,
+                            new Promise((_, rej) => setTimeout(() => rej(new Error('Request timeout while updating user (direct)')), 15000))
+                        ]);
                         if (upErr) throw upErr;
                         console.log('User updated via direct Supabase');
                     }
@@ -3221,8 +3242,10 @@ Permissions:
             }
             } catch (error) {
                 console.error('Error updating user in Supabase:', error);
-                alert('Failed to save user: ' + error.message);
+                alert('Failed to save user: ' + (error && error.message ? error.message : error));
                 return;
+            } finally {
+                try { if (saveBtn) { saveBtn.disabled = false; if (saveBtn.dataset._oldText) saveBtn.textContent = saveBtn.dataset._oldText; } } catch(_) {}
             }
             console.log('User updated in localStorage:', users[userIndex]);
             
