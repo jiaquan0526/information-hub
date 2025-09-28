@@ -73,15 +73,22 @@
         (function(){
             function ensureKeys(){
                 try {
-                    if (!window.SUPABASE_URL) window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || window.SUPABASE_URL;
-                    if (!window.SUPABASE_ANON_KEY) window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || window.SUPABASE_ANON_KEY;
+                    // Always prefer keys saved by hub (localStorage) to keep same project/ref across pages
+                    const lsUrl = localStorage.getItem('SUPABASE_URL');
+                    const lsKey = localStorage.getItem('SUPABASE_ANON_KEY');
+                    if (lsUrl) window.SUPABASE_URL = lsUrl;
+                    if (lsKey) window.SUPABASE_ANON_KEY = lsKey;
                 } catch(_) {}
             }
             function initClient(){
                 ensureKeys();
                 try {
                     if (window.supabase && !window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
-                        window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+                        window.supabaseClient = window.supabase.createClient(
+                            window.SUPABASE_URL,
+                            window.SUPABASE_ANON_KEY,
+                            { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+                        );
                     }
                 } catch (e) { console.warn('Supabase init (section) failed', e); }
             }
