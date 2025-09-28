@@ -5058,6 +5058,45 @@ Permissions:
             });
         };
         
+        // Ensure assignments render triggers when the tab becomes visible
+        (function setupAssignmentsRenderTrigger() {
+            try {
+                if (window.__assignmentsRenderHooked) return;
+                window.__assignmentsRenderHooked = true;
+                const triggerLoadOrRender = () => {
+                    try {
+                        const hasUsers = Array.isArray((window.__assignmentsCache||{}).users) && window.__assignmentsCache.users.length > 0;
+                        const hasSections = Array.isArray((window.__assignmentsCache||{}).sectionIds) && window.__assignmentsCache.sectionIds.length > 0;
+                        if (hasUsers && hasSections && typeof window.renderAssignmentsList === 'function') {
+                            window.renderAssignmentsList();
+                            setTimeout(() => { try { window.renderAssignmentsList(); } catch(_) {} }, 0);
+                        } else if (typeof window.loadSectionAssignments === 'function' && !window.__assignmentsLoading) {
+                            window.loadSectionAssignments();
+                        }
+                    } catch(_) {}
+                };
+                // Click safety hook on the nav tab
+                const nav = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
+                if (nav && !nav.__assignHooked) {
+                    nav.addEventListener('click', () => { setTimeout(triggerLoadOrRender, 0); });
+                    nav.__assignHooked = true;
+                }
+                // Observe when the assignments content becomes active
+                const content = document.getElementById('assignments-tab');
+                if (content) {
+                    if (content.classList.contains('active')) { setTimeout(triggerLoadOrRender, 0); }
+                    const mo = new MutationObserver(muts => {
+                        muts.forEach(m => {
+                            if (m.type === 'attributes' && m.attributeName === 'class') {
+                                if (content.classList.contains('active')) { triggerLoadOrRender(); }
+                            }
+                        });
+                    });
+                    mo.observe(content, { attributes: true });
+                }
+            } catch(_) {}
+        })();
+        
         window.loadSectionAssignments = async function() {
             if (__assignmentsLoading) { return; }
              __assignmentsLoading = true;
