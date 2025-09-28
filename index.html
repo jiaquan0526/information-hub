@@ -4994,7 +4994,7 @@ Permissions:
             try {
                 const { data: sectionsData, error: sectErr } = await window.supabaseClient
                     .from('sections')
-                    .select('section_id, id, name')
+                    .select('section_id, name')
                     .order('name', { ascending: true });
                 if (sectErr) throw sectErr;
                 rows = Array.isArray(sectionsData) ? sectionsData : [];
@@ -5004,9 +5004,9 @@ Permissions:
                 return;
             }
             
-            const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
+            const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id).filter(Boolean);
             const sectionNames = {};
-            (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id || r.id; if (k) sectionNames[k] = r.name || k; });
+            (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id; if (k) sectionNames[k] = r.name || k; });
             
             console.log('[Assignments] users:', users.length, 'sections:', sectionIds.length);
             
