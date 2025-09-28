@@ -306,7 +306,6 @@
             </div>
         </div>
     </div>
-
     <!-- Admin Panel Modal -->
     <div id="adminPanelModal" class="modal">
         <div class="modal-content admin-modal">
@@ -469,6 +468,12 @@
                         <div class="admin-section-header">
                             <h3>User Section Assignments</h3>
                             <p>Assign specific sections to each user. Users will only see sections they are assigned to.</p>
+                        </div>
+                        <div class="assignment-search-bar" style="margin:10px 0 12px; display:flex; gap:10px; align-items:center;">
+                            <input id="assignmentUserSearchInput" type="text" placeholder="Search users by name, username, email, or role" oninput="renderAssignmentsList()" style="flex:1; padding:8px 10px; border:1px solid #e1e5e9; border-radius:6px;" />
+                            <button class="btn btn-secondary" onclick="document.getElementById('assignmentUserSearchInput').value=''; renderAssignmentsList();">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
                         </div>
                         <div id="assignmentsList" class="assignments-list"></div>
                     </div>
@@ -773,7 +778,6 @@
                 setTimeout(() => showFallbackSections(), 2000);
             }
         }
-
         // Expose for console debugging on the hub page
         try { window.loadSectionsFromSupabase = loadSectionsFromSupabase; } catch (_) {}
         
@@ -1263,7 +1267,6 @@
                 try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
             } catch(_) {}
         };
-
         // Filter: include only content updates (playbooks/boxlinks/dashboards)
         function isContentActivity(a) {
             try {
@@ -2102,7 +2105,6 @@ Username: ${profile.username}
 Role: ${profile.role}
 Name: ${profile.name || 'Not provided'}
 Email: ${profile.email || 'Not provided'}
-
 Accessible Sections:
 ${(profile.permissions?.sections || []).map(s => '• ' + s.replace('-', ' ').toUpperCase()).join('\n')}
 
@@ -2574,7 +2576,6 @@ Permissions:
                 select.appendChild(option);
             });
         };
-        
         window.loadUserPermissions = async function() {
             const userId = document.getElementById('permissionUserSelect').value;
             if (!userId) {
@@ -3073,7 +3074,6 @@ Permissions:
                     if (content) content.style.zIndex = '10006';
                 }
             } catch(_) {}
-            
 			// Load sections for the modal (show all sections from DB, not role-filtered)
 			try {
 				const sections = await getAllAvailableSections();
@@ -3554,7 +3554,6 @@ Permissions:
             // Ultimate fallback if everything fails
             return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
         }
-        
         // Function to get sections the CURRENT USER can assign - SUPABASE ONLY
         async function getAssignableSectionsForCurrentUser() {
             try {
@@ -3941,8 +3940,6 @@ Permissions:
                 }
             });
         }
-        
-        
         function openSectionModal(mode, section) {
             const isEdit = mode === 'edit';
             const modal = document.createElement('div');
@@ -4441,7 +4438,6 @@ Permissions:
             }
             return;
         }
-
         // Optimize background images client-side and cache results
         function computeManifestVersion() {
             try {
@@ -4945,6 +4941,26 @@ Permissions:
         // Load section assignments for admin panel – Supabase only
         let __assignmentsLoading = false;
         let __assignmentsLoaded = false;
+        let __assignmentsCache = { users: [], sectionIds: [], sectionNames: {} };
+        window.renderAssignmentsList = function() {
+            const assignmentsList = document.getElementById('assignmentsList');
+            if (!assignmentsList) return;
+            const q = (document.getElementById('assignmentUserSearchInput')?.value || '').trim().toLowerCase();
+            const users = Array.isArray(__assignmentsCache.users) ? __assignmentsCache.users : [];
+            const sectionIds = Array.isArray(__assignmentsCache.sectionIds) ? __assignmentsCache.sectionIds : [];
+            const sectionNames = __assignmentsCache.sectionNames || {};
+            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
+            const filteredUsers = q ? users.filter(u => {
+                const hay = [u.username, u.name, u.email, u.role].filter(Boolean).join(' ').toLowerCase();
+                return hay.includes(q);
+            }) : users;
+            assignmentsList.innerHTML = filteredUsers.map(user => {
+                const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
+                return `
+                    <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.name || user.username} (${user.username})</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
+                `;
+            }).join('');
+        };
          window.loadSectionAssignments = async function() {
             if (__assignmentsLoading) { return; }
             // If already loaded and DOM has content, skip
@@ -4958,16 +4974,16 @@ Permissions:
              try { console.log('[Assignments] load start'); } catch(_) {}
               const assignmentsList = document.getElementById('assignmentsList');
               if (!assignmentsList) return;
-              assignmentsList.innerHTML = `<div style="padding:10px;color:#555;">Loading section assignments…</div>`;
-             
+              assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">Loading section assignments…</div>`;
+            
               // Ensure Supabase client is ready
               let retries = 0;
               while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
               if (!window.supabaseClient) {
-                  assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Supabase not initialized. Please sign in again.</div>`;
+                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Supabase not initialized. Please sign in again.</div>`;
                   __assignmentsLoading = false; return;
               }
-             
+            
               // Ensure we are authenticated (RLS may return 0 rows if anonymous)
               try {
                   let authTries = 0;
@@ -4986,7 +5002,7 @@ Permissions:
                   assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Authentication check failed. Please refresh and sign in.</div>`;
                   __assignmentsLoading = false; return;
               }
-             
+            
               let users = [];
               let rows = [];
               try {
@@ -5001,7 +5017,7 @@ Permissions:
                   assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load users from Supabase. Check RLS policies for table 'profiles'.</div>`;
                   __assignmentsLoading = false; return;
               }
-             
+            
               try {
                   const { data: sectionsData, error: sectErr } = await window.supabaseClient
                       .from('sections')
@@ -5014,13 +5030,13 @@ Permissions:
                   assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load sections from Supabase. Ensure table 'sections' is readable and has columns 'section_id' and 'name'.</div>`;
                   __assignmentsLoading = false; return;
               }
-             
+            
               const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id).filter(Boolean);
               const sectionNames = {};
               (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id; if (k) sectionNames[k] = r.name || k; });
-             
+            
               console.log('[Assignments] users:', users.length, 'sections:', sectionIds.length);
-             
+            
               if (users.length === 0) {
                   assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No users found. Ensure 'profiles' has rows and RLS allows admin to select all users.</div>`;
                   __assignmentsLoading = false; return;
@@ -5029,25 +5045,20 @@ Permissions:
                   assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
                   __assignmentsLoading = false; return;
               }
-             
-             // If content signature is unchanged, skip rewriting DOM
-             try {
-                 const sig = JSON.stringify({ u: users.map(u => u.id), s: sectionIds });
-                 if (window.__assignmentsSig === sig) {
-                     __assignmentsLoaded = true;
-                     __assignmentsLoading = false;
-                     return;
-                 }
-                 window.__assignmentsSig = sig;
-             } catch(_) {}
+            
+              // If content signature is unchanged, skip rewriting DOM
+              try {
+                  const sig = JSON.stringify({ u: users.map(u => u.id), s: sectionIds });
+                  if (window.__assignmentsSig === sig) {
+                      __assignmentsLoaded = true;
+                      __assignmentsLoading = false;
+                      return;
+                  }
+                  window.__assignmentsSig = sig;
+              } catch(_) {}
 
-              const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-              assignmentsList.innerHTML = users.map(user => {
-                  const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
-                  return `
-                      <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.name || user.username} (${user.username})</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
-                  `;
-              }).join('');
+             __assignmentsCache = { users, sectionIds, sectionNames };
+             renderAssignmentsList();
               __assignmentsLoaded = true;
               try { console.log('[Assignments] load complete'); } catch(_) {}
               __assignmentsLoading = false;
@@ -5443,7 +5454,6 @@ Permissions:
             border-color: #4CAF50;
             box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
         }
-        
         .section-drag-handle {
             margin-right: 15px;
             color: #999;
