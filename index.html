@@ -4972,6 +4972,7 @@ Permissions:
                 console.error('Assignments list element not found');
                 return;
             }
+            try { assignmentsList.innerHTML = '<div class="loading">Loading section assignments…</div>'; } catch(_) {}
             // Ensure Supabase client is ready before querying
             try {
                 if (!window.supabaseClient) {
@@ -5079,6 +5080,7 @@ Permissions:
             }
             users = Array.isArray(users) ? users : [];
             sectionIds = Array.isArray(sectionIds) ? sectionIds : [];
+            console.log('[Assignments] users.length =', users.length, 'sectionIds.length =', sectionIds.length);
             // Final guard: if wrapper data empty but Supabase counts show data, surface a helpful message
             try {
                 if ((sectionIds.length === 0 || users.length === 0) && window.supabaseClient) {
@@ -5151,7 +5153,8 @@ Permissions:
                 return;
             }
             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-            assignmentsList.innerHTML = users.map(user => {
+            const headerDebug = `<div class="assignments-debug" style="margin:8px 0;color:#666;font-size:12px;">users=${users.length} sections=${sectionIds.length}</div>`;
+            assignmentsList.innerHTML = headerDebug + users.map(user => {
                 const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
                 return `
                     <div class="assignment-card" data-user-id="${user.id}">

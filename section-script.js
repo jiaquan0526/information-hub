@@ -186,41 +186,38 @@ class SectionManager {
     }
 
     async loadSectionData() {
-        // Load section information from Supabase database
+        // Always fetch authoritative header fields from Supabase first
         let sectionConfig = null;
-        
         try {
-            if (window.hubDatabase && window.hubDatabaseReady) {
-                const sections = await hubDatabase.getAllSections();
-                sectionConfig = sections.find(s => (s.section_id === this.currentSection || s.id === this.currentSection)) || null;
-                console.log('Loaded section config from Supabase:', sectionConfig);
-            } else {
-                console.log('Database not ready, using fallback config');
+            if (window.supabaseClient) {
+                const { data, error } = await window.supabaseClient
+                    .from('sections')
+                    .select('section_id, name, icon, image, config, description')
+                    .eq('section_id', this.currentSection)
+                    .single();
+                if (!error && data) {
+                    sectionConfig = data;
+                    console.log('Loaded section from Supabase (authoritative):', sectionConfig);
+                }
             }
-        } catch (error) {
-            console.error('Error loading section data from Supabase:', error);
+        } catch (e) {
+            console.warn('Direct Supabase fetch failed; will try wrapper if available', e);
         }
-
-        // Fallback: fetch the single section row directly to get the display name ASAP
+        // Fallback to wrapper list if direct fetch did not return
         if (!sectionConfig) {
             try {
-                if (window.supabaseClient) {
-                    const { data, error } = await window.supabaseClient
-                        .from('sections')
-                        .select('section_id, name, icon, image, config, description')
-                        .eq('section_id', this.currentSection)
-                        .single();
-                    if (!error && data) {
-                        sectionConfig = data;
-                        console.log('Loaded section via direct Supabase fallback:', sectionConfig);
-                    }
+                if (window.hubDatabase && window.hubDatabaseReady) {
+                    const sections = await hubDatabase.getAllSections();
+                    sectionConfig = sections.find(s => (s.section_id === this.currentSection || s.id === this.currentSection)) || null;
+                    console.log('Loaded section via wrapper fallback:', sectionConfig);
                 }
-            } catch (_) {}
+            } catch (error) {
+                console.error('Error loading section via wrapper:', error);
+            }
         }
-
         if (!sectionConfig) {
             // No named defaults; show section id and a generic icon
-            sectionConfig = { name: this.currentSection, icon: 'fas fa-th-large', intro: '' };
+            sectionConfig = { section_id: this.currentSection, name: this.currentSection, icon: 'fa-solid fa-table-cells-large', image: '', intro: '' };
         }
 
         const nameEl = document.getElementById('sectionName');
