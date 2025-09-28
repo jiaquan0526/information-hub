@@ -857,6 +857,66 @@ class InformationHub {
             }
         } catch (_) {}
 
+        // Direct Supabase fallback: if wrapper returns nothing but table has rows (RLS permitting)
+        try {
+            if ((all || []).length === 0 && window.supabaseClient) {
+                let data = null, err = null;
+                // Try order by timestamp
+                try {
+                    const r1 = await window.supabaseClient
+                        .from('activities')
+                        .select('*')
+                        .order('timestamp', { ascending: false })
+                        .limit(pageSize);
+                    data = r1.data; err = r1.error;
+                } catch (e1) { err = e1; }
+                // Fallback order by created_at
+                if (err) {
+                    try {
+                        const r2 = await window.supabaseClient
+                            .from('activities')
+                            .select('*')
+                            .order('created_at', { ascending: false })
+                            .limit(pageSize);
+                        data = r2.data; err = r2.error;
+                    } catch (e2) { err = e2; }
+                }
+                // Final fallback no order
+                if (err) {
+                    const r3 = await window.supabaseClient
+                        .from('activities')
+                        .select('*')
+                        .limit(pageSize);
+                    data = r3.data; err = r3.error;
+                }
+                if (!err && Array.isArray(data) && data.length > 0) {
+                    // Resolve usernames
+                    const ids = Array.from(new Set(data.map(r => r.user_id).filter(Boolean)));
+                    let usersById = {};
+                    if (ids.length > 0) {
+                        try {
+                            const pr = await window.supabaseClient
+                                .from('profiles')
+                                .select('id, username, email')
+                                .in('id', ids);
+                            (pr.data || []).forEach(p => { usersById[p.id] = p; });
+                        } catch (_) {}
+                    }
+                    data.forEach(r => {
+                        const meta = r.metadata || {};
+                        const prof = r.user_id ? usersById[r.user_id] : null;
+                        all.push({
+                            ...r,
+                            username: meta.username || (prof && (prof.username || prof.email)) || null,
+                            description: meta.description || meta.title || null,
+                            title: meta.title || null,
+                            section: r.section_id || meta.section || null
+                        });
+                    });
+                }
+            }
+        } catch (_) {}
+
         const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
         const html = (all || []).map(a => {
             const who = esc(a.username || 'Unknown');
