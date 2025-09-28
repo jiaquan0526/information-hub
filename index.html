@@ -3177,12 +3177,23 @@ Permissions:
                 return;
             }
             
-            const userIndex = users.findIndex(u => u.id === userId);
-            
+            let userIndex = users.findIndex(u => String(u && u.id) === String(userId));
             if (userIndex === -1) {
-                alert('User not found');
-                return;
+                try {
+                    if (window.supabaseClient) {
+                        const { data: prof, error: fetchErr } = await window.supabaseClient
+                            .from('profiles')
+                            .select('id, username, name, email, role, permissions')
+                            .eq('id', userId)
+                            .single();
+                        if (!fetchErr && prof && prof.id) {
+                            users.push(prof);
+                            userIndex = users.length - 1;
+                        }
+                    }
+                } catch(_) {}
             }
+            if (userIndex === -1) { alert('User not found'); return; }
             
             const targetUser = users[userIndex];
             
