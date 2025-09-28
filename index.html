@@ -1795,6 +1795,7 @@
                             if (tabId === 'audit' && typeof loadAuditLog === 'function') loadAuditLog();
                             if (tabId === 'assignments' && typeof loadSectionAssignments === 'function') {
                                 if (!window.__assignmentsLoaded) { loadSectionAssignments(); }
+                                else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
                             }
                             if (tabId === 'sections') {
                                 // If DB not ready yet, load once ready
@@ -3416,6 +3417,7 @@ Permissions:
             } else if (tabName === 'assignments') {
                 console.log('Loading section assignments...');
                 if (!window.__assignmentsLoaded) loadSectionAssignments();
+                else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
             }
         };
 
