@@ -3435,8 +3435,24 @@ Permissions:
             } else if (tabName === 'assignments') {
                 console.log('Loading section assignments...');
                 loadSectionAssignments();
+                // Double-call after paint to ensure DOM is ready and visible
+                setTimeout(() => { try { loadSectionAssignments(); } catch(_) {} }, 50);
             }
         };
+
+        // Auto-load assignments when the assignments tab becomes active (safety net)
+        (function(){
+            try {
+                const assignmentsTabEl = document.getElementById('assignments-tab');
+                if (!assignmentsTabEl) return;
+                const obs = new MutationObserver(() => {
+                    if (assignmentsTabEl.classList.contains('active')) {
+                        try { loadSectionAssignments(); } catch(_) {}
+                    }
+                });
+                obs.observe(assignmentsTabEl, { attributes: true, attributeFilter: ['class'] });
+            } catch(_) {}
+        })();
 
         // Toggle compact admin UI
         window.toggleCompactAdmin = function() {
