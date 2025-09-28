@@ -5057,6 +5057,41 @@ Permissions:
             });
         };
         
+        // Lightweight non-blocking toast notifications
+        window.showToast = function(message, type = 'info') {
+            try {
+                let container = document.getElementById('toastContainer');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.id = 'toastContainer';
+                    container.style.position = 'fixed';
+                    container.style.top = '20px';
+                    container.style.right = '20px';
+                    container.style.zIndex = '10000';
+                    container.style.display = 'flex';
+                    container.style.flexDirection = 'column';
+                    container.style.gap = '8px';
+                    document.body.appendChild(container);
+                }
+                const toast = document.createElement('div');
+                toast.textContent = message;
+                toast.style.padding = '10px 14px';
+                toast.style.borderRadius = '8px';
+                toast.style.color = '#fff';
+                toast.style.fontSize = '14px';
+                toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                toast.style.opacity = '0.95';
+                toast.style.transition = 'opacity 0.3s ease';
+                if (type === 'success') toast.style.background = '#28a745';
+                else if (type === 'error') toast.style.background = '#dc3545';
+                else if (type === 'warning') toast.style.background = '#ffc107';
+                else toast.style.background = '#343a40';
+                container.appendChild(toast);
+                setTimeout(() => { try { toast.style.opacity = '0'; } catch(_) {} }, 1800);
+                setTimeout(() => { try { toast.remove(); } catch(_) {} }, 2200);
+            } catch(_) {}
+        };
+        
         // Ensure assignments render triggers when the tab becomes visible
         (function setupAssignmentsRenderTrigger() {
             try {
@@ -5188,11 +5223,11 @@ Permissions:
         // Update user section access
         window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
-            if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
+            if (!window.supabaseClient) { try { showToast('Supabase not initialized', 'error'); } catch(_) {} return; }
             // Enforce that only admins or users with canManageUsers can change others
             try {
                 const { data: { user: me } } = await window.supabaseClient.auth.getUser();
-                if (!me) return alert('Not authenticated');
+                if (!me) { try { showToast('Not authenticated', 'error'); } catch(_) {} return; }
                 const { data: myProfile } = await window.supabaseClient
                     .from('profiles')
                     .select('role, permissions')
@@ -5200,7 +5235,7 @@ Permissions:
                     .single();
                 const myRole = String(myProfile?.role || '').toLowerCase();
                 const canManageUsers = myRole === 'admin' || !!myProfile?.permissions?.canManageUsers;
-                if (!canManageUsers) return alert('You do not have permission to modify section assignments');
+                if (!canManageUsers) { try { showToast('You do not have permission to modify section assignments', 'error'); } catch(_) {} return; }
             } catch (_) { /* fail closed handled above */ }
             // Get user from database (profiles)
             const { data: user, error: userError } = await window.supabaseClient
@@ -5244,10 +5279,10 @@ Permissions:
                 
                 console.log('User section access updated in Supabase:', user);
                 try { await InformationHub.loadExportOptions?.(); } catch(_) {}
-                alert(`Section access updated for ${user.username}. Changes saved to database.`);
+                try { if (!window.__assignmentsBatchActive) showToast(`Section access updated for ${user.username}`, 'success'); } catch(_) {}
             } catch (error) {
                 console.error('Error updating user section access in Supabase:', error);
-                alert('Failed to save section access: ' + error.message);
+                try { if (!window.__assignmentsBatchActive) showToast('Failed to save section access: ' + error.message, 'error'); } catch(_) {}
             }
             
             console.log('Section access updated for user', user.username, ':', user.permissions.sections);
@@ -5255,6 +5290,7 @@ Permissions:
         
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
+            window.__assignmentsBatchActive = true;
             // Use the same full list as loader (ignore visibility)
             let allSections = [];
             try {
@@ -5277,10 +5313,20 @@ Permissions:
                     await updateUserSectionAccess(userId, sectionId, true);
                 }
             }
+            window.__assignmentsBatchActive = false;
+            try {
+                let username = '';
+                if (window.supabaseClient) {
+                    const { data: u } = await window.supabaseClient.from('profiles').select('username').eq('id', userId).single();
+                    username = u?.username || '';
+                }
+                showToast(`Assigned all sections ${username ? 'to ' + username : ''}`, 'success');
+            } catch(_) { try { showToast('Assigned all sections', 'success'); } catch(_) {} }
         };
         
         // Clear all sections for a user
         window.clearAllSections = async function(userId) {
+            window.__assignmentsBatchActive = true;
             // Use the same full list as loader (ignore visibility)
             let allSections = [];
             try {
@@ -5303,6 +5349,15 @@ Permissions:
                     await updateUserSectionAccess(userId, sectionId, false);
                 }
             }
+            window.__assignmentsBatchActive = false;
+            try {
+                let username = '';
+                if (window.supabaseClient) {
+                    const { data: u } = await window.supabaseClient.from('profiles').select('username').eq('id', userId).single();
+                    username = u?.username || '';
+                }
+                showToast(`Cleared all sections ${username ? 'for ' + username : ''}`, 'success');
+            } catch(_) { try { showToast('Cleared all sections', 'success'); } catch(_) {} }
         };
         // Ensure selected image actually loads; if not, remap to another available image
         function resolveValidBackground(sectionId, attempts = 0) {
