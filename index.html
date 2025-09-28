@@ -1815,6 +1815,7 @@
                     loadSectionsList();
                 } else if (tabName === 'assignments') {
                     console.log('Loading section assignments...');
+                    try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
                     if (!window.__assignmentsLoaded) loadSectionAssignments();
                     else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
                 }
@@ -3422,6 +3423,7 @@ Permissions:
                 loadSectionsList();
             } else if (tabName === 'assignments') {
                 console.log('Loading section assignments...');
+                try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
                 if (!window.__assignmentsLoaded) loadSectionAssignments();
                 else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
             }
@@ -5079,6 +5081,7 @@ Permissions:
                  }
                  window.__assignmentsSig = sig;
              } catch(_) {}
+             try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
              renderAssignmentsList();
               __assignmentsLoaded = true;
               try { console.log('[Assignments] load complete'); } catch(_) {}
