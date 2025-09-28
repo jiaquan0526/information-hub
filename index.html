@@ -4950,6 +4950,17 @@ Permissions:
                     return;
                 }
                 users = await hubDatabase.getAllUsers();
+                if (!Array.isArray(users) || users.length === 0) {
+                    try {
+                        if (window.supabaseClient) {
+                            const { data: rawUsers } = await window.supabaseClient
+                                .from('profiles')
+                                .select('id, username, name, email, role, permissions')
+                                .order('username', { ascending: true });
+                            users = Array.isArray(rawUsers) ? rawUsers : [];
+                        }
+                    } catch(_) {}
+                }
                 sectionIds = await getAllAvailableSections();
                 sectionNames = await getSectionDisplayNames();
             } catch (error) {
@@ -4961,6 +4972,10 @@ Permissions:
             sectionIds = Array.isArray(sectionIds) ? sectionIds : [];
             if (sectionIds.length === 0) {
                 assignmentsList.innerHTML = '<div class="empty">No sections available. Create sections first in Manage Sections.</div>';
+                return;
+            }
+            if (users.length === 0) {
+                assignmentsList.innerHTML = '<div class="empty">No users available to assign. Create users first in Users tab.</div>';
                 return;
             }
             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
