@@ -1831,6 +1831,10 @@
             const log = (msg) => { if (out) out.innerHTML += `<div>${msg}</div>`; };
             if (out) out.innerHTML = '';
             try {
+                log('<b>0) Environment</b>');
+                log(`vers: app=${(window.appVersion||'n/a')} time=${new Date().toISOString()}`);
+                log(`flags: hubDBReady=${!!window.hubDatabaseReady}`);
+                
                 log('<b>1) Supabase client</b>');
                 if (!window.supabaseClient) { log('❌ Not initialized'); return; } else { log('✅ Initialized'); }
 
@@ -1853,14 +1857,31 @@
                     .order('name', { ascending: true });
                 if (sErr) { log('❌ ' + sErr.message); } else { log('✅ ' + (secs?.length || 0) + ' rows'); }
 
-                log('<b>5) No-op profile update (self)</b>');
+                // Variables snapshot for troubleshooting data flows
+                log('<b>5) Variables snapshot</b>');
+                try {
+                    const usersFromDb = (window.hubDatabase && window.hubDatabaseReady && hubDatabase.getAllUsers) ? (await hubDatabase.getAllUsers()) : [];
+                    const sectionsFromDb = (window.hubDatabase && window.hubDatabaseReady && hubDatabase.getAllSections) ? (await hubDatabase.getAllSections()) : [];
+                    const sectionIdsAvail = await (async () => { try { return await getAllAvailableSections(); } catch(_) { return []; }})();
+                    const sectionNamesMap = await (async () => { try { return await getSectionDisplayNames(); } catch(_) { return {}; }})();
+                    log(`users(count) = ${Array.isArray(usersFromDb) ? usersFromDb.length : 0}`);
+                    log(`sections(count) = ${Array.isArray(sectionsFromDb) ? sectionsFromDb.length : 0}`);
+                    log(`getAllAvailableSections(count) = ${Array.isArray(sectionIdsAvail) ? sectionIdsAvail.length : 0}`);
+                    log(`getSectionDisplayNames(keys) = ${Object.keys(sectionNamesMap||{}).length}`);
+                    if (Array.isArray(sectionsFromDb) && sectionsFromDb.length > 0) {
+                        const sample = sectionsFromDb.slice(0, 3).map(s => s.section_id || s.id).join(', ');
+                        log(`sections(sample ids) = ${sample}`);
+                    }
+                } catch (snapErr) { log('⚠️ Snapshot error: ' + (snapErr?.message||snapErr)); }
+
+                log('<b>6) No-op profile update (self)</b>');
                 const { error: uErr } = await window.supabaseClient
                     .from('profiles')
                     .update({ permissions: myProfile.permissions || {} })
                     .eq('id', me.id);
                 if (uErr) { log('❌ ' + uErr.message); } else { log('✅ OK'); }
 
-                log('<b>6) Temp section create/delete</b>');
+                log('<b>7) Temp section create/delete</b>');
                 const tempId = 'diag-' + Math.random().toString(36).slice(2, 8);
                 const { error: cErr } = await window.supabaseClient
                     .from('sections')
@@ -3371,7 +3392,10 @@ Permissions:
             document.querySelectorAll('.admin-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-            event.target.classList.add('active');
+            try {
+                const selectedNav = document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`);
+                if (selectedNav) selectedNav.classList.add('active');
+            } catch(_) {}
 
             // Show/hide content sections
             document.querySelectorAll('.admin-tab-content').forEach(content => {
