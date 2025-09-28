@@ -3433,8 +3433,6 @@ Permissions:
             }
         };
 
-        // Removed extra observers/triggers to avoid repeated reloads
-
         // Toggle compact admin UI
         window.toggleCompactAdmin = function() {
             const modal = document.getElementById('adminPanelModal');
@@ -4960,9 +4958,11 @@ Permissions:
         
         // Load section assignments for admin panel – Supabase only
         let __assignmentsLoading = false;
+        let __assignmentsLoaded = false;
          window.loadSectionAssignments = async function() {
             if (__assignmentsLoading) { return; }
             __assignmentsLoading = true;
+            try { console.log('[Assignments] load start'); } catch(_) {}
              const assignmentsList = document.getElementById('assignmentsList');
              if (!assignmentsList) return;
              assignmentsList.innerHTML = `<div style="padding:10px;color:#555;">Loading section assignments…</div>`;
@@ -5033,7 +5033,7 @@ Permissions:
                  __assignmentsLoading = false; return;
              }
              if (sectionIds.length === 0) {
-                 assignmentsList.innerHTML = `<div style=\"padding:10px;color:\#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
+                 assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
                  __assignmentsLoading = false; return;
              }
             
@@ -5044,6 +5044,8 @@ Permissions:
                      <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.name || user.username} (${user.username})</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
                  `;
              }).join('');
+            __assignmentsLoaded = true;
+            try { console.log('[Assignments] load complete'); } catch(_) {}
             __assignmentsLoading = false;
          };
         
