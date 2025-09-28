@@ -470,7 +470,7 @@
                             <p>Assign specific sections to each user. Users will only see sections they are assigned to.</p>
                         </div>
                         <div class="assignment-search-bar" style="margin:10px 0 12px; display:flex; gap:10px; align-items:center;">
-                            <input id="assignmentUserSearchInput" type="text" placeholder="Search users by name, username, email, or role" oninput="renderAssignmentsList()" style="flex:1; padding:8px 10px; border:1px solid #e1e5e9; border-radius:6px;" />
+                            <input id="assignmentUserSearchInput" type="text" placeholder="Search users by name, username, email, or role" oninput="filterAssignmentsList()" style="flex:1; padding:8px 10px; border:1px solid #e1e5e9; border-radius:6px;" />
                             <button class="btn btn-secondary" onclick="document.getElementById('assignmentUserSearchInput').value=''; renderAssignmentsList();">
                                 <i class="fas fa-times"></i> Clear
                             </button>
@@ -1772,7 +1772,6 @@
         };
         // Backward-compatible alias
         window.showAdminPanel = window.openAdminPanel;
-
         // Ensure tab switching works and triggers data loading
         if (typeof window.switchAdminTab !== 'function') {
             window.switchAdminTab = function(tabName) {
@@ -2115,7 +2114,6 @@ Name: ${profile.name || 'Not provided'}
 Email: ${profile.email || 'Not provided'}
 Accessible Sections:
 ${(profile.permissions?.sections || []).map(s => '• ' + s.replace('-', ' ').toUpperCase()).join('\n')}
-
 Permissions:
 • Manage Users: ${profile.permissions?.canManageUsers ? 'Yes' : 'No'}
 • Edit All Sections: ${profile.permissions?.canEditAllSections ? 'Yes' : 'No'}
@@ -4971,7 +4969,7 @@ Permissions:
                 return;
             }
             if (stats) {
-                stats.textContent = `Users: ${users.length} • Sections: ${sectionIds.length}${q ? ` • Filter: "${q}"` : ''}`;
+                stats.textContent = `Users: ${users.length} • Sections: ${sectionIds.length}${q ? ` • Filter: \"${q}\"` : ''}`;
             }
             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
             const filteredUsers = q ? users.filter(u => {
@@ -4989,6 +4987,77 @@ Permissions:
                 `;
             }).join('');
         };
+        window.filterAssignmentsList = function() {
+            try { renderAssignmentsList(); } catch(_) {}
+        };
+        // DOM-based fallback renderer in case HTML concat fails to paint
+        window.renderAssignmentsListDom = function() {
+            const assignmentsList = document.getElementById('assignmentsList');
+            if (!assignmentsList) return;
+            const q = (document.getElementById('assignmentUserSearchInput')?.value || '').trim().toLowerCase();
+            const users = Array.isArray(__assignmentsCache.users) ? __assignmentsCache.users : [];
+            const sectionIds = Array.isArray(__assignmentsCache.sectionIds) ? __assignmentsCache.sectionIds : [];
+            const sectionNames = __assignmentsCache.sectionNames || {};
+            const filteredUsers = q ? users.filter(u => {
+                const hay = [u.username, u.name, u.email, u.role].filter(Boolean).join(' ').toLowerCase();
+                return hay.includes(q);
+            }) : users;
+            assignmentsList.innerHTML = '';
+            filteredUsers.forEach(user => {
+                const card = document.createElement('div');
+                card.className = 'assignment-card';
+                card.setAttribute('data-user-id', user.id);
+                const userInfo = document.createElement('div');
+                userInfo.className = 'user-info';
+                const h4 = document.createElement('h4');
+                h4.textContent = `${user.name || user.username} (${user.username})`;
+                const roleSpan = document.createElement('span');
+                roleSpan.className = 'user-role';
+                roleSpan.textContent = user.role || '';
+                userInfo.appendChild(h4);
+                userInfo.appendChild(roleSpan);
+                const secWrap = document.createElement('div');
+                secWrap.className = 'section-assignments';
+                const h5 = document.createElement('h5');
+                h5.textContent = 'Assigned Sections:';
+                const boxes = document.createElement('div');
+                boxes.className = 'section-checkboxes';
+                const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
+                sectionIds.forEach(id => {
+                    const label = document.createElement('label');
+                    label.className = 'section-checkbox';
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.value = id;
+                    input.checked = userSections.includes(id);
+                    input.onchange = () => { try { updateUserSectionAccess(String(user.id), String(id), input.checked); } catch(_) {} };
+                    const span = document.createElement('span');
+                    span.textContent = sectionNames[id] || id;
+                    label.appendChild(input);
+                    label.appendChild(span);
+                    boxes.appendChild(label);
+                });
+                const actions = document.createElement('div');
+                actions.className = 'assignment-actions';
+                const btnAll = document.createElement('button');
+                btnAll.className = 'btn btn-sm btn-primary';
+                btnAll.textContent = 'Select All';
+                btnAll.onclick = () => { try { selectAllSections(String(user.id)); } catch(_) {} };
+                const btnClear = document.createElement('button');
+                btnClear.className = 'btn btn-sm btn-secondary';
+                btnClear.textContent = 'Clear All';
+                btnClear.onclick = () => { try { clearAllSections(String(user.id)); } catch(_) {} };
+                actions.appendChild(btnAll);
+                actions.appendChild(btnClear);
+                secWrap.appendChild(h5);
+                secWrap.appendChild(boxes);
+                secWrap.appendChild(actions);
+                card.appendChild(userInfo);
+                card.appendChild(secWrap);
+                assignmentsList.appendChild(card);
+            });
+        };
+        
         window.loadSectionAssignments = async function() {
             if (__assignmentsLoading) { return; }
              __assignmentsLoading = true;
@@ -5071,7 +5140,8 @@ Permissions:
              __assignmentsCache = { users, sectionIds, sectionNames };
              try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
              renderAssignmentsList();
-+            setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0);
+            setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0);
+            setTimeout(() => { try { if (document.querySelectorAll('#assignmentsList .assignment-card').length === 0) renderAssignmentsListDom(); } catch(_) {} }, 30);
               __assignmentsLoaded = true;
               try { console.log('[Assignments] load complete'); } catch(_) {}
               __assignmentsLoading = false;
@@ -5196,7 +5266,6 @@ Permissions:
                 }
             }
         };
-
         // Ensure selected image actually loads; if not, remap to another available image
         function resolveValidBackground(sectionId, attempts = 0) {
             return new Promise((resolve) => {
@@ -5899,7 +5968,6 @@ Permissions:
             border-radius: 8px;
             background: #f8f9fa;
         }
-        
         .section-checkbox {
             display: flex;
             align-items: center;
