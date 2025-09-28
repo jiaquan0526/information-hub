@@ -520,7 +520,6 @@
         </div>
     </div>
     </div>
-
     <!-- Defer scripts to improve First Paint; XLSX will be loaded on demand -->
     <script src="database-supabase.js" defer></script>
     <script src="excel-export.js" defer></script>
@@ -1279,7 +1278,6 @@
             } catch(_) {}
             return false;
         }
-
         // Info bar marquee: build scrolling track from latest activities
         window.rotateInfoBar = async function() {
             try {
@@ -2002,7 +2000,6 @@
                 }
             };
         }
-        
         // Robust Restore JSON fallback (works even if DB is not ready)
         if (typeof window.restoreJson !== 'function') {
             window.restoreJson = async function() {
@@ -2769,7 +2766,6 @@ Permissions:
 				try { if (typeof renderEditChips === 'function') renderEditChips(); } catch(_) {}
 			} catch(_) {}
 		};
-        
 		window.saveUserPermissions = async function() {
 			if (!currentEditingUser) return;
 			
@@ -3169,7 +3165,6 @@ Permissions:
             const email = document.getElementById('editUserEmail').value;
             const roleSelect = document.getElementById('editUserRole');
             const role = roleSelect.value;
-
 			// Collect selected permissions from the modal by reading existing checkboxes in the DOM
 			// This avoids waiting on any network call that could cause a pending state
 			const selectedSections = [];
@@ -3435,24 +3430,10 @@ Permissions:
             } else if (tabName === 'assignments') {
                 console.log('Loading section assignments...');
                 loadSectionAssignments();
-                // Double-call after paint to ensure DOM is ready and visible
-                setTimeout(() => { try { loadSectionAssignments(); } catch(_) {} }, 50);
             }
         };
 
-        // Auto-load assignments when the assignments tab becomes active (safety net)
-        (function(){
-            try {
-                const assignmentsTabEl = document.getElementById('assignments-tab');
-                if (!assignmentsTabEl) return;
-                const obs = new MutationObserver(() => {
-                    if (assignmentsTabEl.classList.contains('active')) {
-                        try { loadSectionAssignments(); } catch(_) {}
-                    }
-                });
-                obs.observe(assignmentsTabEl, { attributes: true, attributeFilter: ['class'] });
-            } catch(_) {}
-        })();
+        // Removed extra observers/triggers to avoid repeated reloads
 
         // Toggle compact admin UI
         window.toggleCompactAdmin = function() {
@@ -3715,7 +3696,6 @@ Permissions:
                 console.error('sectionCheckboxes element not found!');
                 return;
             }
-            
 		// Show all provided sections in the Permissions tab (no role-based filtering here)
 		const filteredSections = Array.isArray(sections) ? sections.slice() : [];
             
@@ -4278,7 +4258,7 @@ Permissions:
             
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    // Update each section's order in Supabase via wrapper; fallback to direct Supabase if wrapper fails
+                    // Update each section's order in Supabase via wrapper; fallback to direct Supabase batch update if wrapper fails
                     try {
                         for (const section of sectionOrder) {
                             await hubDatabase.updateSection(section);
@@ -4979,112 +4959,93 @@ Permissions:
         }
         
         // Load section assignments for admin panel – Supabase only
-        window.loadSectionAssignments = async function() {
-            const assignmentsList = document.getElementById('assignmentsList');
-            if (!assignmentsList) return;
-            assignmentsList.innerHTML = `<div style="padding:10px;color:#555;">Loading section assignments…</div>`;
+        let __assignmentsLoading = false;
+         window.loadSectionAssignments = async function() {
+            if (__assignmentsLoading) { return; }
+            __assignmentsLoading = true;
+             const assignmentsList = document.getElementById('assignmentsList');
+             if (!assignmentsList) return;
+             assignmentsList.innerHTML = `<div style="padding:10px;color:#555;">Loading section assignments…</div>`;
             
-            // Ensure Supabase client is ready
-            let retries = 0;
-            while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
-            if (!window.supabaseClient) {
-                assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Supabase not initialized. Please sign in again.</div>`;
-                return;
-            }
+             // Ensure Supabase client is ready
+             let retries = 0;
+             while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
+             if (!window.supabaseClient) {
+                 assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Supabase not initialized. Please sign in again.</div>`;
+                 __assignmentsLoading = false; return;
+             }
             
-            // Ensure we are authenticated (RLS may return 0 rows if anonymous)
-            try {
-                let authTries = 0;
-                let userObj = null;
-                while (authTries < 50 && !userObj) {
-                    const { data: { user } } = await window.supabaseClient.auth.getUser();
-                    userObj = user || null;
-                    if (!userObj) { await new Promise(r => setTimeout(r, 100)); }
-                    authTries++;
-                }
-                if (!userObj) {
-                    assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">You are not signed in. Please log in to manage section assignments.</div>`;
-                    return;
-                }
-            } catch (_) {
-                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Authentication check failed. Please refresh and sign in.</div>`;
-                return;
-            }
+             // Ensure we are authenticated (RLS may return 0 rows if anonymous)
+             try {
+                 let authTries = 0;
+                 let userObj = null;
+                 while (authTries < 50 && !userObj) {
+                     const { data: { user } } = await window.supabaseClient.auth.getUser();
+                     userObj = user || null;
+                     if (!userObj) { await new Promise(r => setTimeout(r, 100)); }
+                     authTries++;
+                 }
+                 if (!userObj) {
+                     assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">You are not signed in. Please log in to manage section assignments.</div>`;
+                     __assignmentsLoading = false; return;
+                 }
+             } catch (_) {
+                 assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Authentication check failed. Please refresh and sign in.</div>`;
+                 __assignmentsLoading = false; return;
+             }
             
-            let users = [];
-            let rows = [];
-            try {
-                const { data: usersData, error: usersErr } = await window.supabaseClient
-                    .from('profiles')
-                    .select('id, username, name, email, role, permissions')
-                    .order('username', { ascending: true });
-                if (usersErr) throw usersErr;
-                users = Array.isArray(usersData) ? usersData : [];
-            } catch (e) {
-                console.error('Failed to load profiles:', e);
-                assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Failed to load users from Supabase. Check RLS policies for table 'profiles'.</div>`;
-                return;
-            }
+             let users = [];
+             let rows = [];
+             try {
+                 const { data: usersData, error: usersErr } = await window.supabaseClient
+                     .from('profiles')
+                     .select('id, username, name, email, role, permissions')
+                     .order('username', { ascending: true });
+                 if (usersErr) throw usersErr;
+                 users = Array.isArray(usersData) ? usersData : [];
+             } catch (e) {
+                 console.error('Failed to load profiles:', e);
+                 assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Failed to load users from Supabase. Check RLS policies for table 'profiles'.</div>`;
+                 __assignmentsLoading = false; return;
+             }
             
-            try {
-                const { data: sectionsData, error: sectErr } = await window.supabaseClient
-                    .from('sections')
-                    .select('section_id, name')
-                    .order('name', { ascending: true });
-                if (sectErr) throw sectErr;
-                rows = Array.isArray(sectionsData) ? sectionsData : [];
-            } catch (e) {
-                console.error('Failed to load sections:', e);
-                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load sections from Supabase. Ensure table 'sections' is readable and has columns 'section_id' and 'name'.</div>`;
-                return;
-            }
+             try {
+                 const { data: sectionsData, error: sectErr } = await window.supabaseClient
+                     .from('sections')
+                     .select('section_id, name')
+                     .order('name', { ascending: true });
+                 if (sectErr) throw sectErr;
+                 rows = Array.isArray(sectionsData) ? sectionsData : [];
+             } catch (e) {
+                 console.error('Failed to load sections:', e);
+                 assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load sections from Supabase. Ensure table 'sections' is readable and has columns 'section_id' and 'name'.</div>`;
+                 __assignmentsLoading = false; return;
+             }
             
-            const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id).filter(Boolean);
-            const sectionNames = {};
-            (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id; if (k) sectionNames[k] = r.name || k; });
+             const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id).filter(Boolean);
+             const sectionNames = {};
+             (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id; if (k) sectionNames[k] = r.name || k; });
             
-            console.log('[Assignments] users:', users.length, 'sections:', sectionIds.length);
+             console.log('[Assignments] users:', users.length, 'sections:', sectionIds.length);
             
-            if (users.length === 0) {
-                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No users found. Ensure 'profiles' has rows and RLS allows admin to select all users.</div>`;
-                return;
-            }
-            if (sectionIds.length === 0) {
-                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
-                return;
-            }
+             if (users.length === 0) {
+                 assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No users found. Ensure 'profiles' has rows and RLS allows admin to select all users.</div>`;
+                 __assignmentsLoading = false; return;
+             }
+             if (sectionIds.length === 0) {
+                 assignmentsList.innerHTML = `<div style=\"padding:10px;color:\#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
+                 __assignmentsLoading = false; return;
+             }
             
-            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-            assignmentsList.innerHTML = users.map(user => {
-                const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
-                return `
-                    <div class=\"assignment-card\" data-user-id=\"${user.id}\">
-                        <div class=\"user-info\">
-                            <h4>${user.name || user.username} (${user.username})</h4>
-                            <span class=\"user-role\">${user.role}</span>
-                        </div>
-                        <div class=\"section-assignments\">
-                            <h5>Assigned Sections:</h5>
-                            <div class=\"section-checkboxes\">
-                                ${sectionIds.map(id => `
-                                    <label class=\"section-checkbox\">
-                                        <input type=\"checkbox\"
-                                               value=\"${id}\"
-                                               ${userSections.includes(id) ? 'checked' : ''}
-                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">
-                                        <span>${safeName(id)}</span>
-                                    </label>
-                                `).join('')}
-                            </div>
-                            <div class=\"assignment-actions\">
-                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>
-                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        };
+             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
+             assignmentsList.innerHTML = users.map(user => {
+                 const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
+                 return `
+                     <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.name || user.username} (${user.username})</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
+                 `;
+             }).join('');
+            __assignmentsLoading = false;
+         };
         
         // Update user section access
         window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
@@ -5265,7 +5226,6 @@ Permissions:
         function isLowDataConnection() { return false; }
         function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
     </script>
-    
     <style>
         @keyframes spin {
             0% { transform: rotate(0deg); }
