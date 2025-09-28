@@ -5092,9 +5092,38 @@ Permissions:
                         return;
                     }
                     if ((uCount || 0) > 0 && users.length === 0) {
-                        console.warn('Assignments: Supabase shows users but none loaded via wrappers. Rendering message.');
-                        assignmentsList.innerHTML = '<div class="empty">Users exist in Supabase but could not be listed. Try refreshing, or check RLS/permissions for reading profiles.</div>';
-                        return;
+                        console.warn('Assignments: Supabase shows users but none loaded via wrappers. Attempting to include current user only.');
+                        try {
+                            const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                            if (me) {
+                                const { data: myProf } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('id, username, name, email, role, permissions')
+                                    .eq('id', me.id)
+                                    .single();
+                                if (myProf) users = [myProf];
+                            }
+                        } catch(_) {}
+                        // If still empty after self-fallback, show a helpful message but keep sections visible below
+                        if (!Array.isArray(users) || users.length === 0) {
+                            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
+                            assignmentsList.innerHTML = `
+                                <div class="empty">Users exist in Supabase but could not be listed due to permissions. Showing sections for reference.</div>
+                                <div class="assignment-card">
+                                    <div class="section-assignments">
+                                        <h5>Available Sections:</h5>
+                                        <div class="section-checkboxes">
+                                            ${sectionIds.map(id => `
+                                                <label class="section-checkbox">
+                                                    <input type="checkbox" value="${id}" disabled>
+                                                    <span>${safeName(id)}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                </div>`;
+                            return;
+                        }
                     }
                 }
             } catch(_) {}
@@ -5103,7 +5132,22 @@ Permissions:
                 return;
             }
             if (users.length === 0) {
-                assignmentsList.innerHTML = '<div class="empty">No users available to assign. Create users first in Users tab.</div>';
+                const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
+                assignmentsList.innerHTML = `
+                    <div class="empty">No users available to assign. Showing sections for reference.</div>
+                    <div class="assignment-card">
+                        <div class="section-assignments">
+                            <h5>Available Sections:</h5>
+                            <div class="section-checkboxes">
+                                ${sectionIds.map(id => `
+                                    <label class="section-checkbox">
+                                        <input type="checkbox" value="${id}" disabled>
+                                        <span>${safeName(id)}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>`;
                 return;
             }
             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
