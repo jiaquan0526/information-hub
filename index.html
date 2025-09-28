@@ -1802,7 +1802,9 @@
                             if (tabId === 'users' && typeof loadUsersList === 'function') loadUsersList();
                             if (tabId === 'permissions' && typeof loadPermissionUserList === 'function') loadPermissionUserList();
                             if (tabId === 'audit' && typeof loadAuditLog === 'function') loadAuditLog();
-                            if (tabId === 'assignments' && typeof loadSectionAssignments === 'function') loadSectionAssignments();
+                            if (tabId === 'assignments' && typeof loadSectionAssignments === 'function') {
+                                if (!window.__assignmentsLoaded) { loadSectionAssignments(); }
+                            }
                             if (tabId === 'sections') {
                                 // If DB not ready yet, load once ready
                                 const ensureSections = async () => {
@@ -3429,7 +3431,7 @@ Permissions:
                 loadSectionsList();
             } else if (tabName === 'assignments') {
                 console.log('Loading section assignments...');
-                loadSectionAssignments();
+                if (!window.__assignmentsLoaded) loadSectionAssignments();
             }
         };
 
