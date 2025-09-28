@@ -4986,11 +4986,12 @@ Permissions:
             let sectionIds = [];
             let sectionNames = {};
             try {
-                if (!(window.hubDatabase && window.hubDatabaseReady)) {
-                    assignmentsList.innerHTML = '<div class="empty">Database not ready. Please try again.</div>';
-                    return;
+                // Prefer wrapper if ready, but do not bail when not ready
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllUsers === 'function') {
+                    users = await hubDatabase.getAllUsers();
+                } else {
+                    users = [];
                 }
-                users = await hubDatabase.getAllUsers();
                 if (!Array.isArray(users) || users.length === 0) {
                     try {
                         if (window.supabaseClient) {
@@ -5019,7 +5020,7 @@ Permissions:
                 // Build section list for assignments (include all, regardless of visible)
                 try {
                     let rows = [];
-                    if (window.hubDatabase && window.hubDatabaseReady) {
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
                         rows = await hubDatabase.getAllSections();
                     }
                     if ((!rows || rows.length === 0) && window.supabaseClient) {
@@ -5098,7 +5099,7 @@ Permissions:
                 }
             } catch(_) {}
             if (sectionIds.length === 0) {
-                assignmentsList.innerHTML = '<div class="empty">No sections available. Create sections first in Manage Sections.</div>';
+                assignmentsList.innerHTML = '<div class="empty">No sections available to list. If you do have sections, check Diagnostics for counts and RLS permissions on the sections table.</div>';
                 return;
             }
             if (users.length === 0) {
