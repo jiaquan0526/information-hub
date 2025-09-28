@@ -1775,45 +1775,48 @@
 
         // Ensure tab switching works and triggers data loading
         if (typeof window.switchAdminTab !== 'function') {
-            window.switchAdminTab = function(tabId) {
+            window.switchAdminTab = function(tabName) {
+                console.log('Switching to tab:', tabName);
+                
+                // Update tab appearance
+                document.querySelectorAll('.admin-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
                 try {
-                    const contents = document.querySelectorAll('.admin-tab-content');
-                    contents.forEach(el => { el.classList.remove('active'); el.style.display = 'none'; });
-                    const target = document.getElementById(`${tabId}-tab`);
-                    if (target) { target.classList.add('active'); target.style.display = 'block'; }
-
-                    // Update nav active state
-                    const navs = document.querySelectorAll('.admin-tabs .admin-tab');
-                    navs.forEach(n => n.classList.remove('active'));
-                    const selectedNav = document.querySelector(`.admin-tabs .admin-tab[onclick="switchAdminTab('${tabId}')"]`);
+                    const selectedNav = document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`);
                     if (selectedNav) selectedNav.classList.add('active');
+                } catch(_) {}
 
-                    // Trigger loaders based on tab
-                    setTimeout(async () => {
-                        try {
-                            if (tabId === 'users' && typeof loadUsersList === 'function') loadUsersList();
-                            if (tabId === 'permissions' && typeof loadPermissionUserList === 'function') loadPermissionUserList();
-                            if (tabId === 'audit' && typeof loadAuditLog === 'function') loadAuditLog();
-                            if (tabId === 'assignments' && typeof loadSectionAssignments === 'function') {
-                                if (!window.__assignmentsLoaded) { loadSectionAssignments(); }
-                                else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
-                            }
-                            if (tabId === 'sections') {
-                                // If DB not ready yet, load once ready
-                                const ensureSections = async () => {
-                                    try { await loadSectionsList(); } catch(_) {}
-                                };
-                                if (window.hubDatabaseReady) {
-                                    ensureSections();
-                                } else {
-                                    const once = () => { document.removeEventListener('hubdb-ready', once); ensureSections(); };
-                                    document.addEventListener('hubdb-ready', once);
-                                }
-                            }
-                        } catch (e) { console.warn('switchAdminTab loader error', e); }
-                    }, 0);
-                } catch (e) {
-                    console.error('switchAdminTab error', e);
+                // Show/hide content sections
+                document.querySelectorAll('.admin-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                    try { content.style.display = 'none'; } catch(_) {}
+                });
+                
+                const targetTab = document.getElementById(`${tabName}-tab`);
+                if (targetTab) {
+                    targetTab.classList.add('active');
+                    try { targetTab.style.display = 'block'; } catch(_) {}
+                    console.log('Tab content activated:', tabName);
+                } else {
+                    console.error('Tab content not found:', `${tabName}-tab`);
+                }
+
+                // Load specific tab content
+                if (tabName === 'users') {
+                    try { renderCurrentUserSummary(); } catch (e) { console.warn('renderCurrentUserSummary error', e); }
+                    loadUsersList();
+                } else if (tabName === 'permissions') {
+                    loadPermissionUserList();
+                } else if (tabName === 'audit') {
+                    loadAuditLog();
+                } else if (tabName === 'sections') {
+                    console.log('Loading sections list...');
+                    loadSectionsList();
+                } else if (tabName === 'assignments') {
+                    console.log('Loading section assignments...');
+                    if (!window.__assignmentsLoaded) loadSectionAssignments();
+                    else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
                 }
             };
         }
@@ -3394,11 +3397,13 @@ Permissions:
             // Show/hide content sections
             document.querySelectorAll('.admin-tab-content').forEach(content => {
                 content.classList.remove('active');
+                try { content.style.display = 'none'; } catch(_) {}
             });
             
             const targetTab = document.getElementById(`${tabName}-tab`);
             if (targetTab) {
                 targetTab.classList.add('active');
+                try { targetTab.style.display = 'block'; } catch(_) {}
                 console.log('Tab content activated:', tabName);
             } else {
                 console.error('Tab content not found:', `${tabName}-tab`);
@@ -4951,6 +4956,12 @@ Permissions:
             const users = Array.isArray(__assignmentsCache.users) ? __assignmentsCache.users : [];
             const sectionIds = Array.isArray(__assignmentsCache.sectionIds) ? __assignmentsCache.sectionIds : [];
             const sectionNames = __assignmentsCache.sectionNames || {};
+            // Auto-load if cache not ready yet
+            if ((!users || users.length === 0) || (!sectionIds || sectionIds.length === 0)) {
+                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">Loading section assignments…</div>`;
+                try { if (!__assignmentsLoading) { loadSectionAssignments(); } } catch(_) {}
+                return;
+            }
             if (stats) {
                 stats.textContent = `Users: ${users.length} • Sections: ${sectionIds.length}${q ? ` • Filter: "${q}"` : ''}`;
             }
