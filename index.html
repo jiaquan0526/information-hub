@@ -1868,6 +1868,17 @@
                     log(`sections(count) = ${Array.isArray(sectionsFromDb) ? sectionsFromDb.length : 0}`);
                     log(`getAllAvailableSections(count) = ${Array.isArray(sectionIdsAvail) ? sectionIdsAvail.length : 0}`);
                     log(`getSectionDisplayNames(keys) = ${Object.keys(sectionNamesMap||{}).length}`);
+                    // Direct Supabase counts for cross-check
+                    try {
+                        const { count: profileCount } = await window.supabaseClient
+                            .from('profiles')
+                            .select('id', { count: 'exact', head: true });
+                        const { count: sectionCount } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id', { count: 'exact', head: true });
+                        log(`profiles(count via Supabase) = ${profileCount ?? 'n/a'}`);
+                        log(`sections(count via Supabase) = ${sectionCount ?? 'n/a'}`);
+                    } catch(_) {}
                     if (Array.isArray(sectionsFromDb) && sectionsFromDb.length > 0) {
                         const sample = sectionsFromDb.slice(0, 3).map(s => s.section_id || s.id).join(', ');
                         log(`sections(sample ids) = ${sample}`);
@@ -4985,6 +4996,18 @@ Permissions:
                         }
                     } catch(_) {}
                 }
+                // Fallback to local session if still empty
+                if (!Array.isArray(users) || users.length === 0) {
+                    try {
+                        const sessRaw = localStorage.getItem('hubSession');
+                        if (sessRaw) {
+                            const s = JSON.parse(sessRaw);
+                            if (s && s.userId) {
+                                users = [{ id: s.userId, username: s.username || 'me', name: s.name || s.username || 'Me', email: s.email || '', role: s.role || 'viewer', permissions: s.permissions || {} }];
+                            }
+                        }
+                    } catch(_) {}
+                }
                 // Build section list for assignments (include all, regardless of visible)
                 try {
                     let rows = [];
@@ -4994,7 +5017,7 @@ Permissions:
                     if ((!rows || rows.length === 0) && window.supabaseClient) {
                         const { data: direct } = await window.supabaseClient
                             .from('sections')
-                            .select('section_id, name')
+                            .select('section_id, id, name')
                             .order('name', { ascending: true });
                         rows = Array.isArray(direct) ? direct : [];
                     }
@@ -5007,10 +5030,36 @@ Permissions:
                         // As a last resort, fallback to visible-only helpers
                         sectionIds = await getAllAvailableSections();
                         sectionNames = await getSectionDisplayNames();
+                        // If still empty, derive from DOM (cards on main hub)
+                        if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
+                            try {
+                                const cards = Array.from(document.querySelectorAll('.hub-card[data-section-id]'));
+                                sectionIds = cards.map(c => c.getAttribute('data-section-id')).filter(Boolean);
+                                sectionNames = sectionNames || {};
+                                cards.forEach(c => {
+                                    const id = c.getAttribute('data-section-id');
+                                    const titleEl = c.querySelector('.card-title h3');
+                                    if (id && titleEl && !sectionNames[id]) sectionNames[id] = titleEl.textContent || id;
+                                });
+                            } catch(_) {}
+                        }
                     }
                 } catch(_) {
                     sectionIds = await getAllAvailableSections();
                     sectionNames = await getSectionDisplayNames();
+                    // DOM fallback
+                    if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
+                        try {
+                            const cards = Array.from(document.querySelectorAll('.hub-card[data-section-id]'));
+                            sectionIds = cards.map(c => c.getAttribute('data-section-id')).filter(Boolean);
+                            sectionNames = sectionNames || {};
+                            cards.forEach(c => {
+                                const id = c.getAttribute('data-section-id');
+                                const titleEl = c.querySelector('.card-title h3');
+                                if (id && titleEl && !sectionNames[id]) sectionNames[id] = titleEl.textContent || id;
+                            });
+                        } catch(_) {}
+                    }
                 }
             } catch (error) {
                 console.error('Error loading assignments data:', error);

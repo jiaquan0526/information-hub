@@ -1134,7 +1134,25 @@ class SectionManager {
             // Fallback to direct upsert when wrapper not available or failed
             if (!writeOk) {
                 if (!window.supabaseClient) throw (lastErr || new Error('Supabase unavailable'));
-                const payload = { section_id: this.currentSection, config: cfg };
+                // Ensure required non-null columns (e.g., name) are present on insert
+                let ensure = {};
+                try {
+                    const { data: existing } = await window.supabaseClient
+                        .from('sections')
+                        .select('name, icon, image, color')
+                        .eq('section_id', this.currentSection)
+                        .single();
+                    ensure.name = (existing && existing.name && String(existing.name).trim())
+                        ? existing.name
+                        : (document.getElementById('sectionName')?.textContent?.trim() || this.currentSection);
+                    if (existing && existing.icon) ensure.icon = existing.icon;
+                    if (existing && existing.image) ensure.image = existing.image;
+                    if (existing && existing.color) ensure.color = existing.color;
+                } catch (_) {
+                    // If select fails (row doesn't exist), default name to section id to satisfy NOT NULL
+                    ensure.name = document.getElementById('sectionName')?.textContent?.trim() || this.currentSection;
+                }
+                const payload = { section_id: this.currentSection, ...ensure, config: cfg };
                 const { error: upErr } = await window.supabaseClient
                     .from('sections')
                     .upsert(payload, { onConflict: 'section_id' });
@@ -1412,18 +1430,54 @@ class SectionManager {
         // Seed existing types
         (cfg.types || []).filter(t => !t.hidden).forEach(t => typeList.appendChild(makeRow(t)));
 
+        // Local normalizer to ensure consistent IDs and detect collisions
+        const normalizeTypeIdLocal = (raw) => {
+            try {
+                let t = String(raw || '').toLowerCase().trim();
+                t = t.replace(/\s+/g, '-');
+                t = t.replace(/_/g, '-');
+                // Collapse repeats and strip invalids
+                t = t.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                // Canonicalize built-ins and common synonyms
+                if (t === 'playbook') t = 'playbooks';
+                if (t === 'boxlink' || t === 'box-links' || t === 'boxlinks' || t === 'box') t = 'box-links';
+                if (t === 'dashboard') t = 'dashboards';
+                return t;
+            } catch (_) { return String(raw || '').toLowerCase().trim(); }
+        };
+
         modal.querySelector('#addTypeBtn').addEventListener('click', () => {
-            typeList.appendChild(makeRow({ id: '', name: '', icon: '' }));
+            // Suggest a unique ID automatically
+            try {
+                const existingIds = Array.from(typeList.querySelectorAll('.type-row .type-id'))
+                    .map(inp => normalizeTypeIdLocal(inp.value || ''))
+                    .filter(Boolean);
+                let idx = 1;
+                let candidate = 'type';
+                while (existingIds.includes(candidate) || !candidate) {
+                    idx++;
+                    candidate = `type-${idx}`;
+                }
+                typeList.appendChild(makeRow({ id: candidate, name: '', icon: '' }));
+            } catch (_) {
+                typeList.appendChild(makeRow({ id: '', name: '', icon: '' }));
+            }
             showAlert('Added a new type row', 'info');
         });
 
         modal.querySelector('#saveCfgBtn').addEventListener('click', async () => {
             // Collect
             const rows = Array.from(typeList.querySelectorAll('.type-row'));
-            const types = rows.map(r => ({
+            // Normalize ids and validate
+            const rawTypes = rows.map(r => ({
                 id: String(r.querySelector('.type-id')?.value || '').trim(),
                 name: String(r.querySelector('.type-name')?.value || '').trim(),
                 icon: String(r.querySelector('.type-icon')?.value || '').trim()
+            })).filter(t => t.id);
+            const types = rawTypes.map(t => ({
+                id: normalizeTypeIdLocal(t.id),
+                name: t.name,
+                icon: t.icon
             })).filter(t => t.id);
             if (types.length === 0) {
                 showAlert('Provide at least one type with an id', 'error');
@@ -1439,6 +1493,17 @@ class SectionManager {
                 }
                 seen.add(id);
             }
+            // Prevent immediate collision against existing config (if any) when admin adds a new single type
+            try {
+                const existing = (this.sectionConfig && Array.isArray(this.sectionConfig.types)) ? this.sectionConfig.types : [];
+                const existingIds = new Set(existing.map(x => normalizeTypeIdLocal(x && (x.id !== undefined ? x.id : x))));
+                // If adding exactly one new row and it collides with existing, block
+                const newIds = types.map(x => x.id);
+                const merged = new Set(); let collision = null;
+                [...existingIds].forEach(i => merged.add(i));
+                for (const i of newIds) { if (merged.has(i)) { collision = i; break; } merged.add(i); }
+                if (collision) { showAlert(`Type id already exists: ${collision}`, 'error'); return; }
+            } catch (_) {}
             const catsRaw = modal.querySelector('#cfgCats').value || '';
             const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
             const validTypes = types.map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon }));
