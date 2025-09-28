@@ -239,7 +239,7 @@ class SectionManager {
         // Intro text
         const introEl = document.getElementById('sectionIntro');
         if (introEl) {
-            const intro = (sectionConfig.intro || '').trim();
+            const intro = ((sectionConfig && sectionConfig.config && sectionConfig.config.intro) ? String(sectionConfig.config.intro) : String(sectionConfig.intro || '')).trim();
             introEl.textContent = intro;
             introEl.style.display = intro ? 'block' : 'none';
         }

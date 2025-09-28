@@ -5152,9 +5152,9 @@ Permissions:
                     </div>`;
                 return;
             }
-            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-            const headerDebug = `<div class="assignments-debug" style="margin:8px 0;color:#666;font-size:12px;">users=${users.length} sections=${sectionIds.length}</div>`;
-            assignmentsList.innerHTML = headerDebug + users.map(user => {
+    const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
+    const headerDebug = `<div class="assignments-debug" style="margin:8px 0;color:#666;font-size:12px;">users=${users.length} sections=${sectionIds.length}</div>`;
+    assignmentsList.innerHTML = headerDebug + users.map(user => {
                 const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
                 return `
                     <div class="assignment-card" data-user-id="${user.id}">
@@ -5183,6 +5183,37 @@ Permissions:
                     </div>
                 `;
             }).join('');
+    // As a final visibility fallback, if nothing rendered, dump direct Supabase lists for inspection
+    try {
+        const hasCards = assignmentsList.querySelector('.assignment-card');
+        if (!hasCards && window.supabaseClient) {
+            const [directUsersRes, directSectionsRes] = await Promise.all([
+                window.supabaseClient.from('profiles').select('id, username, role').order('username', { ascending: true }),
+                window.supabaseClient.from('sections').select('section_id, id, name').order('name', { ascending: true })
+            ]);
+            const directUsers = Array.isArray(directUsersRes?.data) ? directUsersRes.data : [];
+            const directSections = Array.isArray(directSectionsRes?.data) ? directSectionsRes.data : [];
+            const usersHtml = directUsers.length > 0
+                ? `<ul>${directUsers.map(u => `<li>${u.username || u.id} (${u.role || 'n/a'})</li>`).join('')}</ul>`
+                : '<div style="color:#666;">(no users)</div>';
+            const sectionsHtml = directSections.length > 0
+                ? `<ul>${directSections.map(s => `<li>${s.name || s.section_id || s.id}</li>`).join('')}</ul>`
+                : '<div style="color:#666;">(no sections)</div>';
+            assignmentsList.innerHTML = `
+                ${headerDebug}
+                <div class="empty">Could not render assignment cards. Showing raw Supabase results for debugging:</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
+                    <div>
+                        <h5 style="margin:0 0 6px;">Profiles (direct)</h5>
+                        ${usersHtml}
+                    </div>
+                    <div>
+                        <h5 style="margin:0 0 6px;">Sections (direct)</h5>
+                        ${sectionsHtml}
+                    </div>
+                </div>`;
+        }
+    } catch(_) {}
         };
         
         // Update user section access
