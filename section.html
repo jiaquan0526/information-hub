@@ -79,8 +79,22 @@
                         window.supabaseClient = window.supabase.createClient(
                             window.SUPABASE_URL,
                             window.SUPABASE_ANON_KEY,
-                            { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+                            { auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: true } }
                         );
+                        // If tokens are present in URL, set session, then clean URL
+                        (async function setSessionFromUrl(){
+                            try {
+                                const u = new URL(window.location.href);
+                                const at = u.searchParams.get('at');
+                                const rt = u.searchParams.get('rt');
+                                if (at && rt && window.supabaseClient && window.supabaseClient.auth && window.supabaseClient.auth.setSession) {
+                                    await window.supabaseClient.auth.setSession({ access_token: at, refresh_token: rt });
+                                    u.searchParams.delete('at');
+                                    u.searchParams.delete('rt');
+                                    history.replaceState({}, document.title, u.toString());
+                                }
+                            } catch(_) {}
+                        })();
                     }
                 } catch (e) { console.warn('Supabase init (section) failed', e); }
             }

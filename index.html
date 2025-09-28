@@ -4976,6 +4976,25 @@ Permissions:
                 return;
             }
             
+            // Ensure we are authenticated (RLS may return 0 rows if anonymous)
+            try {
+                let authTries = 0;
+                let userObj = null;
+                while (authTries < 50 && !userObj) {
+                    const { data: { user } } = await window.supabaseClient.auth.getUser();
+                    userObj = user || null;
+                    if (!userObj) { await new Promise(r => setTimeout(r, 100)); }
+                    authTries++;
+                }
+                if (!userObj) {
+                    assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">You are not signed in. Please log in to manage section assignments.</div>`;
+                    return;
+                }
+            } catch (_) {
+                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Authentication check failed. Please refresh and sign in.</div>`;
+                return;
+            }
+            
             let users = [];
             let rows = [];
             try {

@@ -353,10 +353,7 @@ class InformationHub {
     }
 
     // Navigation Functions
-    navigateToSection(sectionId) {
-        // Store the current section in session storage for the section page
-        sessionStorage.setItem('currentSection', sectionId);
-
+    async navigateToSection(sectionId) {
         // Attempt to record hub card click (non-blocking)
         try {
             const user = this.currentUser;
@@ -372,14 +369,26 @@ class InformationHub {
             }
         } catch (_) {}
 
+        // Build URL with ephemeral auth tokens to avoid storage
+        let at = '', rt = '';
+        try {
+            if (window.supabaseClient && window.supabaseClient.auth) {
+                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                at = session && session.access_token ? encodeURIComponent(session.access_token) : '';
+                rt = session && session.refresh_token ? encodeURIComponent(session.refresh_token) : '';
+            }
+        } catch (_) {}
+        const q = [`section=${encodeURIComponent(sectionId)}`];
+        if (at) q.push(`at=${at}`);
+        if (rt) q.push(`rt=${rt}`);
+        const targetUrl = `section.html?${q.join('&')}`;
+
         // Navigate to a dedicated section page with a smooth transition
-        const go = () => { window.location.href = `section.html?section=${sectionId}`; };
+        const go = () => { window.location.href = targetUrl; };
         try {
             if (document.startViewTransition) {
-                // Use View Transitions API when available
                 document.startViewTransition(() => go());
             } else {
-                // Fallback: quick fade-out
                 const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
                 if (!prefersReduced) {
                     document.body.classList.add('fade-out');
