@@ -5063,12 +5063,12 @@ Permissions:
              __assignmentsLoading = true;
              try { console.log('[Assignments] load start'); } catch(_) {}
             const assignmentsList = document.getElementById('assignmentsList');
-            if (!assignmentsList) return;
+            if (!assignmentsList) { __assignmentsLoading = false; try { setTimeout(() => { try { loadSectionAssignments(); } catch(_) {} }, 100); } catch(_) {} return; }
               assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">Loading section assignments…</div>`;
             
               // Ensure Supabase client is ready
                 let retries = 0;
-                while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
+                while (!window.supabaseClient && retries < 100) { await new Promise(r => setTimeout(r, 100)); retries++; }
               if (!window.supabaseClient) {
                   assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Supabase not initialized. Please sign in again.</div>`;
                   __assignmentsLoading = false; return;
@@ -5078,7 +5078,7 @@ Permissions:
               try {
                   let authTries = 0;
                   let userObj = null;
-                  while (authTries < 50 && !userObj) {
+                  while (authTries < 100 && !userObj) {
                       const { data: { user } } = await window.supabaseClient.auth.getUser();
                       userObj = user || null;
                       if (!userObj) { await new Promise(r => setTimeout(r, 100)); }
