@@ -475,6 +475,7 @@
                                 <i class="fas fa-times"></i> Clear
                             </button>
                         </div>
+                        <div id="assignmentsStats" style="margin:6px 0 8px; color:#666; font-size:0.9rem;"></div>
                         <div id="assignmentsList" class="assignments-list"></div>
                     </div>
                     
@@ -4945,10 +4946,14 @@ Permissions:
         window.renderAssignmentsList = function() {
             const assignmentsList = document.getElementById('assignmentsList');
             if (!assignmentsList) return;
+            const stats = document.getElementById('assignmentsStats');
             const q = (document.getElementById('assignmentUserSearchInput')?.value || '').trim().toLowerCase();
             const users = Array.isArray(__assignmentsCache.users) ? __assignmentsCache.users : [];
             const sectionIds = Array.isArray(__assignmentsCache.sectionIds) ? __assignmentsCache.sectionIds : [];
             const sectionNames = __assignmentsCache.sectionNames || {};
+            if (stats) {
+                stats.textContent = `Users: ${users.length} • Sections: ${sectionIds.length}${q ? ` • Filter: "${q}"` : ''}`;
+            }
             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
             const filteredUsers = q ? users.filter(u => {
                 const hay = [u.username, u.name, u.email, u.role].filter(Boolean).join(' ').toLowerCase();
