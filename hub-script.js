@@ -379,8 +379,8 @@ class InformationHub {
             }
         } catch (_) {}
         const q = [`section=${encodeURIComponent(sectionId)}`];
-        if (at) q.push(`at=${at}`);
-        if (rt) q.push(`rt=${rt}`);
+        if (at) q.push(`access_token=${at}`, `token_type=bearer`);
+        if (rt) q.push(`refresh_token=${rt}`);
         const targetUrl = `section.html?${q.join('&')}`;
 
         // Navigate to a dedicated section page with a smooth transition

@@ -81,16 +81,18 @@
                             window.SUPABASE_ANON_KEY,
                             { auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: true } }
                         );
-                        // If tokens are present in URL, set session, then clean URL
+                        // If tokens are present in URL (Supabase-compatible names), set session, then clean URL
                         (async function setSessionFromUrl(){
                             try {
                                 const u = new URL(window.location.href);
-                                const at = u.searchParams.get('at');
-                                const rt = u.searchParams.get('rt');
+                                const at = u.searchParams.get('access_token');
+                                const rt = u.searchParams.get('refresh_token');
+                                const tt = u.searchParams.get('token_type');
                                 if (at && rt && window.supabaseClient && window.supabaseClient.auth && window.supabaseClient.auth.setSession) {
-                                    await window.supabaseClient.auth.setSession({ access_token: at, refresh_token: rt });
-                                    u.searchParams.delete('at');
-                                    u.searchParams.delete('rt');
+                                    await window.supabaseClient.auth.setSession({ access_token: at, refresh_token: rt, token_type: tt || 'bearer' });
+                                    u.searchParams.delete('access_token');
+                                    u.searchParams.delete('refresh_token');
+                                    u.searchParams.delete('token_type');
                                     history.replaceState({}, document.title, u.toString());
                                 }
                             } catch(_) {}
