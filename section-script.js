@@ -186,7 +186,7 @@ class SectionManager {
     }
 
     async loadSectionData() {
-        // Always fetch authoritative header fields from Supabase first
+        // Fetch header fields strictly from Supabase
         let sectionConfig = null;
         try {
             if (window.supabaseClient) {
@@ -201,45 +201,50 @@ class SectionManager {
                 }
             }
         } catch (e) {
-            console.warn('Direct Supabase fetch failed; will try wrapper if available', e);
-        }
-        // Fallback to wrapper list if direct fetch did not return
-        if (!sectionConfig) {
-            try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    const sections = await hubDatabase.getAllSections();
-                    sectionConfig = sections.find(s => (s.section_id === this.currentSection || s.id === this.currentSection)) || null;
-                    console.log('Loaded section via wrapper fallback:', sectionConfig);
-                }
-            } catch (error) {
-                console.error('Error loading section via wrapper:', error);
-            }
-        }
-        if (!sectionConfig) {
-            // No named defaults; show section id and a generic icon
-            sectionConfig = { section_id: this.currentSection, name: this.currentSection, icon: 'fa-solid fa-table-cells-large', image: '', intro: '' };
+            console.warn('Supabase fetch failed:', e);
         }
 
         const nameEl = document.getElementById('sectionName');
         const iconEl = document.getElementById('sectionIcon');
-        if (nameEl) nameEl.textContent = (sectionConfig.name && String(sectionConfig.name).trim()) ? sectionConfig.name : this.currentSection;
+        if (nameEl) {
+            const nm = (sectionConfig && sectionConfig.name) ? String(sectionConfig.name).trim() : '';
+            nameEl.textContent = nm;
+        }
         if (iconEl) {
-            if (sectionConfig.image) {
-                try {
-                    iconEl.outerHTML = `<img id="sectionIcon" src="${sectionConfig.image}" style="width:22px;height:22px;object-fit:contain;margin-right:8px;" />`;
-                } catch (_) {
-                    iconEl.className = this.normalizeIconClass(sectionConfig.icon || 'fa-solid fa-table-cells-large');
+            const img = sectionConfig && sectionConfig.image ? String(sectionConfig.image).trim() : '';
+            const icn = sectionConfig && sectionConfig.icon ? String(sectionConfig.icon).trim() : '';
+            try {
+                if (img) {
+                    iconEl.outerHTML = `<img id="sectionIcon" src="${img}" style="width:22px;height:22px;object-fit:contain;margin-right:8px;" />`;
+                } else if (icn) {
+                    iconEl.className = this.normalizeIconClass(icn);
+                } else {
+                    // No image or icon: leave blank
+                    if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
+                        iconEl.outerHTML = '<i id="sectionIcon"></i>';
+                    } else {
+                        iconEl.className = '';
+                    }
                 }
-            } else {
-                iconEl.className = this.normalizeIconClass(sectionConfig.icon || 'fa-solid fa-table-cells-large');
+            } catch (_) {
+                // On any error, clear icon completely
+                try {
+                    if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
+                        iconEl.outerHTML = '<i id="sectionIcon"></i>';
+                    } else {
+                        iconEl.className = '';
+                    }
+                } catch (_) {}
             }
         }
-        document.title = `${(sectionConfig.name && String(sectionConfig.name).trim()) ? sectionConfig.name : this.currentSection} - Information Hub`;
+        if (sectionConfig && sectionConfig.name && String(sectionConfig.name).trim()) {
+            document.title = `${String(sectionConfig.name).trim()} - Information Hub`;
+        }
 
         // Intro text
         const introEl = document.getElementById('sectionIntro');
         if (introEl) {
-            const intro = ((sectionConfig && sectionConfig.config && sectionConfig.config.intro) ? String(sectionConfig.config.intro) : String(sectionConfig.intro || '')).trim();
+            const intro = ((sectionConfig && sectionConfig.config && sectionConfig.config.intro) ? String(sectionConfig.config.intro) : '').trim();
             introEl.textContent = intro;
             introEl.style.display = intro ? 'block' : 'none';
         }

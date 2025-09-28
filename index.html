@@ -4962,199 +4962,29 @@ Permissions:
             isUpdatingSections = false;
         }
         
-        // Load section assignments for admin panel (GitHub-driven)
+        // Load section assignments for admin panel – Supabase-only (no fallbacks)
         window.loadSectionAssignments = async function() {
-            console.log('Loading section assignments...');
-            
             const assignmentsList = document.getElementById('assignmentsList');
-            
-            if (!assignmentsList) {
-                console.error('Assignments list element not found');
-                return;
-            }
-            try { assignmentsList.innerHTML = '<div class="loading">Loading section assignments…</div>'; } catch(_) {}
-            // Ensure Supabase client is ready before querying
-            try {
-                if (!window.supabaseClient) {
-                    let attempts = 0; while (!window.supabaseClient && attempts < 20) { await new Promise(r => setTimeout(r, 100)); attempts++; }
-                }
-            } catch(_) {}
-            
-            // Load users and sections (robust):
-            // - Users via hubDatabase
-            // - Sections via getAllAvailableSections() and getSectionDisplayNames()
-            let users = [];
-            let sectionIds = [];
-            let sectionNames = {};
-            try {
-                // Prefer wrapper if ready, but do not bail when not ready
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllUsers === 'function') {
-                    users = await hubDatabase.getAllUsers();
-                } else {
-                    users = [];
-                }
-                if (!Array.isArray(users) || users.length === 0) {
-                    try {
-                        if (window.supabaseClient) {
-                            // Force direct Supabase fetch if wrapper empty
-                            const { data: rawUsers, error: rawUsersErr } = await window.supabaseClient
-                                .from('profiles')
-                                .select('id, username, name, email, role, permissions')
-                                .order('username', { ascending: true });
-                            if (rawUsersErr) { console.warn('profiles direct fetch error', rawUsersErr); }
-                            users = Array.isArray(rawUsers) ? rawUsers : [];
-                        }
-                    } catch(_) {}
-                }
-                // Fallback to local session if still empty
-                if (!Array.isArray(users) || users.length === 0) {
-                    try {
-                        const sessRaw = localStorage.getItem('hubSession');
-                        if (sessRaw) {
-                            const s = JSON.parse(sessRaw);
-                            if (s && s.userId) {
-                                users = [{ id: s.userId, username: s.username || 'me', name: s.name || s.username || 'Me', email: s.email || '', role: s.role || 'viewer', permissions: s.permissions || {} }];
-                            }
-                        }
-                    } catch(_) {}
-                }
-                // Build section list for assignments (include all, regardless of visible)
-                try {
-                    let rows = [];
-                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                        rows = await hubDatabase.getAllSections();
-                    }
-                    if ((!rows || rows.length === 0) && window.supabaseClient) {
-                        // Force direct Supabase fetch if wrapper empty
-                        const { data: direct, error: directErr } = await window.supabaseClient
-                            .from('sections')
-                            .select('section_id, id, name')
-                            .order('name', { ascending: true });
-                        if (directErr) { console.warn('sections direct fetch error', directErr); }
-                        rows = Array.isArray(direct) ? direct : [];
-                    }
-                    sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
-                    sectionNames = {};
-                    (Array.isArray(rows) ? rows : []).forEach(r => {
-                        const key = r.section_id || r.id; if (key) sectionNames[key] = r.name || key;
-                    });
-                    if (sectionIds.length === 0) {
-                        // As a last resort, fallback to visible-only helpers
-                        sectionIds = await getAllAvailableSections();
-                        sectionNames = await getSectionDisplayNames();
-                        // If still empty, derive from DOM (cards on main hub)
-                        if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
-                            try {
-                                const cards = Array.from(document.querySelectorAll('.hub-card[data-section-id]'));
-                                sectionIds = cards.map(c => c.getAttribute('data-section-id')).filter(Boolean);
-                                sectionNames = sectionNames || {};
-                                cards.forEach(c => {
-                                    const id = c.getAttribute('data-section-id');
-                                    const titleEl = c.querySelector('.card-title h3');
-                                    if (id && titleEl && !sectionNames[id]) sectionNames[id] = titleEl.textContent || id;
-                                });
-                            } catch(_) {}
-                        }
-                    }
-                } catch(_) {
-                    sectionIds = await getAllAvailableSections();
-                    sectionNames = await getSectionDisplayNames();
-                    // DOM fallback
-                    if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
-                        try {
-                            const cards = Array.from(document.querySelectorAll('.hub-card[data-section-id]'));
-                            sectionIds = cards.map(c => c.getAttribute('data-section-id')).filter(Boolean);
-                            sectionNames = sectionNames || {};
-                            cards.forEach(c => {
-                                const id = c.getAttribute('data-section-id');
-                                const titleEl = c.querySelector('.card-title h3');
-                                if (id && titleEl && !sectionNames[id]) sectionNames[id] = titleEl.textContent || id;
-                            });
-                        } catch(_) {}
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading assignments data:', error);
-                assignmentsList.innerHTML = '<div class="empty">Error loading data. Please try again.</div>';
-                return;
-            }
-            users = Array.isArray(users) ? users : [];
-            sectionIds = Array.isArray(sectionIds) ? sectionIds : [];
-            console.log('[Assignments] users.length =', users.length, 'sectionIds.length =', sectionIds.length);
-            // Final guard: if wrapper data empty but Supabase counts show data, surface a helpful message
-            try {
-                if ((sectionIds.length === 0 || users.length === 0) && window.supabaseClient) {
-                    const [{ count: sCount }, { count: uCount }] = await Promise.all([
-                        window.supabaseClient.from('sections').select('section_id', { count: 'exact', head: true }),
-                        window.supabaseClient.from('profiles').select('id', { count: 'exact', head: true })
-                    ]);
-                    if ((sCount || 0) > 0 && sectionIds.length === 0) {
-                        console.warn('Assignments: Supabase shows sections but none loaded via wrappers. Rendering DOM fallback message.');
-                        assignmentsList.innerHTML = '<div class="empty">Sections exist in Supabase but could not be listed. Try refreshing, or check RLS/permissions for reading sections.</div>';
-                        return;
-                    }
-                    if ((uCount || 0) > 0 && users.length === 0) {
-                        console.warn('Assignments: Supabase shows users but none loaded via wrappers. Attempting to include current user only.');
-                        try {
-                            const { data: { user: me } } = await window.supabaseClient.auth.getUser();
-                            if (me) {
-                                const { data: myProf } = await window.supabaseClient
-                                    .from('profiles')
-                                    .select('id, username, name, email, role, permissions')
-                                    .eq('id', me.id)
-                                    .single();
-                                if (myProf) users = [myProf];
-                            }
-                        } catch(_) {}
-                        // If still empty after self-fallback, show a helpful message but keep sections visible below
-                        if (!Array.isArray(users) || users.length === 0) {
-                            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-                            assignmentsList.innerHTML = `
-                                <div class="empty">Users exist in Supabase but could not be listed due to permissions. Showing sections for reference.</div>
-                                <div class="assignment-card">
-                                    <div class="section-assignments">
-                                        <h5>Available Sections:</h5>
-                                        <div class="section-checkboxes">
-                                            ${sectionIds.map(id => `
-                                                <label class="section-checkbox">
-                                                    <input type="checkbox" value="${id}" disabled>
-                                                    <span>${safeName(id)}</span>
-                                                </label>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                </div>`;
-                            return;
-                        }
-                    }
-                }
-            } catch(_) {}
-            if (sectionIds.length === 0) {
-                assignmentsList.innerHTML = '<div class="empty">No sections available to list. If you do have sections, check Diagnostics for counts and RLS permissions on the sections table.</div>';
-                return;
-            }
-            if (users.length === 0) {
-                const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-                assignmentsList.innerHTML = `
-                    <div class="empty">No users available to assign. Showing sections for reference.</div>
-                    <div class="assignment-card">
-                        <div class="section-assignments">
-                            <h5>Available Sections:</h5>
-                            <div class="section-checkboxes">
-                                ${sectionIds.map(id => `
-                                    <label class="section-checkbox">
-                                        <input type="checkbox" value="${id}" disabled>
-                                        <span>${safeName(id)}</span>
-                                    </label>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>`;
-                return;
-            }
-    const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-    const headerDebug = `<div class="assignments-debug" style="margin:8px 0;color:#666;font-size:12px;">users=${users.length} sections=${sectionIds.length}</div>`;
-    assignmentsList.innerHTML = headerDebug + users.map(user => {
+            if (!assignmentsList) return;
+            // Ensure Supabase client is ready
+            if (!window.supabaseClient) return;
+            const { data: usersData } = await window.supabaseClient
+                .from('profiles')
+                .select('id, username, name, email, role, permissions')
+                .order('username', { ascending: true });
+            const users = Array.isArray(usersData) ? usersData : [];
+            const { data: sectionsData } = await window.supabaseClient
+                .from('sections')
+                .select('section_id, id, name')
+                .order('name', { ascending: true });
+            const rows = Array.isArray(sectionsData) ? sectionsData : [];
+            const sectionIds = rows.map(r => r.section_id || r.id).filter(Boolean);
+            const sectionNames = {};
+            rows.forEach(r => { const k = r.section_id || r.id; if (k) sectionNames[k] = r.name || k; });
+            // Render (blank if none)
+            if (users.length === 0 || sectionIds.length === 0) { assignmentsList.innerHTML = ''; return; }
+            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
+            assignmentsList.innerHTML = users.map(user => {
                 const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
                 return `
                     <div class="assignment-card" data-user-id="${user.id}">
@@ -5183,37 +5013,6 @@ Permissions:
                     </div>
                 `;
             }).join('');
-    // As a final visibility fallback, if nothing rendered, dump direct Supabase lists for inspection
-    try {
-        const hasCards = assignmentsList.querySelector('.assignment-card');
-        if (!hasCards && window.supabaseClient) {
-            const [directUsersRes, directSectionsRes] = await Promise.all([
-                window.supabaseClient.from('profiles').select('id, username, role').order('username', { ascending: true }),
-                window.supabaseClient.from('sections').select('section_id, id, name').order('name', { ascending: true })
-            ]);
-            const directUsers = Array.isArray(directUsersRes?.data) ? directUsersRes.data : [];
-            const directSections = Array.isArray(directSectionsRes?.data) ? directSectionsRes.data : [];
-            const usersHtml = directUsers.length > 0
-                ? `<ul>${directUsers.map(u => `<li>${u.username || u.id} (${u.role || 'n/a'})</li>`).join('')}</ul>`
-                : '<div style="color:#666;">(no users)</div>';
-            const sectionsHtml = directSections.length > 0
-                ? `<ul>${directSections.map(s => `<li>${s.name || s.section_id || s.id}</li>`).join('')}</ul>`
-                : '<div style="color:#666;">(no sections)</div>';
-            assignmentsList.innerHTML = `
-                ${headerDebug}
-                <div class="empty">Could not render assignment cards. Showing raw Supabase results for debugging:</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
-                    <div>
-                        <h5 style="margin:0 0 6px;">Profiles (direct)</h5>
-                        ${usersHtml}
-                    </div>
-                    <div>
-                        <h5 style="margin:0 0 6px;">Sections (direct)</h5>
-                        ${sectionsHtml}
-                    </div>
-                </div>`;
-        }
-    } catch(_) {}
         };
         
         // Update user section access
