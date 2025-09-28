@@ -409,11 +409,12 @@ class HubDatabase {
                 section: activity.section || activity.sectionId || null,
                 ip: activity.ip || null
             });
+            const rawSection = activity.sectionId || activity.section || null;
             const payload = {
                 user_id: userId,
                 action: activity.action || 'EVENT',
                 resource_id: activity.resourceId || null,
-                section_id: activity.sectionId || activity.section || null,
+                section_id: (rawSection && String(rawSection).trim().toLowerCase() !== 'general') ? rawSection : null,
                 metadata: meta
             };
             if (activity.timestamp) {
@@ -438,7 +439,7 @@ class HubDatabase {
             const payload = {
                 user_id: userId,
                 action: entry.action || 'updated',
-                section_id: entry.section || null,
+                section_id: (entry.section && String(entry.section).trim().toLowerCase() !== 'general') ? entry.section : null,
                 resource_id: entry.resourceId || null,
                 metadata: {
                     username: entry.username || null,
@@ -462,12 +463,37 @@ class HubDatabase {
 
     async getActivities(limit = 1000, offset = 0) {
         try {
-            const query = this.supabase
-                .from('activities')
-                .select('*')
-                .order('timestamp', { ascending: false })
-                .range(offset, Math.max(offset, offset + limit - 1));
-            const { data, error } = await query;
+            const from = offset;
+            const to = Math.max(offset, offset + limit - 1);
+            let data = null, error = null;
+            // Try ordering by 'timestamp' (newer schema)
+            try {
+                const res = await this.supabase
+                    .from('activities')
+                    .select('*')
+                    .order('timestamp', { ascending: false })
+                    .range(from, to);
+                data = res.data; error = res.error;
+            } catch (e1) { error = e1; }
+            // Fallback: order by 'created_at' (older schema)
+            if (error) {
+                try {
+                    const res2 = await this.supabase
+                        .from('activities')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .range(from, to);
+                    data = res2.data; error = res2.error;
+                } catch (e2) { error = e2; }
+            }
+            // Final fallback: no explicit ordering
+            if (error) {
+                const res3 = await this.supabase
+                    .from('activities')
+                    .select('*')
+                    .range(from, to);
+                data = res3.data; error = res3.error;
+            }
             if (error) throw error;
 
             const rows = Array.isArray(data) ? data : [];
