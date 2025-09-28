@@ -1815,11 +1815,10 @@
                 } else if (tabName === 'assignments') {
                     console.log('Loading section assignments...');
                     try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-                    try {
-                        const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
-                        if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); }
-                        else { loadSectionAssignments(); }
-                    } catch(_) { loadSectionAssignments(); }
+                    // Always render immediately (auto-loads if cache is empty)
+                    try { if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); } } catch(_) {}
+                    // Then ensure data load kicks off
+                    try { if (typeof loadSectionAssignments === 'function' && !window.__assignmentsLoading) { loadSectionAssignments(); } } catch(_) {}
                 }
             };
         }
