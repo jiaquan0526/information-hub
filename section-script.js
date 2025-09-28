@@ -208,7 +208,15 @@ class SectionManager {
         const iconEl = document.getElementById('sectionIcon');
         if (nameEl) {
             const nm = (sectionConfig && sectionConfig.name) ? String(sectionConfig.name).trim() : '';
-            nameEl.textContent = nm;
+            // Fallback to readable section id if name missing
+            try {
+                const fallbackName = String(this.currentSection || 'Section')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\b\w/g, c => c.toUpperCase());
+                nameEl.textContent = nm || fallbackName;
+            } catch (_) {
+                nameEl.textContent = nm || (this.currentSection || 'Section');
+            }
         }
         if (iconEl) {
             const img = sectionConfig && sectionConfig.image ? String(sectionConfig.image).trim() : '';
@@ -219,20 +227,20 @@ class SectionManager {
                 } else if (icn) {
                     iconEl.className = this.normalizeIconClass(icn);
                 } else {
-                    // No image or icon: leave blank
+                    // No image or icon: show default icon so header is visible
                     if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
-                        iconEl.outerHTML = '<i id="sectionIcon"></i>';
+                        iconEl.outerHTML = '<i id="sectionIcon" class="fa-solid fa-table-cells-large"></i>';
                     } else {
-                        iconEl.className = '';
+                        iconEl.className = 'fa-solid fa-table-cells-large';
                     }
                 }
             } catch (_) {
                 // On any error, clear icon completely
                 try {
                     if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
-                        iconEl.outerHTML = '<i id="sectionIcon"></i>';
+                        iconEl.outerHTML = '<i id="sectionIcon" class="fa-solid fa-table-cells-large"></i>';
                     } else {
-                        iconEl.className = '';
+                        iconEl.className = 'fa-solid fa-table-cells-large';
                     }
                 } catch (_) {}
             }
@@ -1197,7 +1205,17 @@ class SectionManager {
                 if (data && (data.name || data.icon || data.image)) {
                     const nameEl = document.getElementById('sectionName');
                     const iconEl = document.getElementById('sectionIcon');
-                    if (nameEl && data.name) nameEl.textContent = data.name;
+                    if (nameEl) {
+                        const nm = (data && data.name) ? String(data.name).trim() : '';
+                        try {
+                            const fallbackName = String(this.currentSection || 'Section')
+                                .replace(/[-_]+/g, ' ')
+                                .replace(/\b\w/g, c => c.toUpperCase());
+                            nameEl.textContent = nm || fallbackName;
+                        } catch (_) {
+                            nameEl.textContent = nm || (this.currentSection || 'Section');
+                        }
+                    }
                     if (iconEl) {
                         if (data.image) {
                             try {
@@ -1207,10 +1225,17 @@ class SectionManager {
                             }
                         } else if (data.icon) {
                             iconEl.className = this.normalizeIconClass(data.icon);
+                        } else {
+                            // Ensure a default icon when DB has no icon/image
+                            if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
+                                iconEl.outerHTML = '<i id="sectionIcon" class="fa-solid fa-table-cells-large"></i>';
+                            } else {
+                                iconEl.className = 'fa-solid fa-table-cells-large';
+                            }
                         }
                     }
                     // Update document title with section name
-                    if (data.name) {
+                    if (data && data.name) {
                         document.title = `${data.name} - Information Hub`;
                     }
                 }
