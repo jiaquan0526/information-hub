@@ -838,19 +838,42 @@ class InformationHub {
     }
 
     async loadAuditLog() {
-        const activities = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getActivities() : [];
         const auditLog = document.getElementById('auditLog');
-        
-        auditLog.innerHTML = activities.map(activity => `
-            <div class="audit-entry">
+        if (!auditLog) return;
+        auditLog.innerHTML = '<div style="padding:10px;color:#666;">Loading audit log…</div>';
+        let offset = 0;
+        const pageSize = 200; // larger page size for fuller history
+        const all = [];
+        try {
+            while (true) {
+                const rows = (window.hubDatabase && window.hubDatabaseReady)
+                    ? await hubDatabase.getActivities(pageSize, offset)
+                    : [];
+                if (!Array.isArray(rows) || rows.length === 0) break;
+                all.push(...rows);
+                if (rows.length < pageSize) break;
+                offset += rows.length;
+                if (offset >= 2000) break; // hard cap to avoid infinite scrolling bloat
+            }
+        } catch (_) {}
+
+        const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
+        const html = (all || []).map(a => {
+            const who = esc(a.username || 'Unknown');
+            const act = esc(a.action || 'EVENT');
+            const desc = esc(a.description || a.title || '');
+            const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
+            const section = esc(a.section || a.section_id || '');
+            return `<div class="audit-entry">
                 <div class="audit-info">
-                    <div class="audit-user">${activity.username}</div>
-                    <div class="audit-action">${activity.action}</div>
-                    <div class="audit-description">${activity.description}</div>
+                    <div class="audit-user">${who}</div>
+                    <div class="audit-action">${act}${section ? ` · ${section}` : ''}</div>
+                    <div class="audit-description">${desc}</div>
                 </div>
-                <div class="audit-time">${new Date(activity.timestamp).toLocaleString()}</div>
-            </div>
-        `).join('');
+                <div class="audit-time">${esc(when)}</div>
+            </div>`;
+        }).join('');
+        auditLog.innerHTML = html || '<div style="padding:10px;color:#666;">No audit entries.</div>';
     }
 
     async addUser() {

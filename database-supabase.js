@@ -400,16 +400,28 @@ class HubDatabase {
     async saveActivity(activity) {
         try {
             const currentUserId = await this.getCurrentUserId();
+            const userId = activity.userId || currentUserId || null;
+            const meta = Object.assign({}, activity.metadata || {}, {
+                username: activity.username || activity.user || null,
+                title: activity.title || null,
+                description: activity.description || null,
+                type: activity.type || activity.resourceType || null,
+                section: activity.section || activity.sectionId || null,
+                ip: activity.ip || null
+            });
+            const payload = {
+                user_id: userId,
+                action: activity.action || 'EVENT',
+                resource_id: activity.resourceId || null,
+                section_id: activity.sectionId || activity.section || null,
+                metadata: meta
+            };
+            if (activity.timestamp) {
+                payload.timestamp = new Date(activity.timestamp);
+            }
             const { data, error } = await this.supabase
                 .from('activities')
-                .insert({
-                    user_id: activity.userId || currentUserId || null,
-                    action: activity.action,
-                    resource_id: activity.resourceId,
-                    section_id: activity.sectionId,
-                    metadata: activity.metadata || {}
-                });
-            
+                .insert(payload);
             if (error) throw error;
             return data;
         } catch (error) {
@@ -418,16 +430,69 @@ class HubDatabase {
         }
     }
 
-    async getActivities(limit = 1000) {
+    // Convenience method used by the hub UI to record content updates
+    async addActivity(entry) {
         try {
-            const { data, error } = await this.supabase
+            const currentUserId = await this.getCurrentUserId();
+            const userId = currentUserId || null;
+            const payload = {
+                user_id: userId,
+                action: entry.action || 'updated',
+                section_id: entry.section || null,
+                resource_id: entry.resourceId || null,
+                metadata: {
+                    username: entry.username || null,
+                    title: entry.title || null,
+                    description: entry.title || null,
+                    type: entry.type || null,
+                    section: entry.section || null
+                }
+            };
+            if (entry.timestamp) {
+                payload.timestamp = new Date(entry.timestamp);
+            }
+            const { data, error } = await this.supabase.from('activities').insert(payload);
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding activity:', error);
+            throw error;
+        }
+    }
+
+    async getActivities(limit = 1000, offset = 0) {
+        try {
+            const query = this.supabase
                 .from('activities')
                 .select('*')
                 .order('timestamp', { ascending: false })
-                .limit(limit);
-            
+                .range(offset, Math.max(offset, offset + limit - 1));
+            const { data, error } = await query;
             if (error) throw error;
-            return data || [];
+
+            const rows = Array.isArray(data) ? data : [];
+            const userIds = Array.from(new Set(rows.map(r => r.user_id).filter(Boolean)));
+            let usersById = {};
+            if (userIds.length > 0) {
+                try {
+                    const { data: profs } = await this.supabase
+                        .from('profiles')
+                        .select('id, username, email')
+                        .in('id', userIds);
+                    (profs || []).forEach(p => { usersById[p.id] = p; });
+                } catch (_) {}
+            }
+
+            return rows.map(r => {
+                const meta = r.metadata || {};
+                const prof = r.user_id ? usersById[r.user_id] : null;
+                return Object.assign({}, r, {
+                    username: meta.username || (prof && (prof.username || prof.email)) || null,
+                    description: meta.description || meta.title || null,
+                    title: meta.title || null,
+                    section: r.section_id || meta.section || null
+                });
+            });
         } catch (error) {
             console.error('Error getting activities:', error);
             return [];

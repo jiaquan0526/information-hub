@@ -10,8 +10,18 @@ class SectionManager {
         this.init();
     }
 
-    // Content activity logger (no-op without Supabase auth)
-    logContentActivity(action, resourceType, title) { try {} catch (_) {} }
+    // Content activity logger (records to activities table via wrapper)
+    async logContentActivity(action, resourceType, title) {
+        try {
+            if (!window.hubDatabase || !window.hubDatabaseReady) return;
+            await hubDatabase.addActivity({
+                action: String(action || 'updated').toUpperCase(),
+                type: resourceType || '',
+                title: title || '',
+                section: this.currentSection || ''
+            });
+        } catch (_) {}
+    }
 
     async getCurrentUser() {
         try {
