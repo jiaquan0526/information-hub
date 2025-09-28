@@ -1816,8 +1816,11 @@
                 } else if (tabName === 'assignments') {
                     console.log('Loading section assignments...');
                     try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-                    if (!window.__assignmentsLoaded) loadSectionAssignments();
-                    else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
+                    try {
+                        const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
+                        if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
+                        else { loadSectionAssignments(); }
+                    } catch(_) { loadSectionAssignments(); }
                 }
             };
         }
@@ -3424,8 +3427,11 @@ Permissions:
             } else if (tabName === 'assignments') {
                 console.log('Loading section assignments...');
                 try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-                if (!window.__assignmentsLoaded) loadSectionAssignments();
-                else if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
+                try {
+                    const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
+                    if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); }
+                    else { loadSectionAssignments(); }
+                } catch(_) { loadSectionAssignments(); }
             }
         };
 
@@ -4985,13 +4991,6 @@ Permissions:
         };
         window.loadSectionAssignments = async function() {
             if (__assignmentsLoading) { return; }
-            // If already loaded and DOM has content, skip
-            try {
-                const existing = document.getElementById('assignmentsList');
-                if (__assignmentsLoaded && existing && existing.children && existing.children.length > 0) {
-                    return;
-                }
-            } catch(_) {}
              __assignmentsLoading = true;
              try { console.log('[Assignments] load start'); } catch(_) {}
             const assignmentsList = document.getElementById('assignmentsList');
@@ -5068,19 +5067,8 @@ Permissions:
                   __assignmentsLoading = false; return;
               }
             
-             // Update cache and render (avoid redundant rewrites)
+             // Update cache and render
              __assignmentsCache = { users, sectionIds, sectionNames };
-             try {
-                 const q = (document.getElementById('assignmentUserSearchInput')?.value || '').trim().toLowerCase();
-                 const sig = JSON.stringify({ u: users.map(u => u.id), s: sectionIds, q });
-                 const hasContent = !!(assignmentsList && assignmentsList.children && assignmentsList.children.length > 0);
-                 if (window.__assignmentsSig === sig && hasContent) {
-                     __assignmentsLoaded = true;
-                     __assignmentsLoading = false;
-                     return;
-                 }
-                 window.__assignmentsSig = sig;
-             } catch(_) {}
              try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
              renderAssignmentsList();
               __assignmentsLoaded = true;
