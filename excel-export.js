@@ -54,97 +54,168 @@ class ExcelExporter {
     // Create Excel file from GitHub data only
     async exportToExcel() {
         try {
+            // 1) Try to load XLSX; if it fails, produce a JSON export instead
             try {
                 await this.ensureXlsxLoaded();
             } catch (e) {
-                // Fallback to JSON when XLSX can't be loaded
-                const payload = { sectionId, section: null, resources: [] };
-                // Try to populate from localStorage for basic export
+                let payload = null;
+                // Prefer Supabase export if available
                 try {
-                    const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                    if (hub && hub[sectionId]) {
-                        payload.section = { id: sectionId, name: hub[sectionId].name || sectionId };
-                        ['playbooks','boxLinks','dashboards'].forEach(t => (hub[sectionId][t]||[]).forEach(r => payload.resources.push({ ...r, type: t })));
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function') {
+                        payload = await hubDatabase.exportAllData();
                     }
-                } catch(_) {}
-                const jsonName = `${sectionId}_Export_${new Date().toISOString().split('T')[0]}.json`;
+                } catch (_) {}
+                // Fallback to localStorage snapshot if DB not available
+                if (!payload) {
+                    try {
+                        const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
+                        const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
+                        let views = [];
+                        try { views = JSON.parse(localStorage.getItem('views') || '[]'); } catch (_) { views = []; }
+                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
+                        const sections = Object.entries(hub).map(([sid, s]) => ({ sectionId: sid, id: sid, name: s?.name || sid, icon: s?.icon || '', color: s?.color || '' }));
+                        const resources = [];
+                        Object.entries(hub).forEach(([sid, s]) => {
+                            ['playbooks','boxLinks','dashboards'].forEach(type => (s?.[type] || []).forEach(r => resources.push({ ...r, sectionId: sid, type })));
+                        });
+                        payload = {
+                            users,
+                            sections,
+                            resources,
+                            activities,
+                            views,
+                            exportDate: new Date().toISOString(),
+                            totalRecords: {
+                                users: users.length,
+                                sections: sections.length,
+                                resources: resources.length,
+                                activities: activities.length,
+                                views: views.length
+                            }
+                        };
+                    } catch (_) {
+                        payload = { exportDate: new Date().toISOString() };
+                    }
+                }
+                const jsonName = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.json`;
                 this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
                 return { success: true, fileName: jsonName, fallback: 'json' };
             }
-            // Build dataset from GitHub only
-            if (!window.githubData) throw new Error('GitHub API unavailable');
 
-            // Helper
-            const canonicalizeUrlForKey = (url) => {
-                try {
-                    let raw = String(url || '').trim();
-                    if (!raw) return '';
-                    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) raw = 'https://' + raw;
-                    const u = new URL(raw);
-                    const host = (u.host || '').toLowerCase();
-                    const path = (u.pathname || '/').replace(/\/+$/, '');
-                    const norm = `${u.protocol}//${host}${path}${u.search || ''}`;
-                    return norm.toLowerCase();
-                } catch (_) {
-                    return String(url || '').trim().toLowerCase();
-                }
-            };
-            // Read GitHub data
-            const usersResp = await githubData.readUsers();
-            const users = Array.isArray(usersResp.json) ? usersResp.json : [];
-            const sectionsResp = await githubData.readSections();
-            const sections = Array.isArray(sectionsResp.json) ? sectionsResp.json : [];
-            const activitiesResp = await githubData.readJson('data/audit-log.json');
-            const activities = Array.isArray(activitiesResp.json) ? activitiesResp.json : [];
-            const viewsResp = await githubData.readJson('data/views.json');
-            const views = Array.isArray(viewsResp.json) ? viewsResp.json : [];
-
-            // Flatten resources
-            const resources = [];
-            for (const s of sections) {
-                const sid = String(s.id || '').trim(); if (!sid) continue;
-                try {
-                    const r = await githubData.readSectionResources(sid);
-                    const json = r.json || {};
-                    ['playbooks','boxLinks','dashboards'].forEach(type => {
-                        (json[type] || []).forEach(item => resources.push({ ...item, sectionId: sid, type }));
+            // 2) Prefer Supabase DB data if available, otherwise build from GitHub
+            let data = null;
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function') {
+                    const db = await hubDatabase.exportAllData();
+                    const sectionsNorm = (db.sections || []).map(s => {
+                        const id = String(s.section_id || s.sectionId || s.id || '').trim();
+                        return { sectionId: id, id, name: s.name || id, icon: s.icon || '', color: s.color || '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
                     });
-                    // Include any custom types as well
-                    Object.keys(json).forEach(k => {
-                        if (k === 'updatedAt' || k === 'playbooks' || k === 'boxLinks' || k === 'dashboards') return;
-                        (json[k] || []).forEach(item => resources.push({ ...item, sectionId: sid, type: k }));
+                    const resourcesNorm = (db.resources || []).map(r => ({ ...r, sectionId: r.sectionId || r.section_id }));
+                    const countsBySection = new Map();
+                    resourcesNorm.forEach(r => {
+                        const sid = String(r.sectionId || '');
+                        if (!countsBySection.has(sid)) countsBySection.set(sid, { playbooks: 0, boxLinks: 0, dashboards: 0 });
+                        const c = countsBySection.get(sid);
+                        if (r.type === 'playbooks') c.playbooks++;
+                        else if (r.type === 'boxLinks') c.boxLinks++;
+                        else if (r.type === 'dashboards') c.dashboards++;
+                    });
+                    sectionsNorm.forEach(s => { const c = countsBySection.get(String(s.sectionId)) || { playbooks: 0, boxLinks: 0, dashboards: 0 }; s.data = { ...s.data, ...c }; });
+                    data = {
+                        users: (db.users || []).map(u => this._normalizePermissions(u)),
+                        sections: sectionsNorm,
+                        resources: resourcesNorm,
+                        activities: db.activities || [],
+                        views: db.views || [],
+                        exportDate: db.exportDate || new Date().toISOString(),
+                        totalRecords: db.totalRecords || {
+                            users: (db.users || []).length,
+                            sections: sectionsNorm.length,
+                            resources: resourcesNorm.length,
+                            activities: (db.activities || []).length,
+                            views: (db.views || []).length
+                        }
+                    };
+                }
+            } catch (_) {}
+            
+            // 3) If DB unavailable, build dataset from GitHub only
+            if (!data) {
+                if (!window.githubData) throw new Error('GitHub API unavailable');
+                
+                // Helper
+                const canonicalizeUrlForKey = (url) => {
+                    try {
+                        let raw = String(url || '').trim();
+                        if (!raw) return '';
+                        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) raw = 'https://' + raw;
+                        const u = new URL(raw);
+                        const host = (u.host || '').toLowerCase();
+                        const path = (u.pathname || '/').replace(/\/+$/, '');
+                        const norm = `${u.protocol}//${host}${path}${u.search || ''}`;
+                        return norm.toLowerCase();
+                    } catch (_) {
+                        return String(url || '').trim().toLowerCase();
+                    }
+                };
+                // Read GitHub data
+                const usersResp = await githubData.readUsers();
+                const users = Array.isArray(usersResp.json) ? usersResp.json : [];
+                const sectionsResp = await githubData.readSections();
+                const sections = Array.isArray(sectionsResp.json) ? sectionsResp.json : [];
+                const activitiesResp = await githubData.readJson('data/audit-log.json');
+                const activities = Array.isArray(activitiesResp.json) ? activitiesResp.json : [];
+                const viewsResp = await githubData.readJson('data/views.json');
+                const views = Array.isArray(viewsResp.json) ? viewsResp.json : [];
+
+                // Flatten resources
+                const resources = [];
+                for (const s of sections) {
+                    const sid = String(s.id || '').trim(); if (!sid) continue;
+                    try {
+                        const r = await githubData.readSectionResources(sid);
+                        const json = r.json || {};
+                        ['playbooks','boxLinks','dashboards'].forEach(type => {
+                            (json[type] || []).forEach(item => resources.push({ ...item, sectionId: sid, type }));
+                        });
+                        // Include any custom types as well
+                        Object.keys(json).forEach(k => {
+                            if (k === 'updatedAt' || k === 'playbooks' || k === 'boxLinks' || k === 'dashboards') return;
+                            (json[k] || []).forEach(item => resources.push({ ...item, sectionId: sid, type: k }));
                         });
                     } catch (_) {}
                 }
 
-            // Enrich sections with counts
-            const sectionsById = {};
-            sections.forEach(sec => {
-                const sid = String(sec.id || '').trim(); if (!sid) return;
-                sectionsById[sid] = { id: sid, sectionId: sid, name: sec.name || sid, icon: sec.icon || '', color: sec.color || '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
-            });
-            resources.forEach(r => {
-                const sid = r.sectionId; const type = r.type || '';
-                if (!sid || !sectionsById[sid]) return;
-                if (!sectionsById[sid].data[type]) sectionsById[sid].data[type] = [];
+                // Enrich sections with counts
+                const sectionsById = {};
+                sections.forEach(sec => {
+                    const sid = String(sec.id || '').trim(); if (!sid) return;
+                    sectionsById[sid] = { id: sid, sectionId: sid, name: sec.name || sid, icon: sec.icon || '', color: sec.color || '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
+                });
+                resources.forEach(r => {
+                    const sid = r.sectionId; const type = r.type || '';
+                    if (!sid || !sectionsById[sid]) return;
+                    if (!sectionsById[sid].data[type]) sectionsById[sid].data[type] = [];
                     sectionsById[sid].data[type].push(r);
-            });
+                });
 
-            const data = {
-                users: users.map(u => this._normalizePermissions(u)),
-                sections: Object.values(sectionsById),
-                resources,
-                activities,
-                views,
-                exportDate: new Date().toISOString(),
-                totalRecords: {
-                    users: users.length,
-                    sections: sections.length,
-                    resources: resources.length,
-                    activities: activities.length,
-                    views: views.length
-                }
-            };
+                data = {
+                    users: users.map(u => this._normalizePermissions(u)),
+                    sections: Object.values(sectionsById),
+                    resources,
+                    activities,
+                    views,
+                    exportDate: new Date().toISOString(),
+                    totalRecords: {
+                        users: users.length,
+                        sections: sections.length,
+                        resources: resources.length,
+                        activities: activities.length,
+                        views: views.length
+                    }
+                };
+            }
 
             this.workbook = XLSX.utils.book_new();
 
