@@ -4966,8 +4966,12 @@ Permissions:
         window.loadSectionAssignments = async function() {
             const assignmentsList = document.getElementById('assignmentsList');
             if (!assignmentsList) return;
-            // Ensure Supabase client is ready
-            if (!window.supabaseClient) return;
+            // Ensure Supabase client is ready (minimal wait, supabase-only)
+            if (!window.supabaseClient) {
+                let retries = 0;
+                while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
+                if (!window.supabaseClient) return;
+            }
             const { data: usersData } = await window.supabaseClient
                 .from('profiles')
                 .select('id, username, name, email, role, permissions')
