@@ -3100,14 +3100,37 @@ Permissions:
         window.saveUserChanges = async function(userId) {
             console.log('Saving changes for user:', userId);
             
-            // Get current user session
-            const currentSession = localStorage.getItem('hubSession');
-            const currentUser = currentSession ? JSON.parse(currentSession) : null;
-            
+            // Get current user session (fallback to Supabase auth if missing)
+            let currentUser = null;
+            try {
+                const currentSession = localStorage.getItem('hubSession');
+                currentUser = currentSession ? JSON.parse(currentSession) : null;
+            } catch(_) { currentUser = null; }
             if (!currentUser) {
-                alert('Please log in to save changes');
-                return;
+                try {
+                    if (window.supabaseClient && typeof window.supabaseClient.auth?.getUser === 'function') {
+                        const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                        if (authUser && authUser.id) {
+                            try {
+                                const { data: prof } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('id, username, role, permissions')
+                                    .eq('id', authUser.id)
+                                    .single();
+                                if (prof) {
+                                    currentUser = {
+                                        id: prof.id,
+                                        username: prof.username,
+                                        role: prof.role || 'viewer',
+                                        permissions: prof.permissions || {}
+                                    };
+                                }
+                            } catch(_) {}
+                        }
+                    }
+                } catch(_) { currentUser = null; }
             }
+            if (!currentUser) { alert('Please log in to save changes'); return; }
             
             // Get form values
             const fullName = document.getElementById('editUserFullName').value;
