@@ -97,8 +97,8 @@
                 try {
                     const metaUrl = document.querySelector('meta[name="supabase-url"]').content;
                     const metaKey = document.querySelector('meta[name="supabase-anon-key"]').content;
-                    const url = window.SUPABASE_URL || localStorage.getItem('SUPABASE_URL') || metaUrl;
-                    const key = window.SUPABASE_ANON_KEY || localStorage.getItem('SUPABASE_ANON_KEY') || metaKey;
+                    const url = window.SUPABASE_URL || metaUrl;
+                    const key = window.SUPABASE_ANON_KEY || metaKey;
                     if (url && key) {
                         window.CONFIG = {
                             SUPABASE_URL: url,
@@ -4962,56 +4962,88 @@ Permissions:
             isUpdatingSections = false;
         }
         
-        // Load section assignments for admin panel – Supabase-only (no fallbacks)
+        // Load section assignments for admin panel – Supabase only
         window.loadSectionAssignments = async function() {
             const assignmentsList = document.getElementById('assignmentsList');
             if (!assignmentsList) return;
-            // Ensure Supabase client is ready (minimal wait, supabase-only)
+            assignmentsList.innerHTML = `<div style="padding:10px;color:#555;">Loading section assignments…</div>`;
+            
+            // Ensure Supabase client is ready
+            let retries = 0;
+            while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
             if (!window.supabaseClient) {
-                let retries = 0;
-                while (!window.supabaseClient && retries < 30) { await new Promise(r => setTimeout(r, 100)); retries++; }
-                if (!window.supabaseClient) return;
+                assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Supabase not initialized. Please sign in again.</div>`;
+                return;
             }
-            const { data: usersData } = await window.supabaseClient
-                .from('profiles')
-                .select('id, username, name, email, role, permissions')
-                .order('username', { ascending: true });
-            const users = Array.isArray(usersData) ? usersData : [];
-            const { data: sectionsData } = await window.supabaseClient
-                .from('sections')
-                .select('section_id, id, name')
-                .order('name', { ascending: true });
-            const rows = Array.isArray(sectionsData) ? sectionsData : [];
-            const sectionIds = rows.map(r => r.section_id || r.id).filter(Boolean);
+            
+            let users = [];
+            let rows = [];
+            try {
+                const { data: usersData, error: usersErr } = await window.supabaseClient
+                    .from('profiles')
+                    .select('id, username, name, email, role, permissions')
+                    .order('username', { ascending: true });
+                if (usersErr) throw usersErr;
+                users = Array.isArray(usersData) ? usersData : [];
+            } catch (e) {
+                console.error('Failed to load profiles:', e);
+                assignmentsList.innerHTML = `<div style="padding:10px;color:#b00020;">Failed to load users from Supabase. Check RLS policies for table 'profiles'.</div>`;
+                return;
+            }
+            
+            try {
+                const { data: sectionsData, error: sectErr } = await window.supabaseClient
+                    .from('sections')
+                    .select('section_id, id, name')
+                    .order('name', { ascending: true });
+                if (sectErr) throw sectErr;
+                rows = Array.isArray(sectionsData) ? sectionsData : [];
+            } catch (e) {
+                console.error('Failed to load sections:', e);
+                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load sections from Supabase. Ensure table 'sections' is readable and has columns 'section_id' and 'name'.</div>`;
+                return;
+            }
+            
+            const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
             const sectionNames = {};
-            rows.forEach(r => { const k = r.section_id || r.id; if (k) sectionNames[k] = r.name || k; });
-            // Render (blank if none)
-            if (users.length === 0 || sectionIds.length === 0) { assignmentsList.innerHTML = ''; return; }
+            (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id || r.id; if (k) sectionNames[k] = r.name || k; });
+            
+            console.log('[Assignments] users:', users.length, 'sections:', sectionIds.length);
+            
+            if (users.length === 0) {
+                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No users found. Ensure 'profiles' has rows and RLS allows admin to select all users.</div>`;
+                return;
+            }
+            if (sectionIds.length === 0) {
+                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
+                return;
+            }
+            
             const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
             assignmentsList.innerHTML = users.map(user => {
                 const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
                 return `
-                    <div class="assignment-card" data-user-id="${user.id}">
-                        <div class="user-info">
+                    <div class=\"assignment-card\" data-user-id=\"${user.id}\">
+                        <div class=\"user-info\">
                             <h4>${user.name || user.username} (${user.username})</h4>
-                            <span class="user-role">${user.role}</span>
+                            <span class=\"user-role\">${user.role}</span>
                         </div>
-                        <div class="section-assignments">
+                        <div class=\"section-assignments\">
                             <h5>Assigned Sections:</h5>
-                            <div class="section-checkboxes">
+                            <div class=\"section-checkboxes\">
                                 ${sectionIds.map(id => `
-                                    <label class="section-checkbox">
-                                        <input type="checkbox"
-                                               value="${id}"
+                                    <label class=\"section-checkbox\">
+                                        <input type=\"checkbox\"
+                                               value=\"${id}\"
                                                ${userSections.includes(id) ? 'checked' : ''}
-                                               onchange="updateUserSectionAccess('${user.id}', '${id}', this.checked)">
+                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">
                                         <span>${safeName(id)}</span>
                                     </label>
                                 `).join('')}
                             </div>
-                            <div class="assignment-actions">
-                                <button class="btn btn-sm btn-primary" onclick="selectAllSections('${user.id}')">Select All</button>
-                                <button class="btn btn-sm btn-secondary" onclick="clearAllSections('${user.id}')">Clear All</button>
+                            <div class=\"assignment-actions\">
+                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>
+                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>
                             </div>
                         </div>
                     </div>
@@ -5022,7 +5054,6 @@ Permissions:
         // Update user section access
         window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
-            
             if (!window.supabaseClient) { alert('Supabase not initialized'); return; }
             // Enforce that only admins or users with canManageUsers can change others
             try {
@@ -6001,8 +6032,7 @@ Permissions:
             if (window.supabaseClient) return;
             function ensureKeys(){
                 try {
-                    if (!window.SUPABASE_URL) window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || window.SUPABASE_URL;
-                    if (!window.SUPABASE_ANON_KEY) window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || window.SUPABASE_ANON_KEY;
+                    // No localStorage fallbacks; keys must be provided by CONFIG/meta/constants
                 } catch(_) {}
             }
             function initClient(){

@@ -363,7 +363,7 @@ class SectionManager {
     getCurrentSectionFromURL() {
         // Extract section from URL or use stored section
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('section') || sessionStorage.getItem('currentSection') || 'costing';
+        return urlParams.get('section');
     }
 
     bindEvents() {
@@ -387,16 +387,7 @@ class SectionManager {
         window.deleteResource = (type, id) => this.deleteResource(type, id);
         // Back to hub
         window.goBackToHub = () => this.goBackToHub();
-        // Live update section config across tabs/windows
-        window.addEventListener('storage', (e) => {
-            try {
-                if (e && e.key === `section_config_${this.currentSection}`) {
-                    this.sectionConfig = this.loadSectionConfig();
-                    this.renderDynamicUI();
-                    this.renderCurrentTab();
-                }
-            } catch (_) {}
-        });
+        // No storage sync: rely on Supabase realtime only
     }
 
     setupSectionSessionLogging() {
@@ -1177,9 +1168,8 @@ class SectionManager {
                     }
                 }
             } catch (_) {}
-            // Write a fast local cache so hub can reflect immediately if DB is slow
-            try { localStorage.setItem(`section_config_${this.currentSection}`, JSON.stringify(cfg)); } catch(_) {}
-            this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
+        // Notify hub via BroadcastChannel only
+        this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
             return true;
         } catch (e) {
             const detail = (e && (e.message || e.details || e.code)) ? (e.message || e.details || e.code) : 'Unknown error';

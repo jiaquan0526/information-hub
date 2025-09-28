@@ -71,15 +71,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
         (function(){
-            function ensureKeys(){
-                try {
-                    // Always prefer keys saved by hub (localStorage) to keep same project/ref across pages
-                    const lsUrl = localStorage.getItem('SUPABASE_URL');
-                    const lsKey = localStorage.getItem('SUPABASE_ANON_KEY');
-                    if (lsUrl) window.SUPABASE_URL = lsUrl;
-                    if (lsKey) window.SUPABASE_ANON_KEY = lsKey;
-                } catch(_) {}
-            }
+            function ensureKeys(){ /* no-op: keys must be provided on window */ }
             function initClient(){
                 ensureKeys();
                 try {
