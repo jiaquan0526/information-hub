@@ -922,7 +922,12 @@ class InformationHub {
             const who = esc(a.username || 'Unknown');
             const act = esc(a.action || 'EVENT');
             const desc = esc(a.description || a.title || '');
-            const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
+            const when = (() => {
+                try {
+                    const t = a.timestamp || a.created_at;
+                    return t ? new Date(t).toLocaleString() : '';
+                } catch(_) { return ''; }
+            })();
             const section = esc(a.section || a.section_id || '');
             return `<div class="audit-entry">
                 <div class="audit-info">
@@ -933,7 +938,47 @@ class InformationHub {
                 <div class="audit-time">${esc(when)}</div>
             </div>`;
         }).join('');
-        auditLog.innerHTML = html || '<div style="padding:10px;color:#666;">No audit entries.</div>';
+        if (html) {
+            auditLog.innerHTML = html;
+            return;
+        }
+        auditLog.innerHTML = '<div style="padding:10px;color:#666;">No audit entries. <button class="btn btn-secondary" id="auditDebugBtn" style="margin-left:8px;">Debug: Load Raw</button></div>';
+        try {
+            const btn = document.getElementById('auditDebugBtn');
+            if (btn && window.supabaseClient) {
+                btn.onclick = async () => {
+                    btn.disabled = true; btn.textContent = 'Loading…';
+                    try {
+                        let data = null, err = null;
+                        try {
+                            const r1 = await window.supabaseClient.from('activities').select('*').order('timestamp', { ascending: false }).limit(50);
+                            data = r1.data; err = r1.error;
+                        } catch (e1) { err = e1; }
+                        if (err) {
+                            try {
+                                const r2 = await window.supabaseClient.from('activities').select('*').order('created_at', { ascending: false }).limit(50);
+                                data = r2.data; err = r2.error;
+                            } catch (e2) { err = e2; }
+                        }
+                        if (err) {
+                            const r3 = await window.supabaseClient.from('activities').select('*').limit(50);
+                            data = r3.data; err = r3.error;
+                        }
+                        const pre = document.createElement('pre');
+                        pre.style.background = '#f8f9fa';
+                        pre.style.border = '1px solid #e9ecef';
+                        pre.style.borderRadius = '8px';
+                        pre.style.padding = '10px';
+                        pre.style.whiteSpace = 'pre-wrap';
+                        pre.textContent = JSON.stringify({ rows: data || [], hint: 'Raw dump to verify data/columns' }, null, 2);
+                        auditLog.innerHTML = '';
+                        auditLog.appendChild(pre);
+                    } catch (_) {
+                        auditLog.innerHTML = '<div style="padding:10px;color:#b00020;">Failed to load raw activities.</div>';
+                    }
+                };
+            }
+        } catch (_) {}
     }
 
     async addUser() {
