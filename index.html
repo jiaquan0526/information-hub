@@ -4972,6 +4972,12 @@ Permissions:
                 console.error('Assignments list element not found');
                 return;
             }
+            // Ensure Supabase client is ready before querying
+            try {
+                if (!window.supabaseClient) {
+                    let attempts = 0; while (!window.supabaseClient && attempts < 20) { await new Promise(r => setTimeout(r, 100)); attempts++; }
+                }
+            } catch(_) {}
             
             // Load users and sections (robust):
             // - Users via hubDatabase
@@ -4988,10 +4994,12 @@ Permissions:
                 if (!Array.isArray(users) || users.length === 0) {
                     try {
                         if (window.supabaseClient) {
-                            const { data: rawUsers } = await window.supabaseClient
+                            // Force direct Supabase fetch if wrapper empty
+                            const { data: rawUsers, error: rawUsersErr } = await window.supabaseClient
                                 .from('profiles')
                                 .select('id, username, name, email, role, permissions')
                                 .order('username', { ascending: true });
+                            if (rawUsersErr) { console.warn('profiles direct fetch error', rawUsersErr); }
                             users = Array.isArray(rawUsers) ? rawUsers : [];
                         }
                     } catch(_) {}
@@ -5015,10 +5023,12 @@ Permissions:
                         rows = await hubDatabase.getAllSections();
                     }
                     if ((!rows || rows.length === 0) && window.supabaseClient) {
-                        const { data: direct } = await window.supabaseClient
+                        // Force direct Supabase fetch if wrapper empty
+                        const { data: direct, error: directErr } = await window.supabaseClient
                             .from('sections')
                             .select('section_id, id, name')
                             .order('name', { ascending: true });
+                        if (directErr) { console.warn('sections direct fetch error', directErr); }
                         rows = Array.isArray(direct) ? direct : [];
                     }
                     sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
@@ -5068,6 +5078,25 @@ Permissions:
             }
             users = Array.isArray(users) ? users : [];
             sectionIds = Array.isArray(sectionIds) ? sectionIds : [];
+            // Final guard: if wrapper data empty but Supabase counts show data, surface a helpful message
+            try {
+                if ((sectionIds.length === 0 || users.length === 0) && window.supabaseClient) {
+                    const [{ count: sCount }, { count: uCount }] = await Promise.all([
+                        window.supabaseClient.from('sections').select('section_id', { count: 'exact', head: true }),
+                        window.supabaseClient.from('profiles').select('id', { count: 'exact', head: true })
+                    ]);
+                    if ((sCount || 0) > 0 && sectionIds.length === 0) {
+                        console.warn('Assignments: Supabase shows sections but none loaded via wrappers. Rendering DOM fallback message.');
+                        assignmentsList.innerHTML = '<div class="empty">Sections exist in Supabase but could not be listed. Try refreshing, or check RLS/permissions for reading sections.</div>';
+                        return;
+                    }
+                    if ((uCount || 0) > 0 && users.length === 0) {
+                        console.warn('Assignments: Supabase shows users but none loaded via wrappers. Rendering message.');
+                        assignmentsList.innerHTML = '<div class="empty">Users exist in Supabase but could not be listed. Try refreshing, or check RLS/permissions for reading profiles.</div>';
+                        return;
+                    }
+                }
+            } catch(_) {}
             if (sectionIds.length === 0) {
                 assignmentsList.innerHTML = '<div class="empty">No sections available. Create sections first in Manage Sections.</div>';
                 return;
