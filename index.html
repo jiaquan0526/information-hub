@@ -4938,75 +4938,56 @@ Permissions:
                 return;
             }
             
-            // Load users and sections from Supabase
+            // Load users and sections (robust):
+            // - Users via hubDatabase
+            // - Sections via getAllAvailableSections() and getSectionDisplayNames()
             let users = [];
-            let allSections = [];
-            
+            let sectionIds = [];
+            let sectionNames = {};
             try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    users = await hubDatabase.getAllUsers();
-                    allSections = await hubDatabase.getAllSections();
-                    // Fallback: query Supabase directly if wrapper returned no rows
-                    if ((!allSections || allSections.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data: directSections } = await window.supabaseClient
-                                .from('sections')
-                                .select('section_id, name, icon')
-                                .order('name', { ascending: true });
-                            allSections = Array.isArray(directSections) ? directSections : [];
-                            console.log('Fallback loaded sections directly:', allSections.length);
-                        } catch (_) {}
-                    }
-                    console.log('Loaded users from Supabase:', users);
-                    console.log('Loaded sections from Supabase:', allSections);
-                } else {
-                    console.log('Database not ready');
+                if (!(window.hubDatabase && window.hubDatabaseReady)) {
                     assignmentsList.innerHTML = '<div class="empty">Database not ready. Please try again.</div>';
                     return;
                 }
+                users = await hubDatabase.getAllUsers();
+                sectionIds = await getAllAvailableSections();
+                sectionNames = await getSectionDisplayNames();
             } catch (error) {
-                console.error('Error loading data from Supabase:', error);
+                console.error('Error loading assignments data:', error);
                 assignmentsList.innerHTML = '<div class="empty">Error loading data. Please try again.</div>';
                 return;
             }
-            
-            // Defensive defaults
             users = Array.isArray(users) ? users : [];
-            allSections = Array.isArray(allSections) ? allSections : [];
-            if (allSections.length === 0) {
-                assignmentsList.innerHTML = '<div class="empty">No sections found. Create sections first in Manage Sections.</div>';
+            sectionIds = Array.isArray(sectionIds) ? sectionIds : [];
+            if (sectionIds.length === 0) {
+                assignmentsList.innerHTML = '<div class="empty">No sections available. Create sections first in Manage Sections.</div>';
                 return;
             }
+            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
             assignmentsList.innerHTML = users.map(user => {
-                const userSections = user.permissions && user.permissions.sections ? user.permissions.sections : [];
-                
+                const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
                 return `
                     <div class="assignment-card" data-user-id="${user.id}">
                         <div class="user-info">
-                            <h4>${user.name} (${user.username})</h4>
+                            <h4>${user.name || user.username} (${user.username})</h4>
                             <span class="user-role">${user.role}</span>
                         </div>
                         <div class="section-assignments">
                             <h5>Assigned Sections:</h5>
                             <div class="section-checkboxes">
-                                ${allSections.map(section => `
+                                ${sectionIds.map(id => `
                                     <label class="section-checkbox">
-                                        <input type="checkbox" 
-                                               value="${section.section_id}" 
-                                               ${userSections.includes(section.section_id) ? 'checked' : ''}
-                                               onchange="updateUserSectionAccess('${user.id}', '${section.section_id}', this.checked)">
-                                        <i class="${section.icon}"></i>
-                                        <span>${section.name || section.section_id}</span>
+                                        <input type="checkbox"
+                                               value="${id}"
+                                               ${userSections.includes(id) ? 'checked' : ''}
+                                               onchange="updateUserSectionAccess('${user.id}', '${id}', this.checked)">
+                                        <span>${safeName(id)}</span>
                                     </label>
                                 `).join('')}
                             </div>
                             <div class="assignment-actions">
-                                <button class="btn btn-sm btn-primary" onclick="selectAllSections('${user.id}')">
-                                    Select All
-                                </button>
-                                <button class="btn btn-sm btn-secondary" onclick="clearAllSections('${user.id}')">
-                                    Clear All
-                                </button>
+                                <button class="btn btn-sm btn-primary" onclick="selectAllSections('${user.id}')">Select All</button>
+                                <button class="btn btn-sm btn-secondary" onclick="clearAllSections('${user.id}')">Clear All</button>
                             </div>
                         </div>
                     </div>
@@ -5085,8 +5066,7 @@ Permissions:
         
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
-            const list = await (async () => { try { return window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : []; } catch(_) { return []; } })();
-            const allSections = list.map(s => s.section_id);
+            const allSections = await (async () => { try { return await getAllAvailableSections(); } catch(_) { return []; } })();
             const card = document.querySelector(`.assignment-card[data-user-id="${userId}"]`);
             for (const sectionId of allSections) {
                 const checkbox = card ? card.querySelector(`input[type="checkbox"][value="${sectionId}"]`) : document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
@@ -5099,8 +5079,7 @@ Permissions:
         
         // Clear all sections for a user
         window.clearAllSections = async function(userId) {
-            const list = await (async () => { try { return window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : []; } catch(_) { return []; } })();
-            const allSections = list.map(s => s.section_id);
+            const allSections = await (async () => { try { return await getAllAvailableSections(); } catch(_) { return []; } })();
             const card = document.querySelector(`.assignment-card[data-user-id="${userId}"]`);
             for (const sectionId of allSections) {
                 const checkbox = card ? card.querySelector(`input[type="checkbox"][value="${sectionId}"]`) : document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
