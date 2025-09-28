@@ -4961,8 +4961,33 @@ Permissions:
                         }
                     } catch(_) {}
                 }
-                sectionIds = await getAllAvailableSections();
-                sectionNames = await getSectionDisplayNames();
+                // Build section list for assignments (include all, regardless of visible)
+                try {
+                    let rows = [];
+                    if (window.hubDatabase && window.hubDatabaseReady) {
+                        rows = await hubDatabase.getAllSections();
+                    }
+                    if ((!rows || rows.length === 0) && window.supabaseClient) {
+                        const { data: direct } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, name')
+                            .order('name', { ascending: true });
+                        rows = Array.isArray(direct) ? direct : [];
+                    }
+                    sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
+                    sectionNames = {};
+                    (Array.isArray(rows) ? rows : []).forEach(r => {
+                        const key = r.section_id || r.id; if (key) sectionNames[key] = r.name || key;
+                    });
+                    if (sectionIds.length === 0) {
+                        // As a last resort, fallback to visible-only helpers
+                        sectionIds = await getAllAvailableSections();
+                        sectionNames = await getSectionDisplayNames();
+                    }
+                } catch(_) {
+                    sectionIds = await getAllAvailableSections();
+                    sectionNames = await getSectionDisplayNames();
+                }
             } catch (error) {
                 console.error('Error loading assignments data:', error);
                 assignmentsList.innerHTML = '<div class="empty">Error loading data. Please try again.</div>';
@@ -5081,7 +5106,20 @@ Permissions:
         
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
-            const allSections = await (async () => { try { return await getAllAvailableSections(); } catch(_) { return []; } })();
+            // Use the same full list as loader (ignore visibility)
+            let allSections = [];
+            try {
+                let rows = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : [];
+                if ((!rows || rows.length === 0) && window.supabaseClient) {
+                    const { data: direct } = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id')
+                        .order('section_id', { ascending: true });
+                    rows = Array.isArray(direct) ? direct : [];
+                }
+                allSections = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
+                if (allSections.length === 0) allSections = await getAllAvailableSections();
+            } catch(_) { allSections = await getAllAvailableSections(); }
             const card = document.querySelector(`.assignment-card[data-user-id="${userId}"]`);
             for (const sectionId of allSections) {
                 const checkbox = card ? card.querySelector(`input[type="checkbox"][value="${sectionId}"]`) : document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
@@ -5094,7 +5132,20 @@ Permissions:
         
         // Clear all sections for a user
         window.clearAllSections = async function(userId) {
-            const allSections = await (async () => { try { return await getAllAvailableSections(); } catch(_) { return []; } })();
+            // Use the same full list as loader (ignore visibility)
+            let allSections = [];
+            try {
+                let rows = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : [];
+                if ((!rows || rows.length === 0) && window.supabaseClient) {
+                    const { data: direct } = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id')
+                        .order('section_id', { ascending: true });
+                    rows = Array.isArray(direct) ? direct : [];
+                }
+                allSections = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
+                if (allSections.length === 0) allSections = await getAllAvailableSections();
+            } catch(_) { allSections = await getAllAvailableSections(); }
             const card = document.querySelector(`.assignment-card[data-user-id="${userId}"]`);
             for (const sectionId of allSections) {
                 const checkbox = card ? card.querySelector(`input[type="checkbox"][value="${sectionId}"]`) : document.querySelector(`input[value="${sectionId}"][onchange*="updateUserSectionAccess(${userId}"]`);
