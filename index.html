@@ -4114,9 +4114,27 @@ Permissions:
                 }
             } catch (error) {
                 console.error('Error saving section to Supabase:', error);
-                const msg = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Failed to fetch';
-                const hint = ' Ensure you are signed in and Supabase URL/Anon Key are correct, and CORS allows this origin.';
-                alert('Failed to save section: ' + msg + hint);
+                try {
+                    const ek = error || {};
+                    const status = ek.status || ek.statusCode || '';
+                    const code = ek.code || '';
+                    const details = ek.details || '';
+                    const message = ek.message || '';
+                    const name = ek.name || '';
+                    const origin = (typeof location !== 'undefined' ? location.origin : '');
+                    const supaUrl = (window.CONFIG && window.CONFIG.SUPABASE_URL) || window.SUPABASE_URL || '';
+                    let hint = '';
+                    if (String(status) === '409' || String(code) === 'PGRST116') {
+                        hint = ' The section ID already exists. It may have been updated.';
+                    } else if (name === 'TypeError' && !status) {
+                        hint = ` Network/CORS issue. Origin: ${origin} → ${supaUrl}`;
+                    }
+                    const head = 'Failed to save section' + (status ? ` (${status})` : '') + ':';
+                    const body = message || details || code || name || 'Unknown error';
+                    alert(`${head} ${body}${hint ? ' ' + hint : ''}`);
+                } catch (_) {
+                    alert('Failed to save section: Unknown error');
+                }
             }
             });
         }
