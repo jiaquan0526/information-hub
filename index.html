@@ -1154,36 +1154,32 @@
         }
         // Function to update section statistics using Supabase as the single source of truth
         async function updateSectionStats() {
-            // Get sections from database
-            let sections = [];
+            // Get sections and configs from Supabase (wrapper or direct), no local fallbacks
+            let rows = [];
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    const dbSections = await hubDatabase.getAllSections();
-                    sections = dbSections.filter(s => s.config?.visible !== false).map(s => s.section_id);
+                    rows = await hubDatabase.getAllSections();
                 }
             } catch (e) {
-                console.warn('Error loading sections for stats:', e);
+                console.warn('Error loading sections from wrapper for stats:', e);
             }
-            if (sections.length === 0) {
-                sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            if ((!rows || rows.length === 0) && window.supabaseClient) {
+                try {
+                    const { data: direct } = await window.supabaseClient
+                        .from('sections')
+                        .select('*')
+                        .order('name', { ascending: true });
+                    rows = Array.isArray(direct) ? direct : [];
+                } catch (e) {
+                    console.warn('Error direct-loading sections for stats:', e);
+                }
             }
+            const visibleRows = (rows || []).filter(s => !(s && s.config && s.config.visible === false));
+            const sections = visibleRows.map(s => s.section_id);
 
-            // Load section configs (prefer wrapper; fallback to any helper)
+            // Build config map from the same Supabase-sourced rows
             const sectionConfigById = new Map();
-            try {
-                // Primary: hubDatabase wrapper (includes config)
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    const rows = await hubDatabase.getAllSections();
-                    (rows || []).forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
-                }
-            } catch (_) {}
-            try {
-                // Optional: supplemental fetchSections helper
-                if (sectionConfigById.size === 0 && window.fetchSections) {
-                    const list = await window.fetchSections();
-                    (list || []).forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
-                }
-            } catch (_) {}
+            visibleRows.forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
 
             const normUiType = (t) => {
                 const raw = String(t || '').toLowerCase().trim();
@@ -1236,7 +1232,7 @@
             }
 
             await Promise.all(sections.map(async (sectionId) => {
-                // Determine types strictly from section config to mirror detail tabs
+                // Determine types to mirror section detail tabs with defaults
                 let typesList = [];
                 try {
                     const cfg = sectionConfigById.get(sectionId);
@@ -1244,8 +1240,10 @@
                         typesList = cfg.types.map(t => String((t && t.id !== undefined ? t.id : t) || '').trim()).filter(Boolean);
                     }
                 } catch (_) {}
+                if (!typesList || typesList.length === 0) {
+                    typesList = ['playbooks','box-links','dashboards'];
+                }
                 const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
-                if (normalizedTypes.length === 0) return; // nothing to update for this section
 
                 // Query Supabase counts per type and update DOM
                 await Promise.all(normalizedTypes.map(async (tid) => {
