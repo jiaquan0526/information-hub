@@ -4749,8 +4749,17 @@ Permissions:
                 }
                 
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                    // Always read from Supabase (via wrapper); do not use any local/github fallbacks
-                    const sections = await hubDatabase.getAllSections();
+                    // Read sections from Supabase wrapper with a robust direct-query fallback
+                    let sections = await hubDatabase.getAllSections();
+                    if ((!sections || sections.length === 0) && window.supabaseClient) {
+                        try {
+                            const { data: directSections } = await window.supabaseClient
+                                .from('sections')
+                                .select('*')
+                                .order('name', { ascending: true });
+                            sections = Array.isArray(directSections) ? directSections : [];
+                        } catch (_) {}
+                    }
                     console.log('Loaded sections from database:', sections);
                     
                     if (sections && sections.length > 0) {
@@ -4808,10 +4817,15 @@ Permissions:
                 console.error('Error loading sections from database:', error);
             }
             
-            // If no sections found, show empty state (no local/github fallbacks)
+            // If no sections found after filtering, preserve existing content if present
             if (visibleSections.length === 0) {
                 console.log('No sections to display');
-                hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
+                try {
+                    const hasExisting = (hubGrid.innerHTML || '').trim().length > 0;
+                    if (!hasExisting) {
+                        hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
+                    }
+                } catch(_) {}
                 isUpdatingSections = false;
                 return;
             }
