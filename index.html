@@ -1221,12 +1221,10 @@
                 }
             }
 
-            function getDbTypeCandidates(sectionId, uiTid) {
+            function getSingleDbType(sectionId, uiTid) {
                 try {
                     const normTid = normUiType(uiTid);
                     const cfg = sectionConfigById.get(sectionId) || {};
-                    const candidates = [];
-                    // From config type definition if present
                     if (cfg && Array.isArray(cfg.types)) {
                         const typeDef = cfg.types.find(t => {
                             const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
@@ -1234,54 +1232,15 @@
                             try { return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false); } catch(_) { return tid.toLowerCase() === normTid; }
                         });
                         if (typeDef) {
-                            [typeDef.dbType, typeDef.resourceType, typeDef.type]
-                                .map(v => v == null ? '' : String(v).trim().toLowerCase())
-                                .filter(Boolean)
-                                .forEach(v => { if (!candidates.includes(v)) candidates.push(v); });
+                            const candidates = [typeDef.dbType, typeDef.resourceType, typeDef.type]
+                                .map(v => v == null ? '' : String(v).trim())
+                                .filter(Boolean);
+                            if (candidates.length > 0) return candidates[0].toLowerCase();
                         }
                     }
-                    // Fallback base from UI mapping
-                    const base = mapUiToDbType(normTid) || normTid;
-                    const baseLc = String(base || '').toLowerCase();
-                    const add = (v) => { const s = String(v||'').toLowerCase(); if (s && !candidates.includes(s)) candidates.push(s); };
-                    add(baseLc);
-                    // Add singular/plural and synonyms
-                    if (baseLc === 'playbook' || normTid === 'playbooks') { add('playbook'); add('playbooks'); }
-                    if (baseLc === 'link' || normTid === 'boxlinks') { add('link'); add('links'); add('boxlinks'); add('box-links'); add('box'); }
-                    if (baseLc === 'dashboard' || normTid === 'dashboards') { add('dashboard'); add('dashboards'); }
-                    if (baseLc === 'report' || normTid === 'reports') { add('report'); add('reports'); }
-                    return candidates.length > 0 ? candidates : [baseLc];
-                } catch(_) { return [String(uiTid||'').toLowerCase()]; }
-            }
-
-            function buildIlikePatterns(sectionId, uiTid) {
-                try {
-                    const normTid = normUiType(uiTid);
-                    const cfg = sectionConfigById.get(sectionId) || {};
-                    const patterns = [];
-                    const add = (v) => { const s = String(v||'').toLowerCase(); if (s) { const p = s.includes('%') ? s : `%${s}%`; if (!patterns.includes(p)) patterns.push(p); } };
-                    // From config
-                    if (cfg && Array.isArray(cfg.types)) {
-                        const typeDef = cfg.types.find(t => {
-                            const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
-                            const tname = String(t && t.name ? t.name : '').trim();
-                            try { return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false); } catch(_) { return tid.toLowerCase() === normTid; }
-                        });
-                        if (typeDef) {
-                            [typeDef.dbType, typeDef.resourceType, typeDef.type]
-                                .map(v => v == null ? '' : String(v).trim().toLowerCase())
-                                .filter(Boolean)
-                                .forEach(v => { add(v); });
-                        }
-                    }
-                    // UI-based synonyms
-                    if (normTid === 'playbooks') { ['playbook','playbooks'].forEach(add); }
-                    else if (normTid === 'boxLinks') { ['box','link','links','boxlink','boxlinks','box-links'].forEach(add); }
-                    else if (normTid === 'dashboards') { ['dashboard','dashboards','dash'].forEach(add); }
-                    else if (normTid === 'reports') { ['report','reports'].forEach(add); }
-                    else { add(normTid); }
-                    return patterns;
-                } catch (_) { return []; }
+                    const fallback = mapUiToDbType(normTid);
+                    return fallback ? fallback.toLowerCase() : null;
+                } catch(_) { return null; }
             }
 
             function updateCountDom(sectionId, tid, count) {
@@ -1311,32 +1270,19 @@
                 // Query Supabase counts per type and update DOM using robust candidates
                 await Promise.all(normalizedTypes.map(async (tid) => {
                     if (!window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
-                    const typeCandidates = getDbTypeCandidates(sectionId, tid);
-                    let countVal = 0;
+                    const dbType = getSingleDbType(sectionId, tid);
+                    if (!dbType) { updateCountDom(sectionId, tid, 0); return; }
                     try {
                         const { count, error } = await window.supabaseClient
                             .from('resources')
                             .select('*', { count: 'exact', head: true })
                             .eq('section_id', sectionId)
-                            .in('type', typeCandidates);
+                            .eq('type', dbType);
                         if (error) throw error;
-                        countVal = count || 0;
-                    } catch (_) { countVal = 0; }
-                    if (countVal === 0) {
-                        try {
-                            const pats = buildIlikePatterns(sectionId, tid);
-                            if (Array.isArray(pats) && pats.length > 0) {
-                                const orExpr = pats.map(p => `type.ilike.${p}`).join(',');
-                                const { count, error } = await window.supabaseClient
-                                    .from('resources')
-                                    .select('*', { count: 'exact', head: true })
-                                    .eq('section_id', sectionId)
-                                    .or(orExpr);
-                                if (!error) countVal = count || 0;
-                            }
-                        } catch (_) { /* ignore */ }
+                        updateCountDom(sectionId, tid, count || 0);
+                    } catch (_) {
+                        updateCountDom(sectionId, tid, 0);
                     }
-                    updateCountDom(sectionId, tid, countVal);
                 }));
             }));
         }
