@@ -2,8 +2,8 @@
 class SectionManager {
     constructor() {
         this.currentUser = null;
-        this.currentSection = this.getCurrentSectionFromURL();
-        this.currentTab = 'playbooks';
+		this.currentSection = this.getCurrentSectionFromURL();
+		this.currentTab = '';
         this.sectionConfig = this.loadSectionConfig();
         this._bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('hub-sync') : null;
         this._initStarted = false;
@@ -122,8 +122,7 @@ class SectionManager {
         this.sectionSessionStartMs = Date.now();
         // IDs are handled by Supabase; no local migrations
         await this.loadSectionData();
-        // Build tabs/types from Supabase resources for this section
-        try { await this.refreshTypesFromResources(); } catch (_) {}
+		// Do not auto-infer tabs from resources; show blank until configured in Supabase
         this.bindEvents();
         this.renderDynamicUI();
         // Asynchronously refresh section config from Supabase so all users share the same tabs
@@ -524,9 +523,10 @@ class SectionManager {
         // Optionally log SWITCH_SECTION_TAB to Supabase
     }
 
-    renderCurrentTab() {
-        this.renderResources(this.currentTab);
-    }
+	renderCurrentTab() {
+		if (!this.currentTab) return;
+		this.renderResources(this.currentTab);
+	}
 
     async renderResources(type) {
         const gridId = `${type.replace('-', '-')}-grid`;
@@ -1193,15 +1193,10 @@ class SectionManager {
         } catch (_) { go(); }
     }
 
-    loadSectionConfig() {
-        // Provide sensible defaults; later overridden by Supabase config or inferred from resources
-        const defaultTypes = [
-            { id: 'playbooks', name: 'Playbooks', icon: 'fas fa-book' },
-            { id: 'box-links', name: 'Box Links', icon: 'fas fa-link' },
-            { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' }
-        ];
-        return { types: defaultTypes, categories: ['process','procedure','guide','template','checklist'] };
-    }
+	loadSectionConfig() {
+		// Start with no tabs by default; Supabase config controls visibility.
+		return { types: [], categories: ['process','procedure','guide','template','checklist'] };
+	}
 
     async saveSectionConfig(cfg) {
         this.sectionConfig = cfg;
@@ -1332,28 +1327,33 @@ class SectionManager {
         } catch (_) {}
     }
 
-    renderDynamicUI() {
+		renderDynamicUI() {
         // Customize button visibility
         const customizeBtn = document.getElementById('customizeBtn');
         if (customizeBtn) {
             customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
         }
-            // Render tabs
-        const tabs = document.getElementById('navTabs');
-        if (tabs) {
-            tabs.innerHTML = this.sectionConfig.types.filter(t => !t.hidden).map((t, idx) => {
-                const active = (idx === 0 ? 'active' : '');
-                const iconCls = this.normalizeIconClass(t.icon || '');
-                return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
-                    <i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)}
-                </div>`;
-            }).join('');
-            // set default current tab to first type id
-                const firstVisible = (this.sectionConfig.types || []).find(t => !t.hidden);
-                if (firstVisible) {
-                    this.currentTab = firstVisible.id;
-            }
-        }
+				// Render tabs
+			const tabs = document.getElementById('navTabs');
+			const visibleTypes = (this.sectionConfig.types || []).filter(t => !t.hidden);
+			if (tabs) {
+				if (visibleTypes.length === 0) {
+					tabs.innerHTML = '';
+					this.currentTab = '';
+				} else {
+					tabs.innerHTML = visibleTypes.map((t, idx) => {
+						const active = (idx === 0 ? 'active' : '');
+						const iconCls = this.normalizeIconClass(t.icon || '');
+						return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
+							<i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)}
+						</div>`;
+					}).join('');
+					// set default current tab to first visible type if none selected
+					if (!this.currentTab && visibleTypes[0]) {
+						this.currentTab = visibleTypes[0].id;
+					}
+				}
+			}
         // Render category filter
         const catSel = document.getElementById('categoryFilter');
         if (catSel) {
@@ -1362,19 +1362,23 @@ class SectionManager {
             );
             catSel.innerHTML = options.join('');
         }
-        // Render content sections containers
-        const wrap = document.getElementById('dynamic-sections');
-            if (wrap) {
-            wrap.innerHTML = this.sectionConfig.types.filter(t => !t.hidden).map((t, idx) => {
-                const active = (idx === 0 ? 'active' : '');
-                return `<div class="content-section ${active}" id="${t.id}-section">
-                    <button class="add-resource-btn" onclick="addResource('${t.id}')" style="display: none;">
-                        <i class="fas fa-plus"></i> Add ${this.escapeHtml(t.name || t.id)}
-                    </button>
-                    <div class="resource-grid" id="${t.id}-grid"></div>
-                </div>`;
-            }).join('');
-        }
+			// Render content sections containers
+			const wrap = document.getElementById('dynamic-sections');
+				if (wrap) {
+				if (visibleTypes.length === 0) {
+					wrap.innerHTML = `<div class="content-blank" style="padding:24px; text-align:center; color:#666;">No tabs configured yet.</div>`;
+				} else {
+					wrap.innerHTML = visibleTypes.map((t, idx) => {
+						const active = (idx === 0 ? 'active' : '');
+						return `<div class="content-section ${active}" id="${t.id}-section">
+							<button class="add-resource-btn" onclick="addResource('${t.id}')" style="display: none;">
+								<i class="fas fa-plus"></i> Add ${this.escapeHtml(t.name || t.id)}
+							</button>
+							<div class="resource-grid" id="${t.id}-grid"></div>
+						</div>`;
+					}).join('');
+				}
+			}
     }
 
     openCustomizeModal() {
@@ -1654,10 +1658,10 @@ class SectionManager {
             const sid = this.currentSection;
             const ch = window.supabaseClient
                 .channel('section-' + sid)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'resources', filter: 'section_id=eq.' + sid }, async () => {
-                    try { await this.refreshTypesFromResources(); } catch(_) {}
-                    try { await this.renderCurrentTab(); } catch(_) {}
-                })
+				.on('postgres_changes', { event: '*', schema: 'public', table: 'resources', filter: 'section_id=eq.' + sid }, async () => {
+					// Do not auto-add tabs from resources; only refresh current tab content if one is selected
+					try { await this.renderCurrentTab(); } catch(_) {}
+				})
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter: 'section_id=eq.' + sid }, async () => {
                     try { await this._refreshSectionConfigFromDb(); } catch(_) {}
                 })
