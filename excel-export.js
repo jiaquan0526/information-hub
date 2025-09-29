@@ -5,6 +5,17 @@ class ExcelExporter {
         this._xlsxReady = false;
     }
 
+    async _waitForDbReady(maxMs = 10000) {
+        try {
+            const started = Date.now();
+            while (Date.now() - started < maxMs) {
+                if (window.hubDatabase && window.hubDatabaseReady) return true;
+                await new Promise(r => setTimeout(r, 100));
+            }
+        } catch (_) {}
+        return !!(window.hubDatabase && window.hubDatabaseReady);
+    }
+
     _downloadTextFile(fileName, content, mime = 'application/json') {
         try {
             const blob = new Blob([content], { type: mime });
@@ -61,8 +72,10 @@ class ExcelExporter {
                 let payload = null;
                 // Prefer Supabase export if available
                 try {
+                    await this._waitForDbReady(4000);
                     if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function') {
                         payload = await hubDatabase.exportAllData();
+                        if (payload) payload.source = 'database';
                     }
                 } catch (_) {}
                 // Fallback to localStorage snapshot if DB not available
@@ -85,6 +98,7 @@ class ExcelExporter {
                             activities,
                             views,
                             exportDate: new Date().toISOString(),
+                            source: 'localStorage',
                             totalRecords: {
                                 users: users.length,
                                 sections: sections.length,
@@ -94,7 +108,7 @@ class ExcelExporter {
                             }
                         };
                     } catch (_) {
-                        payload = { exportDate: new Date().toISOString() };
+                        payload = { exportDate: new Date().toISOString(), source: 'none' };
                     }
                 }
                 const jsonName = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.json`;
@@ -105,6 +119,8 @@ class ExcelExporter {
             // 2) Prefer Supabase DB data if available, otherwise build from GitHub
             let data = null;
             try {
+                await this._waitForDbReady(10000);
+                await this._waitForDbReady(10000);
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function') {
                     const db = await hubDatabase.exportAllData();
                     const sectionsNorm = (db.sections || []).map(s => {
@@ -129,6 +145,7 @@ class ExcelExporter {
                         activities: db.activities || [],
                         views: db.views || [],
                         exportDate: db.exportDate || new Date().toISOString(),
+                        source: 'database',
                         totalRecords: db.totalRecords || {
                             users: (db.users || []).length,
                             sections: sectionsNorm.length,
