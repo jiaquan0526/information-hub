@@ -928,6 +928,21 @@
                 try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
                 if (mainContent) mainContent.style.display = 'block';
                 if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                // Realtime sync: rebuild hub cards and stats when sections/resources change in Supabase
+                try {
+                    if (window.supabaseClient && !window.__hubSectionsRt) {
+                        window.__hubSectionsRt = window.supabaseClient
+                            .channel('hub-sections')
+                            .on('postgres_changes', { event: '*', schema: 'public', table: 'sections' }, () => {
+                                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                            })
+                            .on('postgres_changes', { event: '*', schema: 'public', table: 'resources' }, () => {
+                                try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+                            })
+                            .subscribe();
+                        window.addEventListener('beforeunload', () => { try { window.supabaseClient.removeChannel(window.__hubSectionsRt); } catch(_) {} }, { once: true });
+                    }
+                } catch(_) {}
             } catch(_) {}
         }, { once: true });
 

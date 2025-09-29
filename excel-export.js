@@ -249,8 +249,7 @@ class ExcelExporter {
             // Export Activities
             this.exportActivities(data.activities);
 
-            // Export Views (usage)
-            this.exportViews(data.views || []);
+            // Skip exporting Views to avoid RLS/empty data delays
 
             // Export Usage summaries
             this.exportUsageSummary(data);
@@ -620,24 +619,7 @@ class ExcelExporter {
                 XLSX.utils.book_append_sheet(this.workbook, usersWs, 'Users With Access');
             } catch (_) {}
 
-            // Views for resources in this section, if available
-            try {
-                if (window.hubDatabase && hubDatabase.getAllViews) {
-                    const views = await hubDatabase.getAllViews();
-                    const idsInSection = new Set(resources.map(r => r.id));
-                    const rows = (views || []).filter(v => idsInSection.has(v.resourceId)).map(v => ({
-                        'User ID': v.userId,
-                        'Resource ID': v.resourceId,
-                        'Count': v.count,
-                        'First Viewed At': v.firstViewedAt ? new Date(v.firstViewedAt).toLocaleString() : '',
-                        'Last Viewed At': v.lastViewedAt ? new Date(v.lastViewedAt).toLocaleString() : ''
-                    }));
-                    if (rows.length > 0) {
-                        const wsViews = XLSX.utils.json_to_sheet(rows);
-                        XLSX.utils.book_append_sheet(this.workbook, wsViews, 'Views');
-                    }
-                }
-            } catch (_) {}
+            // Skip Views sheet in section export
 
             const fileName = `${section.name.replace(/\s+/g, '_')}_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
             try {
@@ -772,24 +754,7 @@ class ExcelExporter {
                 }
             } catch (_) {}
 
-            // Views detailed for the user, if available via DB views
-            try {
-                if (hubDatabase && hubDatabase.getAllViews) {
-                    const views = await hubDatabase.getAllViews();
-                    const myViews = (views || []).filter(v => v.userId === userId);
-                    if (myViews.length > 0) {
-                        // We don't have resources here; keep minimal but map section if possible from description (not ideal)
-                        const viewData = myViews.map(v => ({
-                            'Resource ID': v.resourceId,
-                            'Count': v.count,
-                            'First Viewed At': v.firstViewedAt ? new Date(v.firstViewedAt).toLocaleString() : '',
-                            'Last Viewed At': v.lastViewedAt ? new Date(v.lastViewedAt).toLocaleString() : ''
-                        }));
-                        const viewsWs = XLSX.utils.json_to_sheet(viewData);
-                        XLSX.utils.book_append_sheet(this.workbook, viewsWs, 'Views');
-                    }
-                }
-            } catch (_) {}
+            // Skip Views in user data export
 
             const fileName = `${user.username}_Data_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
             try {
