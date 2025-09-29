@@ -1221,6 +1221,69 @@
                 }
             }
 
+            function getDbTypeCandidates(sectionId, uiTid) {
+                try {
+                    const normTid = normUiType(uiTid);
+                    const cfg = sectionConfigById.get(sectionId) || {};
+                    const candidates = [];
+                    // From config type definition if present
+                    if (cfg && Array.isArray(cfg.types)) {
+                        const typeDef = cfg.types.find(t => {
+                            const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
+                            const tname = String(t && t.name ? t.name : '').trim();
+                            try { return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false); } catch(_) { return tid.toLowerCase() === normTid; }
+                        });
+                        if (typeDef) {
+                            [typeDef.dbType, typeDef.resourceType, typeDef.type]
+                                .map(v => v == null ? '' : String(v).trim().toLowerCase())
+                                .filter(Boolean)
+                                .forEach(v => { if (!candidates.includes(v)) candidates.push(v); });
+                        }
+                    }
+                    // Fallback base from UI mapping
+                    const base = mapUiToDbType(normTid) || normTid;
+                    const baseLc = String(base || '').toLowerCase();
+                    const add = (v) => { const s = String(v||'').toLowerCase(); if (s && !candidates.includes(s)) candidates.push(s); };
+                    add(baseLc);
+                    // Add singular/plural and synonyms
+                    if (baseLc === 'playbook' || normTid === 'playbooks') { add('playbook'); add('playbooks'); }
+                    if (baseLc === 'link' || normTid === 'boxlinks') { add('link'); add('links'); add('boxlinks'); add('box-links'); add('box'); }
+                    if (baseLc === 'dashboard' || normTid === 'dashboards') { add('dashboard'); add('dashboards'); }
+                    if (baseLc === 'report' || normTid === 'reports') { add('report'); add('reports'); }
+                    return candidates.length > 0 ? candidates : [baseLc];
+                } catch(_) { return [String(uiTid||'').toLowerCase()]; }
+            }
+
+            function buildIlikePatterns(sectionId, uiTid) {
+                try {
+                    const normTid = normUiType(uiTid);
+                    const cfg = sectionConfigById.get(sectionId) || {};
+                    const patterns = [];
+                    const add = (v) => { const s = String(v||'').toLowerCase(); if (s) { const p = s.includes('%') ? s : `%${s}%`; if (!patterns.includes(p)) patterns.push(p); } };
+                    // From config
+                    if (cfg && Array.isArray(cfg.types)) {
+                        const typeDef = cfg.types.find(t => {
+                            const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
+                            const tname = String(t && t.name ? t.name : '').trim();
+                            try { return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false); } catch(_) { return tid.toLowerCase() === normTid; }
+                        });
+                        if (typeDef) {
+                            [typeDef.dbType, typeDef.resourceType, typeDef.type]
+                                .map(v => v == null ? '' : String(v).trim().toLowerCase())
+                                .filter(Boolean)
+                                .forEach(v => { add(v); });
+                        }
+                    }
+                    // UI-based synonyms
+                    if (normTid === 'playbooks') { ['playbook','playbooks'].forEach(add); }
+                    else if (normTid === 'boxLinks') { ['box','link','links','boxlink','boxlinks','box-links'].forEach(add); }
+                    else if (normTid === 'dashboards') { ['dashboard','dashboards','dash'].forEach(add); }
+                    else if (normTid === 'reports') { ['report','reports'].forEach(add); }
+                    else { add(normTid); }
+                    return patterns;
+                } catch (_) { return []; }
+            }
+
             function updateCountDom(sectionId, tid, count) {
                 try {
                     const el1 = document.getElementById(`${sectionId}-${tid}`);
@@ -1245,21 +1308,35 @@
                 }
                 const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
 
-                // Query Supabase counts per type and update DOM
+                // Query Supabase counts per type and update DOM using robust candidates
                 await Promise.all(normalizedTypes.map(async (tid) => {
-                    const dbType = resolveDbTypeForUiType(sectionId, tid);
-                    if (!dbType || !window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
+                    if (!window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
+                    const typeCandidates = getDbTypeCandidates(sectionId, tid);
+                    let countVal = 0;
                     try {
                         const { count, error } = await window.supabaseClient
                             .from('resources')
                             .select('*', { count: 'exact', head: true })
                             .eq('section_id', sectionId)
-                            .eq('type', dbType);
+                            .in('type', typeCandidates);
                         if (error) throw error;
-                        updateCountDom(sectionId, tid, count || 0);
-                    } catch (_) {
-                        updateCountDom(sectionId, tid, 0);
+                        countVal = count || 0;
+                    } catch (_) { countVal = 0; }
+                    if (countVal === 0) {
+                        try {
+                            const pats = buildIlikePatterns(sectionId, tid);
+                            if (Array.isArray(pats) && pats.length > 0) {
+                                const orExpr = pats.map(p => `type.ilike.${p}`).join(',');
+                                const { count, error } = await window.supabaseClient
+                                    .from('resources')
+                                    .select('*', { count: 'exact', head: true })
+                                    .eq('section_id', sectionId)
+                                    .or(orExpr);
+                                if (!error) countVal = count || 0;
+                            }
+                        } catch (_) { /* ignore */ }
                     }
+                    updateCountDom(sectionId, tid, countVal);
                 }));
             }));
         }
@@ -4463,15 +4540,33 @@ Permissions:
         // Background image support for sections (random, persistent per section)
         let BACKGROUND_IMAGES = [];
         async function ensureBackgroundImagesLoaded() {
-            // Fast path: skip network probing and use the baked-in list immediately
-            if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) {
+            try {
+                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
+                try {
+                    const local = JSON.parse(localStorage.getItem('bgLocalManifest') || '{}');
+                    if (local && Array.isArray(local.files) && local.files.length > 0) {
+                        BACKGROUND_IMAGES = local.files.slice();
+                        return;
+                    }
+                } catch (_) {}
+                try {
+                    const bust = Date.now();
+                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                    if (resp && resp.ok) {
+                        const data = await resp.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`);
+                            return;
+                        }
+                    }
+                } catch (_) {}
+                // Fallback baked-in list (works even if manifest.json is empty)
                 BACKGROUND_IMAGES = [
                     'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
                     'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
                     'background-pic/537082_K.png','background-pic/560846_L.png'
                 ];
-            }
-            return;
+            } catch (_) { /* keep defaults */ }
         }
         // Optimize background images client-side and cache results
         function computeManifestVersion() {
@@ -4505,14 +4600,13 @@ Permissions:
                 const headers = { 'Accept': 'application/vnd.github+json' };
                 for (const br of branches) {
                     try {
-                        // GitHub API removed - using local background images only
-                        const url = null;
+                        const url = `https://api.github.com/repos/${owner}/${repo}/contents/background-pic?ref=${encodeURIComponent(br)}`;
                         const resp = await fetch(url, { headers, cache: 'no-store' });
                         if (!resp.ok) continue;
                         const data = await resp.json();
                         if (Array.isArray(data) && data.length > 0) {
-                        const files = data
-                                .filter(x => x && x.type === 'file' && /\.(png|jpe?g|gif|svg)$/i.test(x.name || ''))
+                            const files = data
+                                .filter(x => x && x.type === 'file' && /\.(png|jpe?g|gif|svg|webp)$/i.test(x.name || ''))
                                 .map(x => `background-pic/${x.name}`);
                             if (files.length > 0) return files;
                         }
@@ -4550,8 +4644,19 @@ Permissions:
             } catch (_) {}
         }
         async function getOptimizedImageUrl(src, width = 1400, height = 0, quality = 0.74) {
-            // WebP/CDN optimization disabled; always use original source
-            return src;
+            try {
+                if (!src || typeof src !== 'string') return src;
+                if (/^data:/i.test(src)) return src;
+                if (/wsrv\.nl\//i.test(src)) return src; // already proxied
+                // Convert to absolute URL for proxying
+                const abs = (function(p){ try { return new URL(p, document.baseURI).href; } catch(_) { return p; } })(src);
+                const w = Math.max(1, Math.floor(Number(width) || 1400));
+                const h = Math.max(0, Math.floor(Number(height) || 0));
+                const q = Math.min(100, Math.max(10, Math.round((Number(quality) || 0.74) * 100)));
+                const params = [`url=${encodeURIComponent(abs)}`, `w=${w}`, `q=${q}`, `output=webp`];
+                if (h > 0) params.push(`h=${h}`);
+                return `https://images.weserv.nl/?${params.join('&')}`;
+            } catch (_) { return src; }
         }
 
         function getBackgroundImageForSection(sectionId) {
