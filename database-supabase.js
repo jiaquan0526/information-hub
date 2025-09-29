@@ -558,36 +558,33 @@ class HubDatabase {
         }
     }
 
-    // Export all data
+    // Export all data (tolerant of RLS: missing datasets return as empty arrays)
     async exportAllData() {
-        try {
-            const [users, sections, resources, activities, views] = await Promise.all([
-                this.getAllUsers(),
-                this.getAllSections(),
-                this.getAllResources(),
-                this.getActivities(),
-                this.getAllViews()
-            ]);
+        const safe = async (fn, fallback = []) => {
+            try { const res = await fn(); return Array.isArray(res) ? res : (res || []); }
+            catch (e) { console.warn('exportAllData partial fetch failed:', e?.message || e); return fallback; }
+        };
+        const users = await safe(() => this.getAllUsers(), []);
+        const sections = await safe(() => this.getAllSections(), []);
+        const resources = await safe(() => this.getAllResources(), []);
+        const activities = await safe(() => this.getActivities(), []);
+        const views = await safe(() => this.getAllViews(), []);
 
-            return {
-                users,
-                sections,
-                resources,
-                activities,
-                views,
-                exportDate: new Date().toISOString(),
-                totalRecords: {
-                    users: users.length,
-                    sections: sections.length,
-                    resources: resources.length,
-                    activities: activities.length,
-                    views: views.length
-                }
-            };
-        } catch (error) {
-            console.error('Export failed:', error);
-            throw error;
-        }
+        return {
+            users,
+            sections,
+            resources,
+            activities,
+            views,
+            exportDate: new Date().toISOString(),
+            totalRecords: {
+                users: users.length,
+                sections: sections.length,
+                resources: resources.length,
+                activities: activities.length,
+                views: views.length
+            }
+        };
     }
 
     // Clear all data (admin only)
