@@ -1239,7 +1239,7 @@
                         }
                     }
                     const fallback = mapUiToDbType(normTid);
-                    return fallback ? fallback.toLowerCase() : null;
+                    return (fallback ? fallback.toLowerCase() : normTid);
                 } catch(_) { return null; }
             }
 
