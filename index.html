@@ -3495,7 +3495,7 @@ Permissions:
         
         // NO localStorage sync - use Supabase only
         
-        // Function to get all available sections dynamically - SUPABASE ONLY
+        // Function to get all available sections dynamically - Supabase ONLY (no fallbacks)
         async function getAllAvailableSections() {
             try {
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
@@ -3513,35 +3513,7 @@ Permissions:
                         .filter(s => s && (s.config?.visible !== false))
                         .map(s => s.section_id || s.id)
                         .filter(Boolean);
-                    // Safe fallback: if still empty, provide a sensible default set so UI can render
-                    if (!ids || ids.length === 0) {
-                        // Try to derive from user profiles' permissions
-                        let derived = [];
-                        try {
-                            if (window.hubDatabase && window.hubDatabaseReady) {
-                                const users = await hubDatabase.getAllUsers();
-                                const set = new Set();
-                                (users || []).forEach(u => {
-                                    const arr = Array.isArray(u?.permissions?.sections) ? u.permissions.sections : [];
-                                    arr.forEach(id => { if (id) set.add(id); });
-                                });
-                                derived = Array.from(set);
-                            } else if (window.supabaseClient) {
-                                const { data: profiles } = await window.supabaseClient
-                                    .from('profiles')
-                                    .select('permissions');
-                                const set = new Set();
-                                (profiles || []).forEach(p => {
-                                    const arr = Array.isArray(p?.permissions?.sections) ? p.permissions.sections : [];
-                                    arr.forEach(id => { if (id) set.add(id); });
-                                });
-                                derived = Array.from(set);
-                            }
-                        } catch(_) {}
-                        if (Array.isArray(derived) && derived.length > 0) return derived;
-                        return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
-                    }
-                    return ids;
+                    return ids || [];
                 } else if (window.supabaseClient) {
                     const { data } = await window.supabaseClient
                         .from('sections')
@@ -3551,30 +3523,13 @@ Permissions:
                         .filter(row => (row && row.config && typeof row.config === 'object') ? (row.config.visible !== false) : true)
                         .map(row => row.section_id)
                         .filter(Boolean);
-                    if (!ids || ids.length === 0) {
-                        // Try to derive from user profiles' permissions
-                        let derived = [];
-                        try {
-                            const { data: profiles } = await window.supabaseClient
-                                .from('profiles')
-                                .select('permissions');
-                            const set = new Set();
-                            (profiles || []).forEach(p => {
-                                const arr = Array.isArray(p?.permissions?.sections) ? p.permissions.sections : [];
-                                arr.forEach(id => { if (id) set.add(id); });
-                            });
-                            derived = Array.from(set);
-                        } catch(_) {}
-                        if (Array.isArray(derived) && derived.length > 0) return derived;
-                        return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
-                    }
-                    return ids;
+                    return ids || [];
                 }
             } catch (error) {
                 console.error('Error loading sections from database:', error);
             }
-            // Ultimate fallback if everything fails
-            return ['costing','supply-planning','operations','quality','hr','it','sales','compliance'];
+            // Strict fallback: empty when none in DB
+            return [];
         }
         // Function to get sections the CURRENT USER can assign - SUPABASE ONLY
         async function getAssignableSectionsForCurrentUser() {
@@ -3628,7 +3583,7 @@ Permissions:
             }
         }
         
-        // Function to get section display names - SUPABASE ONLY
+        // Function to get section display names - Supabase ONLY (no defaults)
         async function getSectionDisplayNames() {
             try {
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
@@ -3647,34 +3602,13 @@ Permissions:
                     (sections || []).forEach(section => {
                         names[section.section_id || section.id] = section.name;
                     });
-                    // Provide defaults for known section ids if names are missing
-                    if (Object.keys(names).length === 0) {
-                        return {
-                            'costing': 'Costing',
-                            'supply-planning': 'Supply Planning',
-                            'operations': 'Operations',
-                            'quality': 'Quality',
-                            'hr': 'HR',
-                            'it': 'IT',
-                            'sales': 'Sales',
-                            'compliance': 'Compliance'
-                        };
-                    }
                     return names;
                 }
             } catch (error) {
                 console.error('Error loading section names from database:', error);
             }
-            return {
-                'costing': 'Costing',
-                'supply-planning': 'Supply Planning',
-                'operations': 'Operations',
-                'quality': 'Quality',
-                'hr': 'HR',
-                'it': 'IT',
-                'sales': 'Sales',
-                'compliance': 'Compliance'
-            };
+            // Strict fallback: empty map
+            return {};
         }
         
         // Function to refresh permission forms when sections change
@@ -5255,7 +5189,6 @@ Permissions:
               try { console.log('[Assignments] load complete'); } catch(_) {}
               __assignmentsLoading = false;
         };
-        
         // Update user section access
         window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
             console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
@@ -6053,7 +5986,6 @@ Permissions:
             overflow-y: scroll !important;
             -webkit-overflow-scrolling: touch;
         }
-        
         /* Improved Edit User Modal Styles */
         .edit-user-modal {
             max-width: 800px !important;
