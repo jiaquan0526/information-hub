@@ -4065,13 +4065,38 @@ Permissions:
                         await hubDatabase.updateSection(target);
                         console.log('Section updated in Supabase:', target);
                     } else {
-                        await hubDatabase.createSection(target);
-                        console.log('Section created in Supabase:', target);
-                        // Ensure creator can view new section
+                        // Pre-authorize creator to satisfy RLS (add to sections + editableSections before insert)
                         try {
                             const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
                             if (authUser) {
-                                // Load profile
+                                const { data: profile } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('role, permissions')
+                                    .eq('id', authUser.id)
+                                    .single();
+                                const role = String(profile?.role || '').toLowerCase();
+                                if (role !== 'admin') {
+                                    const perms = (profile && profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
+                                    const viewList = Array.isArray(perms.sections) ? perms.sections.slice() : [];
+                                    const editList = Array.isArray(perms.editableSections) ? perms.editableSections.slice() : [];
+                                    if (!viewList.includes(target.id)) viewList.push(target.id);
+                                    if (!editList.includes(target.id)) editList.push(target.id);
+                                    const next = { ...perms, sections: viewList, editableSections: editList };
+                                    await window.supabaseClient
+                                        .from('profiles')
+                                        .update({ permissions: next })
+                                        .eq('id', authUser.id);
+                                    console.log('Pre-authorized creator for section (view/edit):', target.id);
+                                }
+                            }
+                        } catch (preAuthErr) { console.warn('Pre-authorization skipped/failed', preAuthErr); }
+
+                        await hubDatabase.createSection(target);
+                        console.log('Section created in Supabase:', target);
+                        // Ensure creator can view new section (idempotent post-insert grant)
+                        try {
+                            const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                            if (authUser) {
                                 const { data: profile } = await window.supabaseClient
                                     .from('profiles')
                                     .select('permissions, username')
@@ -4089,7 +4114,7 @@ Permissions:
                                     console.log('Granted creator access to new section:', target.id);
                                 }
                             }
-                } catch (grantErr) { console.warn('Could not grant creator access', grantErr); }
+                        } catch (grantErr) { console.warn('Could not grant creator access', grantErr); }
                     }
                     
                     // Update local sectionOrder array
