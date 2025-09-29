@@ -1067,14 +1067,15 @@
             btn.innerHTML = off ? '<i class="fas fa-image"></i> Enable Backgrounds' : '<i class="fas fa-image"></i> Disable Backgrounds';
         }
 
-        window.toggleBackgrounds = function() {
+        window.toggleBackgrounds = async function() {
             try {
                 const forced = localStorage.getItem('forceBackgrounds') === '1';
                 if (forced) { try { localStorage.removeItem('forceBackgrounds'); } catch(_) {} }
-                const off = backgroundsDisabled();
-                try { localStorage.setItem('disableBackgrounds', off ? '0' : '1'); } catch(_) {}
+                const wasOff = backgroundsDisabled();
+                try { localStorage.setItem('disableBackgrounds', wasOff ? '0' : '1'); } catch(_) {}
                 updateBackgroundToggleButton();
-                updateMainHubSections();
+                if (wasOff) { try { await ensureBackgroundImagesLoaded(); } catch (_) {} }
+                try { await updateMainHubSections(); } catch (_) { try { updateMainHubSections(); } catch (_) {} }
             } catch (_) {}
         };
 
@@ -4902,6 +4903,14 @@ Permissions:
                             }));
                         }
                     } catch (_) {}
+            if (!typesList || typesList.length === 0) {
+                // Fallback to defaults to match section page behavior
+                typesList = [
+                    { id: 'playbooks', name: 'Playbooks' },
+                    { id: 'box-links', name: 'Box Links' },
+                    { id: 'dashboards', name: 'Dashboards' }
+                ];
+            }
                 // Do not auto-augment; mirror only the configured tabs (or defaults).
 
                     const statsHTML = typesList.map(t => {
