@@ -1235,8 +1235,8 @@
             }
 
             await Promise.all(sections.map(async (sectionId) => {
-                // Determine types for this section (from Supabase config if available)
-                let typesList = ['playbooks','box-links','dashboards'];
+                // Determine types strictly from section config to mirror detail tabs
+                let typesList = [];
                 try {
                     const cfg = sectionConfigById.get(sectionId);
                     if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
@@ -1244,6 +1244,7 @@
                     }
                 } catch (_) {}
                 const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
+                if (normalizedTypes.length === 0) return; // nothing to update for this section
 
                 // Query Supabase counts per type and update DOM
                 await Promise.all(normalizedTypes.map(async (tid) => {
@@ -4888,11 +4889,7 @@ Permissions:
             for (const section of visibleSections) {
                 try {
                     // Build types list to mirror the section detail tabs
-            let typesList = [
-                        { id: 'playbooks', name: 'Playbooks' },
-                        { id: 'box-links', name: 'Box Links' },
-                        { id: 'dashboards', name: 'Dashboards' }
-                    ];
+            let typesList = [];
                     try {
                         // Use section.config from Supabase only
                         const cfg = section.config || {};
