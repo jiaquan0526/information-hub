@@ -202,8 +202,8 @@ class InformationHub {
                         id: user.id,
                         username: user.email,
                         email: user.email,
-                        role: 'viewer',
-                        permissions: this.getDefaultPermissions('viewer')
+                        role: undefined,
+                        permissions: undefined
                     };
                 } else {
                     console.log('Profile found:', profile);
@@ -212,8 +212,8 @@ class InformationHub {
                         username: profile.username || user.email,
                         email: user.email,
                         name: profile.name,
-                        role: profile.role || 'viewer',
-                        permissions: profile.permissions || this.getDefaultPermissions(profile.role || 'viewer')
+                        role: profile.role,
+                        permissions: profile.permissions
                     };
                 }
             } catch (profileError) {
@@ -223,8 +223,8 @@ class InformationHub {
                     id: user.id,
                     username: user.email,
                     email: user.email,
-                    role: 'viewer',
-                    permissions: this.getDefaultPermissions('viewer')
+                    role: undefined,
+                    permissions: undefined
                 };
             }
             
@@ -1147,8 +1147,8 @@ window.editUser = async (userId) => {
         }
         // Fallback to prompts (admin/editor/viewer only)
         const name = prompt('Full name:', prof.name || '') ?? (prof.name || '');
-        const roleInput = prompt('Role (admin/editor/viewer):', prof.role || 'viewer') || prof.role || 'viewer';
-        const role = ['admin','editor','viewer'].includes(roleInput) ? roleInput : (prof.role || 'viewer');
+        const roleInput = prompt('Role (admin/editor/viewer):', prof.role || '') || prof.role || '';
+        const role = ['admin','editor','viewer'].includes(String(roleInput).toLowerCase()) ? String(roleInput).toLowerCase() : prof.role;
         const perms = prof.permissions || {};
         if (perms.disabled === true) {
             if (confirm('User is disabled. Re-enable this user?')) { delete perms.disabled; }
@@ -1182,7 +1182,7 @@ if (typeof window.showEditUserModal !== 'function') {
             modal.innerHTML = `
                 <div class="modal-content edit-user-modal" style="max-width:700px; width:95%;">
                     <div class="modal-header">
-                        <h2 style="display:flex;align-items:center;gap:10px;">Edit User <span class="role-badge" style="font-size:12px;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3f51b5;border:1px solid #dce1ff;">${(user.role||'viewer').toUpperCase()}</span></h2>
+                        <h2 style="display:flex;align-items:center;gap:10px;">Edit User <span class="role-badge" style="font-size:12px;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3f51b5;border:1px solid #dce1ff;">${(user.role?String(user.role).toUpperCase():'').toUpperCase()}</span></h2>
                         <span class="close" onclick="(function(){ const m=document.getElementById('editUserModal'); if(m) m.remove(); })()">&times;</span>
                     </div>
                     <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:flex-start;">
@@ -1240,7 +1240,7 @@ if (typeof window.showEditUserModal !== 'function') {
                     const fullName = (document.getElementById('editUserFullName')?.value || '').trim();
                     const email = (document.getElementById('editUserEmail')?.value || '').trim();
                     const roleSel = document.getElementById('editUserRole');
-                    const role = (roleSel && !roleSel.disabled) ? roleSel.value : (user.role || 'viewer');
+                    const role = (roleSel && !roleSel.disabled) ? roleSel.value : user.role;
                     const disabledCb = document.getElementById('editUserDisabled');
                     const perms = Object.assign({}, user.permissions || {});
                     perms.disabled = !!(disabledCb && disabledCb.checked);

@@ -300,17 +300,17 @@ class AuthSystem {
                 } catch (_) { 
                     console.warn('Failed to load sections during signup, using default list');
                     // Fallback to default sections if database query fails
-                    sectionIds = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                    sectionIds = [];
                 }
                 
-                // Give new users full access to all sections by default
+                // Default viewer with view access to all visible sections; no edit
                 const permissions = {
                     sections: sectionIds.length > 0 ? sectionIds : ['*'], // Access to all sections
-                    editableSections: sectionIds.length > 0 ? sectionIds : ['*'], // Can edit all sections
+                    editableSections: [],
                     canViewAllSections: true,
-                    canEditAllSections: true,
+                    canEditAllSections: false,
                     canManageUsers: false,
-                    canDeleteResources: true,
+                    canDeleteResources: false,
                     canViewAuditLog: false,
                     canManageRoles: false
                 };
@@ -321,7 +321,7 @@ class AuthSystem {
                     email,
                     username: email,
                     name,
-                    role: 'editor', // Give editor role for full access
+                    role: 'viewer',
                     permissions: permissions
                 });
             }

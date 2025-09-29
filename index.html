@@ -1254,7 +1254,7 @@
                 const entry = {
                     username,
                     action: action || 'updated',
-                    section: section || 'general',
+                    section: section || null,
                     type: type || 'resource',
                     title: title || '',
                     timestamp: new Date().toISOString()
@@ -2261,11 +2261,12 @@ Permissions:
                     alert('Please fill in email, password, and role.');
                     return false;
                 }
-                const defaults = {
-                    admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
-                    editor: { canManageUsers: false, canEditAllSections: false, canDeleteResources: true, canViewAuditLog: false, canManageRoles: false, sections: [], editableSections: [] },
-                    user: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: [], editableSections: [] }
-                };
+                // Determine visible sections to seed viewer permissions
+                let sectionIds = [];
+                try {
+                    const rows = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : [];
+                    sectionIds = (rows || []).filter(s => !s.config || s.config.visible !== false).map(s => s.section_id || s.sectionId || s.id).filter(Boolean);
+                } catch(_) { sectionIds = []; }
                 if (!window.supabaseClient) { alert('Supabase not initialized'); return false; }
 
                 // If a profile with this email already exists, just update role/permissions
@@ -2291,14 +2292,23 @@ Permissions:
                     }
                 }
 
-                // Upsert profile with role and permissions
+                // Upsert profile with role viewer and permissions (view all visible)
                 const profilePayload = {
                     id: targetUserId,
                     username: username || email.split('@')[0],
-                    role,
+                    role: 'viewer',
                     name: name || username || email.split('@')[0],
                     email,
-                    permissions: defaults[role] || defaults.user
+                    permissions: {
+                        sections: sectionIds.length > 0 ? sectionIds : ['*'],
+                        editableSections: [],
+                        canViewAllSections: true,
+                        canEditAllSections: false,
+                        canManageUsers: false,
+                        canDeleteResources: false,
+                        canViewAuditLog: false,
+                        canManageRoles: false
+                    }
                 };
                 const { error: upsertErr } = await window.supabaseClient
                     .from('profiles')
@@ -2858,8 +2868,8 @@ Permissions:
             };
             users = users.map(u => ({
                 ...u,
-                role: (u.role || 'viewer').toLowerCase().replace('manager','editor').replace('user','viewer'),
-                permissions: u.permissions ? { sections: u.permissions.sections || [], editableSections: u.permissions.editableSections || [] , ...u.permissions } : defaults[(u.role || 'viewer').toLowerCase().replace('manager','editor').replace('user','viewer')] || defaults.viewer
+                role: (typeof u.role === 'string' ? u.role : u.role),
+                permissions: u.permissions ? { sections: u.permissions.sections || [], editableSections: u.permissions.editableSections || [] , ...u.permissions } : u.permissions
             }));
             
             // Text filter
@@ -3240,7 +3250,7 @@ Permissions:
             if (!users[userIndex].permissions) {
                 users[userIndex].permissions = {};
             }
-            const roleChanged = (String(targetUser.role || 'viewer').toLowerCase()) !== String(role).toLowerCase();
+            const roleChanged = (typeof targetUser.role === 'string' && typeof role === 'string') ? (String(targetUser.role).toLowerCase() !== String(role).toLowerCase()) : false;
             if (roleChanged) {
                 const defaults = {
                     admin: { canManageUsers: true, canEditAllSections: true, canDeleteResources: true, canViewAuditLog: true, canManageRoles: true, sections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'], editableSections: ['costing','supply-planning','operations','quality','hr','it','sales','compliance'] },
@@ -3248,8 +3258,8 @@ Permissions:
                     viewer: { canManageUsers: false, canEditAllSections: false, canDeleteResources: false, canViewAuditLog: false, canManageRoles: false, sections: ['costing','supply-planning'], editableSections: [] }
                 };
                 // Map any legacy roles if present
-                const normalizedRole = String(role).toLowerCase().replace('manager','editor').replace('user','viewer');
-                users[userIndex].permissions = { ...defaults[normalizedRole] };
+                // Keep existing permissions if present; do not coerce by role
+                users[userIndex].permissions = users[userIndex].permissions || {};
             }
             users[userIndex].permissions = users[userIndex].permissions || {};
             users[userIndex].permissions.sections = selectedSections;
@@ -3271,13 +3281,7 @@ Permissions:
                         if (!window.supabaseClient) throw wrapperErr;
                         const directPromise = window.supabaseClient
                             .from('profiles')
-                            .update({
-                                username: users[userIndex].username,
-                                role: users[userIndex].role,
-                                name: users[userIndex].name,
-                                email: users[userIndex].email,
-                                permissions: users[userIndex].permissions
-                            })
+                            .update((() => { const payload = { username: users[userIndex].username, name: users[userIndex].name, email: users[userIndex].email, permissions: users[userIndex].permissions }; if (typeof users[userIndex].role === 'string') payload.role = users[userIndex].role; return payload; })())
                             .eq('id', userId);
                         const { error: upErr } = await Promise.race([
                             directPromise,

@@ -50,7 +50,7 @@ class HubDatabase {
                 .upsert({
                     id: user.id,
                     username: user.username,
-                    role: user.role || 'viewer',
+                    role: user.role,
                     name: user.name,
                     email: user.email,
                     permissions: user.permissions || {}
@@ -104,7 +104,7 @@ class HubDatabase {
                 .from('profiles')
                 .update({
                     username: user.username,
-                    role: user.role || 'viewer',
+                    role: user.role,
                     name: user.name,
                     email: user.email,
                     permissions: user.permissions || {}
