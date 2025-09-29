@@ -698,8 +698,9 @@ class SectionManager {
 
     canEditResource() {
         if (!this.currentUser) return false;
-        return this.currentUser.permissions.canEditAllSections || 
-               this.currentUser.permissions.editableSections.includes(this.currentSection);
+        const perms = this.currentUser.permissions || {};
+        const editableSections = Array.isArray(perms.editableSections) ? perms.editableSections : [];
+        return !!perms.canEditAllSections || editableSections.includes(this.currentSection);
     }
 
     canDeleteResource() {
@@ -1193,8 +1194,13 @@ class SectionManager {
     }
 
     loadSectionConfig() {
-        // Start with empty types; will refresh from Supabase config and resources
-        return { types: [], categories: ['process','procedure','guide','template','checklist'] };
+        // Provide sensible defaults; later overridden by Supabase config or inferred from resources
+        const defaultTypes = [
+            { id: 'playbooks', name: 'Playbooks', icon: 'fas fa-book' },
+            { id: 'box-links', name: 'Box Links', icon: 'fas fa-link' },
+            { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' }
+        ];
+        return { types: defaultTypes, categories: ['process','procedure','guide','template','checklist'] };
     }
 
     async saveSectionConfig(cfg) {

@@ -1086,8 +1086,8 @@
                 if (error || !user) return null;
                 
                 // Get full user profile from database
-                const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
-                    .from('users')
+            const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
+                    .from('profiles')
                     .select('*')
                     .eq('id', user.id)
                     .single();
@@ -2103,7 +2103,7 @@
             
             // Get full user profile from database
             const { data: profile, error: profileError } = await supabase
-                .from('users')
+                .from('profiles')
                 .select('*')
                 .eq('id', user.id)
                 .single();
@@ -2385,9 +2385,9 @@ Permissions:
                     return;
                 }
                 
-                // Get full user profile from database
+                // Get full user profile from database (profiles table)
                 const { data: user, error: profileError } = await supabase
-                    .from('users')
+                    .from('profiles')
                     .select('*')
                     .eq('id', authUser.id)
                     .single();
@@ -2418,7 +2418,7 @@ Permissions:
                 console.log('Admin button found:', !!adminBtn);
                 console.log('User role:', user.role);
                 
-                if (String(user.role||'').toLowerCase() === 'admin' || String(user.role||'').toLowerCase() === 'editor') {
+                if (String(user.role||'').toLowerCase() === 'admin' || String(user.role||'').toLowerCase() === 'editor' || (user.permissions && user.permissions.canManageUsers)) {
                     // Show admin panel button for admins and managers
                     if (adminBtn) {
                         adminBtn.style.display = 'inline-flex';
@@ -4155,7 +4155,7 @@ Permissions:
                                     console.log('Granted creator access to new section:', target.id);
                                 }
                             }
-                        } catch (grantErr) { console.warn('Could not grant creator access', grantErr); }
+                } catch (grantErr) { console.warn('Could not grant creator access', grantErr); }
                     }
                     
                     // Update local sectionOrder array
@@ -4180,7 +4180,9 @@ Permissions:
                 }
             } catch (error) {
                 console.error('Error saving section to Supabase:', error);
-                alert('Failed to save section: ' + error.message);
+                const msg = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Failed to fetch';
+                const hint = ' Ensure you are signed in and Supabase URL/Anon Key are correct, and CORS allows this origin.';
+                alert('Failed to save section: ' + msg + hint);
             }
             });
         }

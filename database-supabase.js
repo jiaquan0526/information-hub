@@ -192,6 +192,11 @@ class HubDatabase {
 
     async createSection(section) {
         try {
+            // Ensure authenticated session before attempting insert (RLS requires auth.uid())
+            const currentUserId = await this.getCurrentUserId();
+            if (!currentUserId) {
+                throw new Error('Not authenticated. Please sign in again.');
+            }
             const { data, error } = await this.supabase
                 .from('sections')
                 .insert({
@@ -206,7 +211,9 @@ class HubDatabase {
                         order: section.order || 0
                     },
                     data: section.data || {}
-                });
+                })
+                .select('section_id')
+                .single();
             
             if (error) throw error;
             return data;
