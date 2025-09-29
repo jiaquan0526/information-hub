@@ -199,7 +199,7 @@ class HubDatabase {
             }
             const { data, error } = await this.supabase
                 .from('sections')
-                .insert({
+                .upsert({
                     section_id: section.sectionId || section.id,
                     name: section.name,
                     icon: section.icon,
@@ -211,7 +211,7 @@ class HubDatabase {
                         order: section.order || 0
                     },
                     data: section.data || {}
-                })
+                }, { onConflict: 'section_id' })
                 .select('section_id')
                 .single();
             
