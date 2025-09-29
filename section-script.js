@@ -10,6 +10,66 @@ class SectionManager {
         this.init();
     }
 
+    async _seedExampleResourcesIfMissing(types) {
+        try {
+            if (!window.supabaseClient) return;
+            const secId = this.currentSection;
+            for (const t of (types || [])) {
+                const uiId = String(t.id || '').toLowerCase();
+                const dbType = this._mapUiTypeToDbType(uiId);
+                const { count, error } = await window.supabaseClient
+                    .from('resources')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('section_id', secId)
+                    .eq('type', dbType);
+                if (error) continue;
+                if (!count || count === 0) {
+                    const sectionNameEl = document.getElementById('sectionName');
+                    const sectionName = (sectionNameEl && sectionNameEl.textContent) ? sectionNameEl.textContent.trim() : secId;
+                    const typeName = String(t.name || t.id || uiId).trim();
+                    const payload = {
+                        section_id: secId,
+                        type: dbType,
+                        title: `${typeName} example` ,
+                        description: '',
+                        url: 'https://example.com',
+                        tags: [],
+                        extra: { category: '' },
+                        section_name: sectionName,
+                        type_name: typeName
+                    };
+                    try { await window.supabaseClient.from('resources').insert(payload).select().single(); } catch (_) {}
+                }
+            }
+            // Notify hub to refresh counts
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'seed' });
+        } catch (_) {}
+    }
+
+    async refreshTypesFromResources() {
+        try {
+            if (!window.supabaseClient) return;
+            const { data, error } = await window.supabaseClient
+                .from('resources')
+                .select('type, type_name')
+                .eq('section_id', this.currentSection);
+            if (error) return;
+            const seen = new Map();
+            (Array.isArray(data) ? data : []).forEach(r => {
+                const dbt = String(r.type || '').trim().toLowerCase();
+                if (!dbt) return;
+                // Map DB type back to UI id
+                let id = dbt === 'playbook' ? 'playbooks' : dbt === 'link' ? 'box-links' : dbt === 'dashboard' ? 'dashboards' : dbt;
+                const name = (r.type_name && String(r.type_name).trim()) || (id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id);
+                seen.set(id, { id, name, icon: (id === 'playbooks' ? 'fas fa-book' : id === 'box-links' ? 'fas fa-link' : id === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder') });
+            });
+            const types = Array.from(seen.values());
+            if (types.length > 0) {
+                this.sectionConfig = { ...(this.sectionConfig || {}), types, categories: this.sectionConfig.categories || [] };
+            }
+        } catch (_) {}
+    }
+
     // Content activity logger (records to activities table via wrapper)
     async logContentActivity(action, resourceType, title) {
         try {
@@ -18,7 +78,7 @@ class SectionManager {
                 action: String(action || 'updated').toUpperCase(),
                 type: resourceType || '',
                 title: title || '',
-                section: this.currentSection || ''
+                section: this.currentSection || null
             });
         } catch (_) {}
     }
@@ -62,6 +122,8 @@ class SectionManager {
         this.sectionSessionStartMs = Date.now();
         // IDs are handled by Supabase; no local migrations
         await this.loadSectionData();
+        // Build tabs/types from Supabase resources for this section
+        try { await this.refreshTypesFromResources(); } catch (_) {}
         this.bindEvents();
         this.renderDynamicUI();
         // Asynchronously refresh section config from Supabase so all users share the same tabs
@@ -499,8 +561,8 @@ class SectionManager {
     }
 
     async getResources(type) {
-        const uiType = this.mapToStorageType(type); // 'playbooks' | 'boxLinks' | 'dashboards'
-        const dbType = this._mapUiTypeToDbType(uiType); // 'playbook' | 'link' | 'dashboard'
+        const uiType = this.mapToStorageType(type);
+        const dbType = this._mapUiTypeToDbType(uiType);
         if (!window.supabaseClient) return [];
         try {
             const { data, error } = await window.supabaseClient
@@ -748,6 +810,19 @@ class SectionManager {
             const uiType = this.mapToStorageType(type);
             const dbType = this._mapUiTypeToDbType(uiType);
             if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            // Enrich with display fields for easier joins/use
+            let sectionName = '';
+            try {
+                const nmEl = document.getElementById('sectionName');
+                sectionName = (nmEl && nmEl.textContent) ? nmEl.textContent.trim() : '';
+            } catch (_) {}
+            let typeName = '';
+            try {
+                // Best effort: find configured type name
+                const cfg = this.sectionConfig || {};
+                const t = (cfg.types || []).find(x => String(x.id || '').trim().toLowerCase() === uiType);
+                typeName = t ? (t.name || t.id || '') : uiType;
+            } catch (_) { typeName = uiType; }
             const payload = {
                 section_id: this.currentSection,
                 type: dbType,
@@ -755,7 +830,9 @@ class SectionManager {
                 description: resource.description || '',
                 url: resource.url,
                 tags: resource.tags || [],
-                extra: { category: resource.category || '' }
+                extra: { category: resource.category || '' },
+                section_name: sectionName || null,
+                type_name: typeName || null
             };
             const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
             if (error) throw error;
@@ -1055,7 +1132,9 @@ class SectionManager {
                 createdAt: row.created_at || row.createdAt || new Date().toISOString(),
                 updatedAt: row.updated_at || row.updatedAt || undefined,
                 userId: row.created_by || row.user_id || row.userId || null,
-                type: uiType
+                type: uiType,
+                section_name: row.section_name || undefined,
+                type_name: row.type_name || undefined
             };
         } catch (_) {
             return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: new Date().toISOString(), type: uiType };
@@ -1116,15 +1195,8 @@ class SectionManager {
     }
 
     loadSectionConfig() {
-        // Default config as placeholder; refreshed from Supabase asynchronously
-        return {
-            types: [
-                { id: 'playbooks', name: 'Playbooks', icon: 'fas fa-book' },
-                { id: 'box-links', name: 'Box Links', icon: 'fas fa-link' },
-                { id: 'dashboards', name: 'Dashboards', icon: 'fas fa-chart-bar' }
-            ],
-            categories: ['process','procedure','guide','template','checklist']
-        };
+        // Start with empty types; will refresh from Supabase config and resources
+        return { types: [], categories: ['process','procedure','guide','template','checklist'] };
     }
 
     async saveSectionConfig(cfg) {
@@ -1493,50 +1565,40 @@ class SectionManager {
         });
 
         modal.querySelector('#saveCfgBtn').addEventListener('click', async () => {
-            // Collect
+            // Collect rows in UI order
             const rows = Array.from(typeList.querySelectorAll('.type-row'));
-            // Normalize ids and validate
-            const rawTypes = rows.map(r => ({
-                id: String(r.querySelector('.type-id')?.value || '').trim(),
+            // Normalize and build last-wins dedup by id while preserving final order
+            const normalized = rows.map((r, idx) => ({
+                rawId: String(r.querySelector('.type-id')?.value || '').trim(),
                 name: String(r.querySelector('.type-name')?.value || '').trim(),
-                icon: String(r.querySelector('.type-icon')?.value || '').trim()
-            })).filter(t => t.id);
-            const types = rawTypes.map(t => ({
-                id: normalizeTypeIdLocal(t.id),
-                name: t.name,
-                icon: t.icon
-            })).filter(t => t.id);
-            if (types.length === 0) {
+                icon: String(r.querySelector('.type-icon')?.value || '').trim(),
+                idx
+            })).filter(t => t.rawId);
+            const lastIndexById = new Map();
+            const rowById = new Map();
+            normalized.forEach(t => {
+                const id = normalizeTypeIdLocal(t.rawId);
+                lastIndexById.set(id, t.idx);
+                rowById.set(id, { id, name: t.name, icon: t.icon });
+            });
+            if (rowById.size === 0) {
                 showAlert('Provide at least one type with an id', 'error');
                 return;
             }
-            // Validate uniqueness of ids
-            const seen = new Set();
-            for (const t of types) {
-                const id = t.id.toLowerCase();
-                if (seen.has(id)) {
-                    showAlert(`Duplicate type id: ${t.id}`, 'error');
-                    return;
-                }
-                seen.add(id);
-            }
-            // Prevent immediate collision against existing config (if any) when admin adds a new single type
-            try {
-                const existing = (this.sectionConfig && Array.isArray(this.sectionConfig.types)) ? this.sectionConfig.types : [];
-                const existingIds = new Set(existing.map(x => normalizeTypeIdLocal(x && (x.id !== undefined ? x.id : x))));
-                // If adding exactly one new row and it collides with existing, block
-                const newIds = types.map(x => x.id);
-                const merged = new Set(); let collision = null;
-                [...existingIds].forEach(i => merged.add(i));
-                for (const i of newIds) { if (merged.has(i)) { collision = i; break; } merged.add(i); }
-                if (collision) { showAlert(`Type id already exists: ${collision}`, 'error'); return; }
-            } catch (_) {}
+            const sortedIds = Array.from(lastIndexById.entries()).sort((a, b) => a[1] - b[1]).map(e => e[0]);
+            const secId = this.currentSection;
+            const types = sortedIds
+                .map(id => rowById.get(id))
+                .map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon, key: `${secId}:${t.id}` }));
             const catsRaw = modal.querySelector('#cfgCats').value || '';
             const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
-            const validTypes = types.map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon }));
-            const cfgNew = { types: validTypes, categories };
+            const tabs = types.map(t => t.id);
+            const tab_names = types.map(t => t.name || t.id);
+            const cfgNew = { types, categories, tabs, tab_names };
             const ok = await this.saveSectionConfig(cfgNew);
             if (!ok) { showAlert('Failed to save configuration', 'error'); return; }
+            // Seed example resources for any types that have none yet in Supabase
+            try { await this._seedExampleResourcesIfMissing(types); } catch (_) {}
             this.renderDynamicUI();
             this.renderCurrentTab();
             this.showMessage('Section customized', 'success');
@@ -1589,6 +1651,7 @@ class SectionManager {
             const ch = window.supabaseClient
                 .channel('section-' + sid)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'resources', filter: 'section_id=eq.' + sid }, async () => {
+                    try { await this.refreshTypesFromResources(); } catch(_) {}
                     try { await this.renderCurrentTab(); } catch(_) {}
                 })
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter: 'section_id=eq.' + sid }, async () => {

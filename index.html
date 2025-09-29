@@ -1199,12 +1199,7 @@
                     if (cfg && Array.isArray(cfg.types)) {
                         const typeDef = cfg.types.find(t => {
                             const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
-                            const tname = String(t && t.name ? t.name : '').trim();
-                            try {
-                                return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false);
-                            } catch(_) {
-                                return tid.toLowerCase() === normTid;
-                            }
+                            try { return normalizeTypeId(tid) === normTid; } catch(_) { return tid.toLowerCase() === normTid; }
                         });
                         if (typeDef) {
                             const candidates = [typeDef.dbType, typeDef.resourceType, typeDef.type]
@@ -1260,6 +1255,8 @@
                     const cfg = sectionConfigById.get(sectionId);
                     if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
                         typesList = cfg.types.map(t => String((t && t.id !== undefined ? t.id : t) || '').trim()).filter(Boolean);
+                    } else if (cfg && Array.isArray(cfg.tabs) && cfg.tabs.length > 0) {
+                        typesList = cfg.tabs.map(x => String(x || '').trim()).filter(Boolean);
                     }
                 } catch (_) {}
                 if (!typesList || typesList.length === 0) {
@@ -4950,6 +4947,13 @@ Permissions:
                                 name: String(t.name || t.id || 'Type').trim(),
                                 icon: String(t.icon || '').trim()
                             }));
+                        } else if (cfg && Array.isArray(cfg.tabs) && cfg.tabs.length > 0) {
+                            const names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+                            typesList = cfg.tabs.map((id, i) => ({
+                                id: String(id || '').trim(),
+                                name: String((names[i] || id || 'Type')).trim(),
+                                icon: ''
+                            })).filter(t => t.id);
                         }
                     } catch (_) {}
             if (!typesList || typesList.length === 0) {
