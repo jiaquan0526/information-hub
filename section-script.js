@@ -1115,10 +1115,8 @@ class SectionManager {
         } catch (_) { return false; }
     }
     _mapUiTypeToDbType(uiType) {
-        if (uiType === 'playbooks') return 'playbook';
-        if (uiType === 'boxLinks') return 'link';
-        if (uiType === 'dashboards') return 'dashboard';
-        return String(uiType || '').trim();
+        // Identity mapping: store UI id directly in resources.type
+        return String(uiType || '').toLowerCase().trim();
     }
     _normalizeResourceRow(row, uiType) {
         try {

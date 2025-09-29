@@ -1181,61 +1181,15 @@
             const sectionConfigById = new Map();
             visibleRows.forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
 
-            const normUiType = (t) => {
-                const raw = String(t || '').toLowerCase().trim();
-                if (raw.includes('playbook')) return 'playbooks';
-                if (raw.includes('box')) return 'boxLinks';
-                if (raw.includes('dash')) return 'dashboards';
-                if (raw.includes('report')) return 'reports';
-                if (raw === 'playbooks' || raw === 'boxlinks' || raw === 'dashboards' || raw === 'reports') return raw === 'boxlinks' ? 'boxLinks' : raw;
-                try { return normalizeTypeId(raw); } catch(_) { return raw; }
-            };
-            const mapUiToDbType = (ui) => ui === 'playbooks' ? 'playbook' : ui === 'boxLinks' ? 'link' : ui === 'dashboards' ? 'dashboard' : ui === 'reports' ? 'report' : null;
+            const normUiType = (t) => String(t || '').toLowerCase().trim();
+            const mapUiToDbType = (ui) => String(ui || '').toLowerCase().trim();
 
             function resolveDbTypeForUiType(sectionId, uiTid) {
-                try {
-                    const cfg = sectionConfigById.get(sectionId);
-                    const normTid = normUiType(uiTid);
-                    if (cfg && Array.isArray(cfg.types)) {
-                        const typeDef = cfg.types.find(t => {
-                            const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
-                            try { return normalizeTypeId(tid) === normTid; } catch(_) { return tid.toLowerCase() === normTid; }
-                        });
-                        if (typeDef) {
-                            const candidates = [typeDef.dbType, typeDef.resourceType, typeDef.type]
-                                .map(v => v == null ? '' : String(v).trim())
-                                .filter(Boolean);
-                            if (candidates.length > 0) return candidates[0].toLowerCase();
-                        }
-                    }
-                    const fallback = mapUiToDbType(normTid);
-                    if (fallback) return fallback;
-                    return normTid;
-                } catch(_) {
-                    return mapUiToDbType(uiTid) || null;
-                }
+                return normUiType(uiTid);
             }
 
             function getSingleDbType(sectionId, uiTid) {
-                try {
-                    const normTid = normUiType(uiTid);
-                    const cfg = sectionConfigById.get(sectionId) || {};
-                    if (cfg && Array.isArray(cfg.types)) {
-                        const typeDef = cfg.types.find(t => {
-                            const tid = String((t && t.id !== undefined ? t.id : t) || '').trim();
-                            const tname = String(t && t.name ? t.name : '').trim();
-                            try { return normalizeTypeId(tid) === normTid || (tname ? normalizeTypeId(tname) === normTid : false); } catch(_) { return tid.toLowerCase() === normTid; }
-                        });
-                        if (typeDef) {
-                            const candidates = [typeDef.dbType, typeDef.resourceType, typeDef.type]
-                                .map(v => v == null ? '' : String(v).trim())
-                                .filter(Boolean);
-                            if (candidates.length > 0) return candidates[0].toLowerCase();
-                        }
-                    }
-                    const fallback = mapUiToDbType(normTid);
-                    return (fallback ? fallback.toLowerCase() : normTid);
-                } catch(_) { return null; }
+                return normUiType(uiTid);
             }
 
             function updateCountDom(sectionId, tid, count) {
@@ -1259,8 +1213,17 @@
                         typesList = cfg.tabs.map(x => String(x || '').trim()).filter(Boolean);
                     }
                 } catch (_) {}
-                if (!typesList || typesList.length === 0) {
-                    typesList = ['playbooks','box-links','dashboards'];
+                // If still empty, derive from resources (distinct types for this section)
+                if ((!typesList || typesList.length === 0) && window.supabaseClient) {
+                    try {
+                        const { data } = await window.supabaseClient
+                            .from('resources')
+                            .select('type')
+                            .eq('section_id', sectionId);
+                        const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
+                        const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
+                        typesList = Array.from(new Set(mapped));
+                    } catch (_) {}
                 }
                 const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
 
@@ -4956,14 +4919,19 @@ Permissions:
                             })).filter(t => t.id);
                         }
                     } catch (_) {}
-            if (!typesList || typesList.length === 0) {
-                // Fallback to defaults to match section page behavior
-                typesList = [
-                    { id: 'playbooks', name: 'Playbooks' },
-                    { id: 'box-links', name: 'Box Links' },
-                    { id: 'dashboards', name: 'Dashboards' }
-                ];
-            }
+                    // If still empty, derive from resources (distinct types for this section)
+                    if ((!typesList || typesList.length === 0) && window.supabaseClient) {
+                        try {
+                            const { data } = await window.supabaseClient
+                                .from('resources')
+                                .select('type')
+                                .eq('section_id', section.id);
+                            const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
+                            const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
+                            const uniq = Array.from(new Set(mapped));
+                            typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
+                        } catch (_) {}
+                    }
                 // Do not auto-augment; mirror only the configured tabs (or defaults).
 
                     const statsHTML = typesList.map(t => {
@@ -6356,7 +6324,7 @@ Permissions:
                     if (total>0) return alert('Database already has resources. Nothing to seed.');
                     var sample = {
                         section_id: 'costing',
-                        type: 'playbook',
+                        type: 'playbooks',
                         title: 'Getting Started',
                         description: 'How to use the hub and add your first items',
                         url: 'https://example.com/getting-started',
