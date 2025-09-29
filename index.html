@@ -1049,8 +1049,15 @@
 
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
-            // Default to disabled for better performance
-            return true;
+            try {
+                const forced = localStorage.getItem('forceBackgrounds') === '1';
+                if (forced) return false;
+                const v = localStorage.getItem('disableBackgrounds');
+                if (v === null || v === undefined) return true; // default disabled
+                return String(v) === '1' || String(v).toLowerCase() === 'true';
+            } catch (_) {
+                return true;
+            }
         }
 
         function updateBackgroundToggleButton() {
@@ -1062,9 +1069,11 @@
 
         window.toggleBackgrounds = function() {
             try {
-                // Backgrounds are always disabled for better performance
+                const forced = localStorage.getItem('forceBackgrounds') === '1';
+                if (forced) { try { localStorage.removeItem('forceBackgrounds'); } catch(_) {} }
+                const off = backgroundsDisabled();
+                try { localStorage.setItem('disableBackgrounds', off ? '0' : '1'); } catch(_) {}
                 updateBackgroundToggleButton();
-                // Rebuild to apply immediately
                 updateMainHubSections();
             } catch (_) {}
         };
@@ -4356,11 +4365,7 @@ Permissions:
                 </div>
                 <h3>${section.name}</h3>
                 <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
-                <div class="card-stats" id="${section.id}-stats">
-                    <span><i class="fas fa-book"></i> <span id="${section.id}-playbooks">0</span> Playbooks</span>
-                    <span><i class="fas fa-link"></i> <span id="${section.id}-boxlinks">0</span> Box Links</span>
-                    <span><i class="fas fa-chart-bar"></i> <span id="${section.id}-dashboards">0</span> Dashboards</span>
-                </div>
+                <div class="card-stats" id="${section.id}-stats"></div>
             </div>`;
             hubGrid.insertAdjacentHTML('beforeend', cardHTML);
         }
@@ -4744,42 +4749,27 @@ Permissions:
                 }
                 
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                    let sections = await hubDatabase.getAllSections();
-                    // Fallback: query Supabase directly if wrapper returned no rows
-                    if ((!sections || sections.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data: directSections } = await window.supabaseClient
-                                .from('sections')
-                                .select('*')
-                                .order('name', { ascending: true });
-                            sections = Array.isArray(directSections) ? directSections : [];
-                        } catch (_) {}
-                    }
+                    // Always read from Supabase (via wrapper); do not use any local/github fallbacks
+                    const sections = await hubDatabase.getAllSections();
                     console.log('Loaded sections from database:', sections);
                     
                     if (sections && sections.length > 0) {
                         // Get current user permissions
-                        const sessionRaw = localStorage.getItem('hubSession');
+                        // Fetch user profile directly from Supabase only
                         let user = null;
-                        if (sessionRaw) {
-                            try { user = JSON.parse(sessionRaw); } catch (_) {}
-                        }
-                        // Fallback: fetch profile from Supabase if no local session
-                        if (!user && window.supabaseClient) {
-                            try {
-                                const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
-                                if (authUser) {
-                                    const { data: profile } = await window.supabaseClient
-                                        .from('profiles')
-                                        .select('role, permissions')
-                                        .eq('id', authUser.id)
-                                        .single();
-                                    user = { role: (profile && profile.role) || 'viewer', permissions: (profile && profile.permissions) || {} };
-                                }
-                            } catch (_) {}
-                        }
+                        try {
+                            const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                            if (authUser) {
+                                const { data: profile } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('role, permissions')
+                                    .eq('id', authUser.id)
+                                    .single();
+                                user = { role: (profile && profile.role) || 'viewer', permissions: (profile && profile.permissions) || {} };
+                            }
+                        } catch (_) {}
                         
-                        // Filter sections based on user permissions
+                        // Filter sections based on user permissions (from Supabase only)
                         if (user) {
                             const role = String(user.role || '').toLowerCase();
                             const canAll = !!(user.permissions && user.permissions.canEditAllSections);
@@ -4804,16 +4794,9 @@ Permissions:
                                 console.log('User has limited access, showing sections:', visibleSections.length, 'allowed sections:', Array.from(allowed));
                             }
                         } else {
-                            // No user logged in - show all sections (for public access)
-                            visibleSections = sections.filter(s => s.config?.visible !== false).sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
-                            console.log('No user logged in, showing all sections:', visibleSections.length);
-                        }
-                        // Final fallback: if permissions filtered everything but data exists, show visible sections
-                        if (visibleSections.length === 0 && sections.length > 0) {
-                            try {
-                                visibleSections = sections.filter(s => s.config?.visible !== false).sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
-                                console.log('Permissions filtered all sections; falling back to visible sections:', visibleSections.length);
-                            } catch (_) {}
+                            // No user profile: still show only visible sections as per Supabase config
+                            visibleSections = sections.filter(s => s.config?.visible !== false)
+                                .sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
                         }
                     } else {
                         console.warn('No sections found in database');
@@ -4825,7 +4808,7 @@ Permissions:
                 console.error('Error loading sections from database:', error);
             }
             
-            // If no sections found, show empty state
+            // If no sections found, show empty state (no local/github fallbacks)
             if (visibleSections.length === 0) {
                 console.log('No sections to display');
                 hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
@@ -4836,16 +4819,17 @@ Permissions:
             const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
             const truncate = (t, n) => { const s = String(t||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
             
-            // Normalize section data for rendering (convert database fields to expected format)
+            // Normalize section data for rendering (Supabase is the single source of truth)
             const normalizeSection = (section) => ({
                 id: section.section_id || section.id,
                 name: section.name,
                 description: section.description,
-                intro: section.description, // Use description as intro
+                intro: (section.config && typeof section.config.intro === 'string') ? section.config.intro : '',
                 icon: section.icon || 'fas fa-th-large',
                 image: section.image,
-                visible: section.visible !== false,
-                order: section.order || 0
+                visible: !(section.config && section.config.visible === false),
+                order: (section.config && Number.isFinite(section.config.order)) ? section.config.order : (section.order || 0),
+                config: section.config || {}
             });
             
             // Normalize all sections
@@ -4896,17 +4880,8 @@ Permissions:
                         { id: 'dashboards', name: 'Dashboards' }
                     ];
                     try {
-                        // Get config from Supabase database
-                        let cfg = null;
-                        if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSectionConfig === 'function') {
-                            try { cfg = await hubDatabase.getSectionConfig(section.id); } catch(_) { cfg = null; }
-                        }
-                        if (!cfg) {
-                            const cfgRaw = localStorage.getItem(`section_config_${section.id}`);
-                            if (cfgRaw) {
-                                cfg = JSON.parse(cfgRaw);
-                            }
-                        }
+                        // Use section.config from Supabase only
+                        const cfg = section.config || {};
                         if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
                             const visibleTypes = cfg.types.filter(t => !t.hidden);
                             typesList = visibleTypes.map(t => ({
@@ -4915,7 +4890,6 @@ Permissions:
                                 icon: String(t.icon || '').trim()
                             }));
                         }
-                        // (deduped) keep single mapping preserving optional icon if provided in config
                     } catch (_) {}
                 // Do not auto-augment; mirror only the configured tabs (or defaults).
 
@@ -4935,7 +4909,7 @@ Permissions:
                         <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                         <div class="card-title">
                             <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
-                            <p class="card-intro">${escapeHtml(truncate(section.intro || section.description || '', 120))}</p>
+                            <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
                         </div>
                     </div>
                     <div class="card-stats" id="${section.id}-stats">${statsHTML}</div>
