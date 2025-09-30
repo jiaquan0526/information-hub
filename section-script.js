@@ -267,6 +267,11 @@ class SectionManager {
                     .eq('section_id', this.currentSection)
                     .single();
                 if (!error && data) {
+                    try {
+                        if (data && data.config && typeof data.config === 'string') {
+                            data.config = JSON.parse(data.config);
+                        }
+                    } catch (_) {}
                     sectionConfig = data;
                     console.log('Loaded section from Supabase (authoritative):', sectionConfig);
                 }
@@ -1301,7 +1306,16 @@ class SectionManager {
                 .single();
             if (error) return;
             // Update config for types/categories
-            const cfg = (data && data.config && typeof data.config === 'object') ? data.config : null;
+            let cfg = null;
+            try {
+                if (data && data.config && typeof data.config === 'string') {
+                    cfg = JSON.parse(data.config);
+                } else if (data && data.config && typeof data.config === 'object') {
+                    cfg = data.config;
+                }
+            } catch (_) {
+                cfg = (data && data.config && typeof data.config === 'object') ? data.config : null;
+            }
             if (cfg) {
                 this.sectionConfig = cfg;
             }
