@@ -52,7 +52,7 @@ class SectionManager {
             if (!window.supabaseClient) return;
             const { data, error } = await window.supabaseClient
                 .from('resources')
-                .select('type, type_name')
+                .select('type')
                 .eq('section_id', this.currentSection);
             if (error) return;
             const seen = new Map();
@@ -61,8 +61,11 @@ class SectionManager {
                 if (!dbt) return;
                 // Map DB type back to UI id
                 let id = dbt === 'playbook' ? 'playbooks' : dbt === 'link' ? 'box-links' : dbt === 'dashboard' ? 'dashboards' : dbt;
-                const name = (r.type_name && String(r.type_name).trim()) || (id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id);
-                seen.set(id, { id, name, icon: (id === 'playbooks' ? 'fas fa-book' : id === 'box-links' ? 'fas fa-link' : id === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder') });
+                const cfg = this.sectionConfig || {};
+                const t = (Array.isArray(cfg.types) ? cfg.types : []).find(x => String(x.id||'').trim().toLowerCase() === id);
+                const name = t ? (t.name || t.id) : (id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id);
+                const icon = t ? (t.icon || '') : (id === 'playbooks' ? 'fas fa-book' : id === 'box-links' ? 'fas fa-link' : id === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder');
+                seen.set(id, { id, name, icon });
             });
             const types = Array.from(seen.values());
             if (types.length > 0) {
@@ -624,7 +627,7 @@ class SectionManager {
         try {
             const { data, error } = await window.supabaseClient
                 .from('resources')
-                .select('*')
+                .select('*, sections(name)')
                 .eq('section_id', this.currentSection)
                 .eq('type', dbType)
                 .order('created_at', { ascending: false });
@@ -885,18 +888,6 @@ class SectionManager {
             const dbType = this._mapUiTypeToDbType(uiType);
             if (!window.supabaseClient) throw new Error('Supabase unavailable');
             // Enrich with display fields for easier joins/use
-            let sectionName = '';
-            try {
-                const nmEl = document.getElementById('sectionName');
-                sectionName = (nmEl && nmEl.textContent) ? nmEl.textContent.trim() : '';
-            } catch (_) {}
-            let typeName = '';
-            try {
-                // Best effort: find configured type name
-                const cfg = this.sectionConfig || {};
-                const t = (cfg.types || []).find(x => String(x.id || '').trim().toLowerCase() === uiType);
-                typeName = t ? (t.name || t.id || '') : uiType;
-            } catch (_) { typeName = uiType; }
             const payload = {
                 section_id: this.currentSection,
                 type: dbType,
@@ -904,9 +895,7 @@ class SectionManager {
                 description: resource.description || '',
                 url: resource.url,
                 tags: resource.tags || [],
-                extra: { category: resource.category || '' },
-                section_name: sectionName || null,
-                type_name: typeName || null
+                extra: { category: resource.category || '' }
             };
             const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
             if (error) throw error;
@@ -1215,8 +1204,7 @@ class SectionManager {
                 updatedAt: row.updated_at || row.updatedAt || undefined,
                 userId: row.created_by || row.user_id || row.userId || null,
                 type: uiType,
-                section_name: row.section_name || undefined,
-                type_name: row.type_name || undefined
+                section_name: (row.sections && row.sections.name) ? row.sections.name : undefined
             };
         } catch (_) {
             return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: new Date().toISOString(), type: uiType };
