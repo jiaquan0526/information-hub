@@ -4088,58 +4088,43 @@ Permissions:
             // Save section to Supabase database
             const target = isEdit ? sectionOrder.find(s => s.id === section.id) : sectionOrder.find(s => s.id === idInput);
             
+            // Narrow critical save to its own block; later UI updates won't mask a successful save
+            let __saveOk = false;
             try {
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    if (isEdit) {
-                        await hubDatabase.updateSection(target);
-                        console.log('Section updated in Supabase:', target);
-                    } else {
-                        await hubDatabase.createSection(target);
-                        console.log('Section created in Supabase:', target);
-                        // Ensure creator can view new section (idempotent post-insert grant)
-                        try {
-                            const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
-                            if (authUser) {
-                                const { data: profile } = await window.supabaseClient
-                                    .from('profiles')
-                                    .select('permissions, username')
-                                    .eq('id', authUser.id)
-                                    .single();
-                                const perms = (profile && profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
-                                const current = Array.isArray(perms.sections) ? perms.sections.slice() : [];
-                                if (!current.includes(target.id)) {
-                                    current.push(target.id);
-                                    const next = { ...perms, sections: current };
-                                    await window.supabaseClient
-                                        .from('profiles')
-                                        .update({ permissions: next })
-                                        .eq('id', authUser.id);
-                                    console.log('Granted creator access to new section:', target.id);
-                                }
-                            }
-                        } catch (grantErr) { console.warn('Could not grant creator access', grantErr); }
-                    }
-                    
-                    // Update local sectionOrder array
-                    // Section order is managed in Supabase database
-                    renderSectionsList();
-                    updateMainHubSections();
-                    
+                if (!(window.hubDatabase && window.hubDatabaseReady)) {
+                    alert('Database not ready. Please try again.');
+                    return;
+                }
+                if (isEdit) {
+                    await hubDatabase.updateSection(target);
+                    console.log('Section updated in Supabase:', target);
+                } else {
+                    await hubDatabase.createSection(target);
+                    console.log('Section created in Supabase:', target);
+                    // Ensure creator can view new section (best-effort; ignore failures)
                     try {
-                        const sessionRaw = localStorage.getItem('hubSession');
-                        if (sessionRaw) {
-                            const sessionUser = JSON.parse(sessionRaw);
-                            if (typeof updateHubCardsAccess === 'function') {
-                                await updateHubCardsAccess(sessionUser);
+                        const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                        if (authUser) {
+                            const { data: profile } = await window.supabaseClient
+                                .from('profiles')
+                                .select('permissions, username')
+                                .eq('id', authUser.id)
+                                .single();
+                            const perms = (profile && profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
+                            const current = Array.isArray(perms.sections) ? perms.sections.slice() : [];
+                            if (!current.includes(target.id)) {
+                                current.push(target.id);
+                                const next = { ...perms, sections: current };
+                                await window.supabaseClient
+                                    .from('profiles')
+                                    .update({ permissions: next })
+                                    .eq('id', authUser.id);
+                                console.log('Granted creator access to new section:', target.id);
                             }
                         }
-                    } catch (e) { console.warn('Could not refresh hub cards access', e); }
-                    
-                    modal.remove();
-                    alert('Section saved successfully!');
-            } else {
-                    alert('Database not ready. Please try again.');
+                    } catch (grantErr) { console.warn('Could not grant creator access (non-blocking)', grantErr); }
                 }
+                __saveOk = true;
             } catch (error) {
                 console.error('Error saving section to Supabase:', error);
                 try {
@@ -4163,7 +4148,31 @@ Permissions:
                 } catch (_) {
                     alert('Failed to save section: Unknown error');
                 }
+                return;
             }
+
+            // Post-save UI refresh (non-blocking)
+            try {
+                // Update local sectionOrder array
+                // Section order is managed in Supabase database
+                renderSectionsList();
+                updateMainHubSections();
+            } catch (uiErr) {
+                console.warn('Post-save UI refresh failed (non-blocking)', uiErr);
+            }
+            
+            try {
+                const sessionRaw = localStorage.getItem('hubSession');
+                if (sessionRaw) {
+                    const sessionUser = JSON.parse(sessionRaw);
+                    if (typeof updateHubCardsAccess === 'function') {
+                        await updateHubCardsAccess(sessionUser);
+                    }
+                }
+            } catch (e) { console.warn('Could not refresh hub cards access (non-blocking)', e); }
+            
+            try { modal.remove(); } catch(_) {}
+            alert('Section saved successfully!');
             });
         }
 
