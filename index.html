@@ -4033,9 +4033,26 @@ Permissions:
                 const introVal = (modal.querySelector('#secIntro') && modal.querySelector('#secIntro').value) ? modal.querySelector('#secIntro').value.trim() : '';
                 if (!idInput || !nameInput) return;
 
-                if (!isEdit && sectionOrder.find(s => s.id === idInput)) {
-                    alert('A section with this ID already exists.');
-                    return;
+                if (!isEdit) {
+                    try {
+                        // Supabase-backed duplicate check to ensure single source of truth
+                        if (window.supabaseClient) {
+                            const { data: existingRow, error: existsErr } = await window.supabaseClient
+                                .from('sections')
+                                .select('section_id')
+                                .eq('section_id', idInput)
+                                .maybeSingle();
+                            if (existsErr) {
+                                console.warn('Section ID existence check failed (continuing to attempt create):', existsErr);
+                            }
+                            if (existingRow && existingRow.section_id) {
+                                alert('A section with this ID already exists.');
+                                return;
+                            }
+                        }
+                    } catch (existsCheckErr) {
+                        console.warn('Supabase duplicate check exception (continuing):', existsCheckErr);
+                    }
                 }
                 // Admin-only creation guard
                 try {
