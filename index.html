@@ -3803,7 +3803,16 @@ Permissions:
                         } catch (wrapperErr) {
                             console.warn('Wrapper update failed, trying direct Supabase update', wrapperErr);
                             if (!window.supabaseClient) throw wrapperErr;
-                            const nextConfig = { ...(section.config || {}), visible: isVisible, intro: section.intro || '', order: section.order || 0 };
+                            let existingCfg = {};
+                            try {
+                                const cur = await window.supabaseClient
+                                    .from('sections')
+                                    .select('config')
+                                    .eq('section_id', sectionId)
+                                    .single();
+                                if (!cur.error && cur.data && typeof cur.data.config === 'object') existingCfg = cur.data.config;
+                            } catch (_) {}
+                            const nextConfig = Object.assign({}, existingCfg, section.config || {}, { visible: isVisible, intro: section.intro || '', order: section.order || 0 });
                             const { data: updated, error } = await window.supabaseClient
                                 .from('sections')
                                 .update({ config: nextConfig })
@@ -4102,7 +4111,16 @@ Permissions:
                     } catch (wrapperErr) {
                         console.warn('Wrapper update failed, attempting direct Supabase update', wrapperErr);
                         if (!window.supabaseClient) throw wrapperErr;
-                        const nextConfig = { ...(target.config || {}), visible: target.visible !== false, intro: target.intro || '', order: target.order || 0 };
+                        let existingCfg = {};
+                        try {
+                            const cur = await window.supabaseClient
+                                .from('sections')
+                                .select('config')
+                                .eq('section_id', target.id)
+                                .single();
+                            if (!cur.error && cur.data && typeof cur.data.config === 'object') existingCfg = cur.data.config;
+                        } catch (_) {}
+                        const nextConfig = Object.assign({}, existingCfg, target.config || {}, { visible: target.visible !== false, intro: target.intro || '', order: target.order || 0 });
                         const { data: up, error: upErr } = await window.supabaseClient
                             .from('sections')
                             .update({ name: target.name, icon: target.icon, color: target.color, config: nextConfig })
@@ -4279,7 +4297,16 @@ Permissions:
                         let failures = 0;
                         for (const section of sectionOrder) {
                             try {
-                                const nextConfig = { ...(section.config || {}), order: section.order || 0, intro: section.intro || '', visible: section.visible !== false };
+                                let existingCfg = {};
+                                try {
+                                    const cur = await window.supabaseClient
+                                        .from('sections')
+                                        .select('config')
+                                        .eq('section_id', section.id)
+                                        .single();
+                                    if (!cur.error && cur.data && typeof cur.data.config === 'object') existingCfg = cur.data.config;
+                                } catch (_) {}
+                                const nextConfig = Object.assign({}, existingCfg, section.config || {}, { order: section.order || 0, intro: section.intro || '', visible: section.visible !== false });
                                 const { data: updated, error } = await window.supabaseClient
                                     .from('sections')
                                     .update({ config: nextConfig })

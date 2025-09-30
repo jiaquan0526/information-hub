@@ -267,21 +267,33 @@ class HubDatabase {
     async updateSection(section) {
         try {
             const run = async () => {
+                const sid = section.sectionId || section.id;
+                // Read current to preserve config fields like types/categories
+                let current = null;
+                try {
+                    const cur = await this.supabase
+                        .from('sections')
+                        .select('config')
+                        .eq('section_id', sid)
+                        .single();
+                    if (!cur.error) current = cur.data;
+                } catch (_) {}
+                const existingCfg = (current && typeof current.config === 'object') ? current.config : {};
+                const nextConfig = Object.assign({}, existingCfg, section.config || {});
+                // Ensure critical flags are kept in sync but do not drop other keys
+                nextConfig.visible = section.visible !== false;
+                nextConfig.intro = section.intro || '';
+                nextConfig.order = section.order || 0;
                 const { data, error } = await this.supabase
                     .from('sections')
                     .update({
                         name: section.name,
                         icon: section.icon,
                         color: section.color,
-                        config: {
-                            ...(section.config || {}),
-                            visible: section.visible !== false,
-                            intro: section.intro || '',
-                            order: section.order || 0
-                        },
+                        config: nextConfig,
                         data: section.data || {}
                     })
-                    .eq('section_id', section.sectionId || section.id);
+                    .eq('section_id', sid);
                 if (error) throw error;
                 return data;
             };
