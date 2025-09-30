@@ -4096,8 +4096,23 @@ Permissions:
                     return;
                 }
                 if (isEdit) {
-                    await hubDatabase.updateSection(target);
-                    console.log('Section updated in Supabase:', target);
+                    try {
+                        await hubDatabase.updateSection(target);
+                        console.log('Section updated in Supabase:', target);
+                    } catch (wrapperErr) {
+                        console.warn('Wrapper update failed, attempting direct Supabase update', wrapperErr);
+                        if (!window.supabaseClient) throw wrapperErr;
+                        const nextConfig = { ...(target.config || {}), visible: target.visible !== false, intro: target.intro || '', order: target.order || 0 };
+                        const { data: up, error: upErr } = await window.supabaseClient
+                            .from('sections')
+                            .update({ name: target.name, icon: target.icon, color: target.color, config: nextConfig })
+                            .eq('section_id', target.id)
+                            .select('section_id')
+                            .maybeSingle();
+                        if (upErr) throw upErr;
+                        if (!up) throw new Error('No section row updated');
+                        console.log('Section updated via direct Supabase:', up);
+                    }
                 } else {
                     try {
                         await hubDatabase.createSection(target);
