@@ -4099,30 +4099,28 @@ Permissions:
                     await hubDatabase.updateSection(target);
                     console.log('Section updated in Supabase:', target);
                 } else {
-                    await hubDatabase.createSection(target);
-                    console.log('Section created in Supabase:', target);
-                    // Ensure creator can view new section (best-effort; ignore failures)
                     try {
-                        const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
-                        if (authUser) {
-                            const { data: profile } = await window.supabaseClient
-                                .from('profiles')
-                                .select('permissions, username')
-                                .eq('id', authUser.id)
-                                .single();
-                            const perms = (profile && profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : {};
-                            const current = Array.isArray(perms.sections) ? perms.sections.slice() : [];
-                            if (!current.includes(target.id)) {
-                                current.push(target.id);
-                                const next = { ...perms, sections: current };
-                                await window.supabaseClient
-                                    .from('profiles')
-                                    .update({ permissions: next })
-                                    .eq('id', authUser.id);
-                                console.log('Granted creator access to new section:', target.id);
-                            }
-                        }
-                    } catch (grantErr) { console.warn('Could not grant creator access (non-blocking)', grantErr); }
+                        await hubDatabase.createSection(target);
+                        console.log('Section created in Supabase:', target);
+                    } catch (wrapperErr) {
+                        console.warn('Wrapper create failed, attempting direct Supabase upsert', wrapperErr);
+                        if (!window.supabaseClient) throw wrapperErr;
+                        const payload = {
+                            section_id: target.id,
+                            name: target.name,
+                            icon: target.icon,
+                            color: target.color,
+                            config: { ...(target.config || {}), visible: target.visible !== false, intro: target.intro || '', order: target.order || 0 },
+                            data: target.data || {}
+                        };
+                        const { data: up, error: upErr } = await window.supabaseClient
+                            .from('sections')
+                            .upsert(payload, { onConflict: 'section_id' })
+                            .select('section_id')
+                            .single();
+                        if (upErr) throw upErr;
+                        console.log('Section created via direct Supabase:', up);
+                    }
                 }
                 __saveOk = true;
             } catch (error) {
@@ -4433,7 +4431,6 @@ Permissions:
             if (t.length <= maxLen) return t;
             return t.slice(0, Math.max(0, maxLen - 1)) + '…';
         }
-        
         // Background image support for sections (random, persistent per section)
         let BACKGROUND_IMAGES = [];
         async function ensureBackgroundImagesLoaded() {
@@ -5953,7 +5950,6 @@ Permissions:
             padding-top: 10px;
             border-top: 1px solid #e9ecef;
         }
-
         /* Edit User Modal overlay and stacking */
         #editUserModal {
             position: fixed !important;
