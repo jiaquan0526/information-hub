@@ -532,7 +532,16 @@ class SectionManager {
             this._sectionSessionLogged = true;
             const durationMs = Date.now() - (this.sectionSessionStartMs || Date.now());
             try {
-                // Optionally write to Supabase activities if you decide to expose it client-side
+                if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+                    const desc = `Closed section ${this.currentSection} after ${Math.round(durationMs/1000)}s`;
+                    this._safeDbCall(hubDatabase.saveActivity({
+                        action: 'CLOSE_SECTION',
+                        section: this.currentSection,
+                        description: desc,
+                        timestamp: new Date().toISOString(),
+                        username: this.currentUser.username || this.currentUser.email || null
+                    }), 1200);
+                }
             } catch (_) {}
         };
         window.addEventListener('beforeunload', logClose);
@@ -541,7 +550,16 @@ class SectionManager {
         });
         // Log open
         try {
-            // Optionally write OPEN_SECTION to Supabase here
+            if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+                const desc = `Opened section ${this.currentSection}`;
+                this._safeDbCall(hubDatabase.saveActivity({
+                    action: 'OPEN_SECTION',
+                    section: this.currentSection,
+                    description: desc,
+                    timestamp: new Date().toISOString(),
+                    username: this.currentUser.username || this.currentUser.email || null
+                }), 1200);
+            }
         } catch (_) {}
     }
 
@@ -721,6 +739,31 @@ class SectionManager {
                     const uid = (u && u.data && u.data.user && u.data.user.id) ? u.data.user.id : null;
                     await window.supabaseClient.rpc('increment_view', { p_user_id: uid, p_resource_id: resourceId });
                 }
+                // Audit: record resource open with details (non-blocking)
+                try {
+                    if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+                        const titleEl = card.querySelector('.resource-title');
+                        const typeEl = card.querySelector('.resource-type');
+                        const title = titleEl ? String(titleEl.textContent || '').trim() : '';
+                        const typeLabel = typeEl ? String(typeEl.textContent || '').trim() : '';
+                        const href = anchor && anchor.getAttribute('href') ? String(anchor.getAttribute('href')).trim() : '';
+                        const meta = {
+                            title,
+                            description: title || '',
+                            type: typeLabel,
+                            url: href,
+                            section: this.currentSection
+                        };
+                        this._safeDbCall(hubDatabase.saveActivity({
+                            action: 'OPEN_RESOURCE',
+                            resourceId,
+                            section: this.currentSection,
+                            timestamp: new Date().toISOString(),
+                            username: this.currentUser.username || this.currentUser.email || null,
+                            metadata: meta
+                        }), 1200);
+                    }
+                } catch (_) {}
             } catch (_) {}
         });
     }

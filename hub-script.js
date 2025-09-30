@@ -613,18 +613,28 @@ class InformationHub {
         const existingMessages = document.querySelectorAll('.message');
         existingMessages.forEach(msg => msg.remove());
 
-        // Create new message
+        // Create new message (fixed position so it's above overlays/modals)
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
         messageDiv.textContent = message;
-
-        // Insert at the top of the container
-        const container = document.querySelector('.container');
-        container.insertBefore(messageDiv, container.firstChild);
+        try {
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '12px';
+            messageDiv.style.left = '50%';
+            messageDiv.style.transform = 'translateX(-50%)';
+            messageDiv.style.zIndex = '10006';
+            messageDiv.style.padding = '10px 14px';
+            messageDiv.style.borderRadius = '8px';
+            messageDiv.style.background = type === 'error' ? '#fff5f5' : (type === 'success' ? '#edfdf2' : '#f6f9ff');
+            messageDiv.style.border = '1px solid ' + (type === 'error' ? '#ffd6d6' : (type === 'success' ? '#d1fadf' : '#dbe7ff'));
+            messageDiv.style.color = type === 'error' ? '#8a1f1f' : (type === 'success' ? '#034d2a' : '#1b3a6b');
+            messageDiv.style.boxShadow = '0 6px 18px rgba(0,0,0,0.12)';
+        } catch (_) {}
+        document.body.appendChild(messageDiv);
 
         // Auto-remove after 3 seconds
         setTimeout(() => {
-            messageDiv.remove();
+            try { messageDiv.remove(); } catch(_) {}
         }, 3000);
     }
 
