@@ -594,17 +594,16 @@ class SectionManager {
 
     createResourceCard(resource, type) {
         const storageType = this.mapToStorageType(type);
-        const hyphenId = storageType === 'boxLinks' ? 'box-links' : storageType;
-        const cfgType = (this.sectionConfig && Array.isArray(this.sectionConfig.types))
-            ? (this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase())
-                || this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === hyphenId))
-            : null;
-        const displayName = (cfgType && (cfgType.name || cfgType.id))
-            || (storageType === 'playbooks' ? 'Playbooks' : storageType === 'boxLinks' ? 'Box Links' : storageType === 'dashboards' ? 'Dashboards' : (type || ''));
-        const label = String(displayName).toUpperCase();
-        const iconClass = (cfgType && cfgType.icon)
-            ? this.normalizeIconClass(cfgType.icon)
-            : (storageType === 'playbooks' ? 'fas fa-book' : storageType === 'boxLinks' ? 'fas fa-link' : storageType === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder');
+        const cfg = this.sectionConfig || {};
+        const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+        const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+        const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
+        const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+        const idx = tabsArr.findIndex(id => String(id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase());
+        const base = typesById.get(String(type || '').trim()) || {};
+        const displayName = (idx >= 0 && tabNames[idx] && String(tabNames[idx]).trim()) ? String(tabNames[idx]).trim() : (base.name || type || '');
+        const label = String(displayName || type || '').toUpperCase();
+        const iconClass = (base && base.icon) ? this.normalizeIconClass(base.icon) : (storageType === 'playbooks' ? 'fas fa-book' : storageType === 'boxLinks' ? 'fas fa-link' : storageType === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder');
 
         const canEdit = this.canEditResource() && (this.isAdmin() || this.isResourceOwner(resource));
         const canDelete = this.currentUser && this.currentUser.permissions.canDeleteResources && (this.isAdmin() || this.isResourceOwner(resource)) && this.canEditResource();
@@ -733,18 +732,18 @@ class SectionManager {
     createResourceModal(type) {
         const modal = document.createElement('div');
         modal.className = 'modal';
-        const storageType = this.mapToStorageType(type);
-        const hyphenId = storageType === 'boxLinks' ? 'box-links' : storageType;
-        const cfgType = (this.sectionConfig && Array.isArray(this.sectionConfig.types))
-            ? (this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase())
-                || this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === hyphenId))
-            : null;
-        const displayName = (cfgType && (cfgType.name || cfgType.id))
-            || (storageType === 'playbooks' ? 'Playbooks' : storageType === 'boxLinks' ? 'Box Links' : storageType === 'dashboards' ? 'Dashboards' : (type || ''));
+        const cfg = this.sectionConfig || {};
+        const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+        const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+        const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
+        const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+        const idx = tabsArr.findIndex(id => String(id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase());
+        const base = typesById.get(String(type || '').trim()) || {};
+        const displayName = (idx >= 0 && tabNames[idx] && String(tabNames[idx]).trim()) ? String(tabNames[idx]).trim() : (base.name || type || '');
         modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Add New ${this.escapeHtml(String(displayName).toUpperCase())}</h2>
+                    <h2>Add New ${this.escapeHtml(String((displayName || type || '').toUpperCase()))}</h2>
                     <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 </div>
                 <form id="resourceForm">
@@ -888,18 +887,18 @@ class SectionManager {
         const modal = document.createElement('div');
         modal.className = 'modal';
         const tagsString = Array.isArray(resource.tags) ? resource.tags.join(', ') : '';
-        const storageType = this.mapToStorageType(type);
-        const hyphenId = storageType === 'boxLinks' ? 'box-links' : storageType;
-        const cfgType = (this.sectionConfig && Array.isArray(this.sectionConfig.types))
-            ? (this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase())
-                || this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === hyphenId))
-            : null;
-        const displayName = (cfgType && (cfgType.name || cfgType.id))
-            || (storageType === 'playbooks' ? 'Playbooks' : storageType === 'boxLinks' ? 'Box Links' : storageType === 'dashboards' ? 'Dashboards' : (type || ''));
+        const cfg = this.sectionConfig || {};
+        const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+        const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+        const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
+        const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+        const idx = tabsArr.findIndex(id => String(id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase());
+        const base = typesById.get(String(type || '').trim()) || {};
+        const displayName = (idx >= 0 && tabNames[idx] && String(tabNames[idx]).trim()) ? String(tabNames[idx]).trim() : (base.name || type || '');
         modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Edit ${this.escapeHtml(String(displayName).toUpperCase())}</h2>
+                    <h2>Edit ${this.escapeHtml(String((displayName || type || '').toUpperCase()))}</h2>
                     <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 </div>
                 <form id="editResourceForm">
@@ -1358,20 +1357,27 @@ class SectionManager {
         if (customizeBtn) {
             customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
         }
-				// Normalize config: if types missing but legacy tabs/tab_names exist, rebuild types
-				try {
-					const cfg = this.sectionConfig || {};
-					const hasTypes = Array.isArray(cfg.types) && cfg.types.length > 0;
-					const hasTabs = Array.isArray(cfg.tabs) && cfg.tabs.length > 0;
-					if (!hasTypes && hasTabs) {
-						const names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
-						const rebuilt = cfg.tabs.map((id, i) => ({ id, name: names[i] || id, icon: '' }));
-						this.sectionConfig = { ...cfg, types: rebuilt };
-					}
-				} catch (_) {}
-				// Render tabs
+				// Build visible types from tabs + tab_names; use types[] only for icon lookup
+			const cfg = this.sectionConfig || {};
+			const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+			const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+			const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
+			const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+			let visibleTypes = [];
+			if (tabsArr.length > 0) {
+				visibleTypes = tabsArr.map((rawId, i) => {
+					const id = String(rawId || '').trim();
+					const base = typesById.get(id) || {};
+					const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
+					const icon = String(base.icon || '').trim();
+					return { id, name, icon };
+				}).filter(t => t.id);
+			} else {
+				// Fallback to configured types when tabs array is not present
+				visibleTypes = (typesArr || []).filter(t => !t.hidden).map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon || '' }));
+			}
+			// Render tabs
 			const tabs = document.getElementById('navTabs');
-			const visibleTypes = (this.sectionConfig.types || []).filter(t => !t.hidden);
 			if (tabs) {
 				if (visibleTypes.length === 0) {
 					tabs.innerHTML = '';
