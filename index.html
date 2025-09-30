@@ -221,10 +221,7 @@
                 <button class="action-btn" id="reshuffleBackgroundsBtn" onclick="reshuffleBackgrounds()" style="display:none;">
                     <i class="fas fa-images"></i> Reshuffle Backgrounds
                 </button>
-                <button class="action-btn" id="toggleBackgroundsBtn" onclick="toggleBackgrounds()">
-                    <i class="fas fa-image"></i> Toggle Backgrounds
-                </button>
-                <button class="action-btn" id="toggleGlobalBackgroundsBtn" onclick="toggleGlobalBackgrounds()" style="display:none;">
+                <button class="action-btn" id="toggleGlobalBackgroundsBtn" onclick="toggleGlobalBackgrounds()">
                     <i class="fas fa-broadcast-tower"></i> Enable Backgrounds For Everyone
                 </button>
             </div>
@@ -932,19 +929,8 @@
                 if (mainContent) mainContent.style.display = 'block';
                 if (typeof updateMainHubSections === 'function') updateMainHubSections();
                 // Show/hide admin-only global backgrounds button
-                (async () => {
-                    try {
-                        const btn = document.getElementById('toggleGlobalBackgroundsBtn');
-                        if (!btn) return;
-                        const { data: { user } } = await window.supabaseClient.auth.getUser();
-                        if (!user) { btn.style.display = 'none'; return; }
-                        const { data: prof } = await window.supabaseClient.from('profiles').select('role, permissions').eq('id', user.id).single();
-                        const role = String(prof?.role || '').toLowerCase();
-                        const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
-                        btn.style.display = (role === 'admin' || canManage) ? 'inline-flex' : 'none';
-                        updateBackgroundToggleButton();
-                    } catch(_) {}
-                })();
+                // Global button is always visible in quick actions
+                try { updateBackgroundToggleButton(); } catch(_) {}
                 // Realtime sync: rebuild hub cards and stats when sections/resources change in Supabase
                 try {
                     if (window.supabaseClient && !window.__hubSectionsRt) {
@@ -1078,11 +1064,7 @@
         }
 
         function updateBackgroundToggleButton() {
-            const btn = document.getElementById('toggleBackgroundsBtn');
-            if (!btn) return;
-            const off = backgroundsDisabled();
-            btn.innerHTML = off ? '<i class="fas fa-image"></i> Enable Backgrounds' : '<i class="fas fa-image"></i> Disable Backgrounds';
-            // Update admin global button label + visibility based on role
+            // Update admin global button label based on forced state
             try {
                 const globalBtn = document.getElementById('toggleGlobalBackgroundsBtn');
                 if (globalBtn) {

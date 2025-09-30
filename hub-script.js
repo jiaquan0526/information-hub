@@ -674,17 +674,20 @@ class InformationHub {
     // Quick Actions
     showAllSections() {
         alert('All sections view - This would show a comprehensive list of all resources across all sections.');
+        try { this.logActivity('VIEW_ALL_SECTIONS', 'Viewed all sections'); } catch(_) {}
     }
 
     searchAcrossHub() {
         const searchTerm = prompt('Enter search term:');
         if (searchTerm) {
             alert(`Searching for "${searchTerm}" across all sections...`);
+            try { this.logActivity('SEARCH', `Searched hub: ${String(searchTerm).slice(0,200)}`); } catch(_) {}
         }
     }
 
     showRecentActivity() {
         alert('Recent activity - This would show recently added or modified resources.');
+        try { this.logActivity('VIEW_RECENT_ACTIVITY', 'Viewed recent activity'); } catch(_) {}
     }
 
     goBackToHub() {
@@ -784,10 +787,14 @@ class InformationHub {
         document.getElementById('adminPanelModal').style.display = 'block';
         // Pre-populate export dropdowns when opening the panel
         try { this.loadExportOptions(); } catch (_) {}
+        try { this.logActivity('OPEN_ADMIN_PANEL', 'Opened admin panel'); } catch(_) {}
     }
 
     closeModal(modalId) {
         document.getElementById(modalId).style.display = 'none';
+        try {
+            if (String(modalId) === 'adminPanelModal') this.logActivity('CLOSE_ADMIN_PANEL', 'Closed admin panel');
+        } catch(_) {}
     }
 
     switchAdminTab(tabName) {
@@ -815,6 +822,7 @@ class InformationHub {
         } else if (tabName === 'export') {
             this.loadExportOptions();
         }
+        try { this.logActivity('SWITCH_ADMIN_TAB', `Switched to ${tabName}`); } catch(_) {}
     }
 
     async loadUsersList() {
