@@ -348,7 +348,16 @@ class SectionManager {
 
         // Apply persistent background image per section (defer heavy images)
         try {
-            const disable = false; // Background images disabled by default for performance
+            // Backgrounds are disabled by default unless globally forced on
+            const disable = (() => {
+                try {
+                    const forced = localStorage.getItem('forceBackgrounds') === '1';
+                    if (forced) return false;
+                    const v = localStorage.getItem('disableBackgrounds');
+                    if (v === null || v === undefined) return true; // default disabled
+                    return String(v) === '1' || String(v).toLowerCase() === 'true';
+                } catch (_) { return true; }
+            })();
             const map = {}; // No local storage for background images
             let img = map[this.currentSection];
             const container = document.querySelector('.container');

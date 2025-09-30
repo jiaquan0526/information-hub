@@ -4699,6 +4699,14 @@ Permissions:
             try {
                 const card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionCfg.id}')"]`);
                 if (!card) return;
+                // Respect global/user setting: default disabled
+                try {
+                    if (typeof backgroundsDisabled === 'function' && backgroundsDisabled()) {
+                        try { card.style.removeProperty('background-image'); } catch(_) {}
+                        try { card.classList.remove('bg-ready'); } catch(_) {}
+                        return;
+                    }
+                } catch(_) {}
                 // Prefer per-section provided image if available
                 let img = null;
                 try {
