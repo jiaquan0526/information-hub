@@ -5,6 +5,41 @@ class HubDatabase {
         this.init();
     }
 
+    // Transient network error detection and retry helper
+    isTransientNetworkError(err) {
+        try {
+            const name = String(err?.name || '')
+                .toLowerCase();
+            const msg = String(err?.message || '')
+                .toLowerCase();
+            return (
+                name === 'typeerror' ||
+                /failed to fetch|networkerror|err_name_not_resolved|enotfound|econnreset|etimedout/.test(msg)
+            );
+        } catch (_) { return false; }
+    }
+
+    wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    async withRetry(runFn, { retries = 3, baseDelayMs = 300 } = {}) {
+        let attempt = 0;
+        let delay = baseDelayMs;
+        while (attempt < retries) {
+            try {
+                return await runFn();
+            } catch (err) {
+                const last = attempt === (retries - 1);
+                if (!this.isTransientNetworkError(err) || last) {
+                    throw err;
+                }
+                try { console.warn(`[retry] transient network error, attempt ${attempt + 1} → retrying in ${delay}ms`, err?.message || err); } catch(_) {}
+                await this.wait(delay);
+                delay = Math.min(delay * 2, 3000);
+                attempt++;
+            }
+        }
+    }
+
     async init() {
         try {
             // Wait for Supabase client to be available
@@ -212,15 +247,17 @@ class HubDatabase {
                 data: section.data || {}
             };
 
-            // Idempotent create: upsert on section_id to avoid 409 conflicts under retry/race
-            const { data, error } = await this.supabase
-                .from('sections')
-                .upsert(payload, { onConflict: 'section_id' })
-                .select('section_id')
-                .single();
+            const run = async () => {
+                const { data, error } = await this.supabase
+                    .from('sections')
+                    .upsert(payload, { onConflict: 'section_id' })
+                    .select('section_id')
+                    .single();
+                if (error) throw error;
+                return data;
+            };
 
-            if (error) throw error;
-            return data;
+            return await this.withRetry(run, { retries: 3, baseDelayMs: 300 });
         } catch (error) {
             console.error('Error creating section:', error);
             throw error;
@@ -229,24 +266,26 @@ class HubDatabase {
 
     async updateSection(section) {
         try {
-            const { data, error } = await this.supabase
-                .from('sections')
-                .update({
-                    name: section.name,
-                    icon: section.icon,
-                    color: section.color,
-                    config: {
-                        ...(section.config || {}),
-                        visible: section.visible !== false,
-                        intro: section.intro || '',
-                        order: section.order || 0
-                    },
-                    data: section.data || {}
-                })
-                .eq('section_id', section.sectionId || section.id);
-            
-            if (error) throw error;
-            return data;
+            const run = async () => {
+                const { data, error } = await this.supabase
+                    .from('sections')
+                    .update({
+                        name: section.name,
+                        icon: section.icon,
+                        color: section.color,
+                        config: {
+                            ...(section.config || {}),
+                            visible: section.visible !== false,
+                            intro: section.intro || '',
+                            order: section.order || 0
+                        },
+                        data: section.data || {}
+                    })
+                    .eq('section_id', section.sectionId || section.id);
+                if (error) throw error;
+                return data;
+            };
+            return await this.withRetry(run, { retries: 3, baseDelayMs: 300 });
         } catch (error) {
             console.error('Error updating section:', error);
             throw error;
