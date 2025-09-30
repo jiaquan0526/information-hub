@@ -1333,6 +1333,17 @@ class SectionManager {
         if (customizeBtn) {
             customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
         }
+				// Normalize config: if types missing but legacy tabs/tab_names exist, rebuild types
+				try {
+					const cfg = this.sectionConfig || {};
+					const hasTypes = Array.isArray(cfg.types) && cfg.types.length > 0;
+					const hasTabs = Array.isArray(cfg.tabs) && cfg.tabs.length > 0;
+					if (!hasTypes && hasTabs) {
+						const names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+						const rebuilt = cfg.tabs.map((id, i) => ({ id, name: names[i] || id, icon: '' }));
+						this.sectionConfig = { ...cfg, types: rebuilt };
+					}
+				} catch (_) {}
 				// Render tabs
 			const tabs = document.getElementById('navTabs');
 			const visibleTypes = (this.sectionConfig.types || []).filter(t => !t.hidden);
