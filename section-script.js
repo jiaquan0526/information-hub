@@ -7,6 +7,7 @@ class SectionManager {
         this.sectionConfig = this.loadSectionConfig();
         this._bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('hub-sync') : null;
         this._initStarted = false;
+        try { window.sectionManager = this; } catch (_) {}
         this.init();
     }
 
@@ -122,6 +123,8 @@ class SectionManager {
         this.sectionSessionStartMs = Date.now();
         // IDs are handled by Supabase; no local migrations
         await this.loadSectionData();
+		// Ensure config is loaded before first render
+		try { await this.ensureSectionConfigLoaded(); } catch (_) {}
 		// Do not auto-infer tabs from resources; show blank until configured in Supabase
         this.bindEvents();
         this.renderDynamicUI();
@@ -393,6 +396,56 @@ class SectionManager {
                 }
             }
         } catch (_) {}
+    }
+
+    // Ensure sectionConfig is loaded and normalized from Supabase before first render
+    async ensureSectionConfigLoaded() {
+        try {
+            if (this.sectionConfig && (Array.isArray(this.sectionConfig.tabs) || Array.isArray(this.sectionConfig.types))) return;
+            if (!window.supabaseClient) return;
+            const { data, error } = await window.supabaseClient
+                .from('sections')
+                .select('config')
+                .eq('section_id', this.currentSection)
+                .single();
+            if (error) return;
+            let cfg = null;
+            if (data && data.config && typeof data.config === 'string') {
+                try { cfg = JSON.parse(data.config); } catch (_) { cfg = null; }
+            } else if (data && typeof data.config === 'object') {
+                cfg = data.config;
+            }
+            if (cfg && typeof cfg === 'object') {
+                this.sectionConfig = this._normalizeConfig(cfg);
+            }
+        } catch (_) {}
+    }
+
+    _normalizeConfig(raw) {
+        try {
+            const cfg = (raw && typeof raw === 'object') ? raw : {};
+            const normId = (s) => {
+                try {
+                    let t = String(s || '').toLowerCase().trim();
+                    t = t.replace(/\s+/g, '-').replace(/_/g, '-');
+                    t = t.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                    if (t === 'playbook') t = 'playbooks';
+                    if (t === 'boxlink' || t === 'box-links' || t === 'boxlinks' || t === 'box') t = 'box-links';
+                    if (t === 'dashboard') t = 'dashboards';
+                    return t;
+                } catch (_) { return String(s || '').toLowerCase().trim(); }
+            };
+            const tabs = Array.isArray(cfg.tabs) ? cfg.tabs.map(normId).filter(Boolean) : [];
+            const names = Array.isArray(cfg.tab_names) ? cfg.tab_names.map(s => String(s||'').trim()) : [];
+            const types = Array.isArray(cfg.types) ? cfg.types.map(t => ({
+                id: normId(t?.id || t?.name || ''),
+                name: String(t?.name || t?.id || '').trim(),
+                icon: String(t?.icon || '').trim(),
+                key: t?.key || (this.currentSection ? `${this.currentSection}:${normId(t?.id || t?.name || '')}` : undefined)
+            })).filter(t => t.id) : [];
+            const categories = Array.isArray(cfg.categories) ? cfg.categories : ['process','procedure','guide','template','checklist'];
+            return { tabs, tab_names: names, types, categories, intro: cfg.intro || '', visible: cfg.visible !== false, order: cfg.order || 0 };
+        } catch (_) { return raw || {}; }
     }
 
     // Normalize FA icon class (simple copy from index page)
