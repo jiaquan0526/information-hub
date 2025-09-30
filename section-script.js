@@ -862,7 +862,8 @@ class SectionManager {
             return true;
         } catch (error) {
             console.error('Error saving resource:', error);
-            this.showMessage('Error saving resource', 'error');
+            const msg = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Unknown error';
+            this.showMessage(`Error saving resource: ${msg}`, 'error');
             return false;
         }
     }
@@ -1318,6 +1319,12 @@ class SectionManager {
             }
             if (cfg) {
                 this.sectionConfig = cfg;
+                // Auto-seed example resources per configured type if editor/admin and none exist
+                try {
+                    if (Array.isArray(this.sectionConfig.types) && this.sectionConfig.types.length > 0 && this.canEditResource && this.canEditResource()) {
+                        await this._seedExampleResourcesIfMissing(this.sectionConfig.types);
+                    }
+                } catch (_) {}
             }
             // Update header name and icon if available
             try {
