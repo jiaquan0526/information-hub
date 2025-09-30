@@ -279,6 +279,9 @@ class SectionManager {
                         const cfgObj = (sectionConfig && sectionConfig.config && typeof sectionConfig.config === 'object') ? sectionConfig.config : null;
                         if (cfgObj) {
                             this.sectionConfig = cfgObj;
+                            // Render immediately without waiting for later refreshes
+                            try { this.renderDynamicUI(); } catch (_) {}
+                            try { this.renderCurrentTab(); } catch (_) {}
                         }
                     } catch (_) {}
                 }
