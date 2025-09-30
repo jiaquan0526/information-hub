@@ -675,6 +675,37 @@ class HubDatabase {
 
     // Export all data (tolerant of RLS: missing datasets return as empty arrays)
     async exportAllData() {
+        // Prefer a privileged RPC if available (reduces multi-round trips and bypasses per-table RLS complexity)
+        try {
+            if (this.supabase && typeof this.supabase.rpc === 'function') {
+                const { data: payload, error: rpcError } = await this.supabase.rpc('export_all_data');
+                if (!rpcError && payload && typeof payload === 'object') {
+                    const users = Array.isArray(payload.users) ? payload.users : [];
+                    const sections = Array.isArray(payload.sections) ? payload.sections : [];
+                    const resources = Array.isArray(payload.resources) ? payload.resources : [];
+                    const activities = Array.isArray(payload.activities) ? payload.activities : [];
+                    const views = Array.isArray(payload.views) ? payload.views : [];
+                    return {
+                        users,
+                        sections,
+                        resources,
+                        activities,
+                        views,
+                        exportDate: new Date().toISOString(),
+                        totalRecords: {
+                            users: users.length,
+                            sections: sections.length,
+                            resources: resources.length,
+                            activities: activities.length,
+                            views: views.length
+                        }
+                    };
+                }
+            }
+        } catch (e) {
+            try { console.warn('exportAllData RPC fallback failed:', e?.message || e); } catch(_) {}
+        }
+
         const safe = async (fn, fallback = []) => {
             try { const res = await fn(); return Array.isArray(res) ? res : (res || []); }
             catch (e) { console.warn('exportAllData partial fetch failed:', e?.message || e); return fallback; }

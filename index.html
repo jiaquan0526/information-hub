@@ -1117,17 +1117,35 @@
             }
         };
 
-        // On load, read global site setting and apply local override
-        (async function applyGlobalBackgroundSettingOnLoad(){
+        // Fetch and apply global backgrounds flags (force + reshuffle token)
+        window.refreshGlobalBackgrounds = async function() {
             try {
                 if (!(window.hubDatabase && window.hubDatabaseReady)) return;
                 const v = await hubDatabase.getSiteSetting('backgrounds');
                 const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 if (force) {
                     try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
+                } else {
+                    try { localStorage.removeItem('forceBackgrounds'); } catch(_) {}
                 }
+                // If a global reshuffle marker exists and changed, clear local mappings so everyone re-picks
+                try {
+                    const globalMark = v && (v.shuffleAt || v.shuffle_at || v.seed);
+                    const prev = localStorage.getItem('globalShuffleAt') || '';
+                    if (globalMark && String(globalMark) !== String(prev)) {
+                        try { localStorage.setItem('globalShuffleAt', String(globalMark)); } catch(_) {}
+                        try { localStorage.removeItem('sectionBackgrounds'); } catch(_) {}
+                    }
+                } catch(_) {}
                 updateBackgroundToggleButton();
+                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                try { await updateMainHubSections(); } catch(_) {}
             } catch(_) {}
+        };
+
+        // On load, read global site setting and apply local override
+        (async function(){
+            try { await window.refreshGlobalBackgrounds(); } catch(_) {}
         })();
 
         // Admin: Get current user from Supabase
@@ -4776,6 +4794,16 @@ Permissions:
                 try { localStorage.setItem('forceBackgrounds', '1'); } catch(_) {}
                 await ensureBackgroundImagesLoaded();
                 updateMainHubSections();
+                // Also set a global reshuffle marker so all clients re-pick
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady) {
+                        const now = new Date().toISOString();
+                        // Merge with any existing setting, preserving forceEnabled
+                        const current = await hubDatabase.getSiteSetting('backgrounds');
+                        const next = Object.assign({}, current || {}, { shuffleAt: now });
+                        await hubDatabase.setSiteSetting('backgrounds', next);
+                    }
+                } catch(_) {}
                 // In case the initial lazy init ran before force flag, try again
                 try { initBackgroundLazyLoad(JSON.parse(null||'[]').filter(s=>s.visible!==false)); } catch(_) {}
                 alert('Backgrounds reshuffled');
