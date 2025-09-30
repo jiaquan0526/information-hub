@@ -594,8 +594,17 @@ class SectionManager {
 
     createResourceCard(resource, type) {
         const storageType = this.mapToStorageType(type);
-        const label = storageType === 'playbooks' ? 'PLAYBOOK' : storageType === 'boxLinks' ? 'BOX LINK' : 'DASHBOARD';
-        const iconClass = storageType === 'playbooks' ? 'fas fa-book' : storageType === 'boxLinks' ? 'fas fa-link' : 'fas fa-chart-bar';
+        const hyphenId = storageType === 'boxLinks' ? 'box-links' : storageType;
+        const cfgType = (this.sectionConfig && Array.isArray(this.sectionConfig.types))
+            ? (this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase())
+                || this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === hyphenId))
+            : null;
+        const displayName = (cfgType && (cfgType.name || cfgType.id))
+            || (storageType === 'playbooks' ? 'Playbooks' : storageType === 'boxLinks' ? 'Box Links' : storageType === 'dashboards' ? 'Dashboards' : (type || ''));
+        const label = String(displayName).toUpperCase();
+        const iconClass = (cfgType && cfgType.icon)
+            ? this.normalizeIconClass(cfgType.icon)
+            : (storageType === 'playbooks' ? 'fas fa-book' : storageType === 'boxLinks' ? 'fas fa-link' : storageType === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder');
 
         const canEdit = this.canEditResource() && (this.isAdmin() || this.isResourceOwner(resource));
         const canDelete = this.currentUser && this.currentUser.permissions.canDeleteResources && (this.isAdmin() || this.isResourceOwner(resource)) && this.canEditResource();
@@ -724,10 +733,18 @@ class SectionManager {
     createResourceModal(type) {
         const modal = document.createElement('div');
         modal.className = 'modal';
+        const storageType = this.mapToStorageType(type);
+        const hyphenId = storageType === 'boxLinks' ? 'box-links' : storageType;
+        const cfgType = (this.sectionConfig && Array.isArray(this.sectionConfig.types))
+            ? (this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase())
+                || this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === hyphenId))
+            : null;
+        const displayName = (cfgType && (cfgType.name || cfgType.id))
+            || (storageType === 'playbooks' ? 'Playbooks' : storageType === 'boxLinks' ? 'Box Links' : storageType === 'dashboards' ? 'Dashboards' : (type || ''));
         modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Add New ${type.replace('-', ' ').toUpperCase()}</h2>
+                    <h2>Add New ${this.escapeHtml(String(displayName).toUpperCase())}</h2>
                     <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 </div>
                 <form id="resourceForm">
@@ -871,10 +888,18 @@ class SectionManager {
         const modal = document.createElement('div');
         modal.className = 'modal';
         const tagsString = Array.isArray(resource.tags) ? resource.tags.join(', ') : '';
+        const storageType = this.mapToStorageType(type);
+        const hyphenId = storageType === 'boxLinks' ? 'box-links' : storageType;
+        const cfgType = (this.sectionConfig && Array.isArray(this.sectionConfig.types))
+            ? (this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === String(type || '').trim().toLowerCase())
+                || this.sectionConfig.types.find(t => String(t?.id || '').trim().toLowerCase() === hyphenId))
+            : null;
+        const displayName = (cfgType && (cfgType.name || cfgType.id))
+            || (storageType === 'playbooks' ? 'Playbooks' : storageType === 'boxLinks' ? 'Box Links' : storageType === 'dashboards' ? 'Dashboards' : (type || ''));
         modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Edit ${type.replace('-', ' ').toUpperCase()}</h2>
+                    <h2>Edit ${this.escapeHtml(String(displayName).toUpperCase())}</h2>
                     <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 </div>
                 <form id="editResourceForm">
