@@ -192,29 +192,33 @@ class HubDatabase {
 
     async createSection(section) {
         try {
-            // Ensure authenticated session before attempting insert (RLS requires auth.uid())
+            // Ensure authenticated session before attempting write (RLS requires auth.uid())
             const currentUserId = await this.getCurrentUserId();
             if (!currentUserId) {
                 throw new Error('Not authenticated. Please sign in again.');
             }
+
+            const payload = {
+                section_id: section.sectionId || section.id,
+                name: section.name,
+                icon: section.icon,
+                color: section.color,
+                config: {
+                    ...(section.config || {}),
+                    visible: section.visible !== false,
+                    intro: section.intro || '',
+                    order: section.order || 0
+                },
+                data: section.data || {}
+            };
+
+            // Idempotent create: upsert on section_id to avoid 409 conflicts under retry/race
             const { data, error } = await this.supabase
                 .from('sections')
-                .insert({
-                    section_id: section.sectionId || section.id,
-                    name: section.name,
-                    icon: section.icon,
-                    color: section.color,
-                    config: {
-                        ...(section.config || {}),
-                        visible: section.visible !== false,
-                        intro: section.intro || '',
-                        order: section.order || 0
-                    },
-                    data: section.data || {}
-                })
+                .upsert(payload, { onConflict: 'section_id' })
                 .select('section_id')
                 .single();
-            
+
             if (error) throw error;
             return data;
         } catch (error) {
