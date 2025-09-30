@@ -274,6 +274,13 @@ class SectionManager {
                     } catch (_) {}
                     sectionConfig = data;
                     console.log('Loaded section from Supabase (authoritative):', sectionConfig);
+                    // Apply config immediately so tabs render on first load
+                    try {
+                        const cfgObj = (sectionConfig && sectionConfig.config && typeof sectionConfig.config === 'object') ? sectionConfig.config : null;
+                        if (cfgObj) {
+                            this.sectionConfig = cfgObj;
+                        }
+                    } catch (_) {}
                 }
             }
         } catch (e) {
@@ -1319,12 +1326,6 @@ class SectionManager {
             }
             if (cfg) {
                 this.sectionConfig = cfg;
-                // Auto-seed example resources per configured type if editor/admin and none exist
-                try {
-                    if (Array.isArray(this.sectionConfig.types) && this.sectionConfig.types.length > 0 && this.canEditResource && this.canEditResource()) {
-                        await this._seedExampleResourcesIfMissing(this.sectionConfig.types);
-                    }
-                } catch (_) {}
             }
             // Update header name and icon if available
             try {
