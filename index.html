@@ -224,6 +224,9 @@
                 <button class="action-btn" id="toggleBackgroundsBtn" onclick="toggleBackgrounds()">
                     <i class="fas fa-image"></i> Toggle Backgrounds
                 </button>
+                <button class="action-btn" id="toggleGlobalBackgroundsBtn" onclick="toggleGlobalBackgrounds()" style="display:none;">
+                    <i class="fas fa-broadcast-tower"></i> Enable Backgrounds For Everyone
+                </button>
             </div>
         </div>
         
@@ -928,6 +931,20 @@
                 try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
                 if (mainContent) mainContent.style.display = 'block';
                 if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                // Show/hide admin-only global backgrounds button
+                (async () => {
+                    try {
+                        const btn = document.getElementById('toggleGlobalBackgroundsBtn');
+                        if (!btn) return;
+                        const { data: { user } } = await window.supabaseClient.auth.getUser();
+                        if (!user) { btn.style.display = 'none'; return; }
+                        const { data: prof } = await window.supabaseClient.from('profiles').select('role, permissions').eq('id', user.id).single();
+                        const role = String(prof?.role || '').toLowerCase();
+                        const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+                        btn.style.display = (role === 'admin' || canManage) ? 'inline-flex' : 'none';
+                        updateBackgroundToggleButton();
+                    } catch(_) {}
+                })();
                 // Realtime sync: rebuild hub cards and stats when sections/resources change in Supabase
                 try {
                     if (window.supabaseClient && !window.__hubSectionsRt) {
@@ -1065,6 +1082,14 @@
             if (!btn) return;
             const off = backgroundsDisabled();
             btn.innerHTML = off ? '<i class="fas fa-image"></i> Enable Backgrounds' : '<i class="fas fa-image"></i> Disable Backgrounds';
+            // Update admin global button label + visibility based on role
+            try {
+                const globalBtn = document.getElementById('toggleGlobalBackgroundsBtn');
+                if (globalBtn) {
+                    const forced = localStorage.getItem('forceBackgrounds') === '1';
+                    globalBtn.innerHTML = forced ? '<i class="fas fa-broadcast-tower"></i> Disable Global Backgrounds' : '<i class="fas fa-broadcast-tower"></i> Enable Backgrounds For Everyone';
+                }
+            } catch(_) {}
         }
 
         window.toggleBackgrounds = async function() {
@@ -1078,6 +1103,50 @@
                 try { await updateMainHubSections(); } catch (_) { try { updateMainHubSections(); } catch (_) {} }
             } catch (_) {}
         };
+
+        // Global admin-controlled toggle: when enabled, override all users to show backgrounds
+        window.toggleGlobalBackgrounds = async function() {
+            try {
+                if (!(window.hubDatabase && window.hubDatabaseReady)) { alert('Database not ready'); return; }
+                // Only admins can toggle globally; server-side check will also enforce
+                const me = await (async()=>{ try { const { data: { user } } = await window.supabaseClient.auth.getUser(); if (!user) return null; const { data } = await window.supabaseClient.from('profiles').select('role, permissions').eq('id', user.id).single(); return data; } catch(_) { return null; } })();
+                const role = String(me?.role||'').toLowerCase();
+                const canManage = !!(me && me.permissions && me.permissions.canManageUsers);
+                if (!(role === 'admin' || canManage)) { alert('Admin only'); return; }
+
+                // Flip the global flag: if currently forced, turn off; else turn on
+                const on = localStorage.getItem('forceBackgrounds') === '1';
+                const next = !on;
+                // Persist to site settings so all clients pick it up
+                await hubDatabase.setSiteSetting('backgrounds', { forceEnabled: next });
+                // Locally reflect immediately
+                if (next) {
+                    try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
+                } else {
+                    try { localStorage.removeItem('forceBackgrounds'); } catch(_) {}
+                }
+                updateBackgroundToggleButton();
+                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                try { await updateMainHubSections(); } catch(_) {}
+                try { informationHub && informationHub.showMessage && informationHub.showMessage(`Global backgrounds ${next ? 'enabled' : 'disabled'}`, 'success'); } catch(_) {}
+            } catch (e) {
+                console.error('Global background toggle failed:', e);
+                alert('Failed to toggle global backgrounds');
+            }
+        };
+
+        // On load, read global site setting and apply local override
+        (async function applyGlobalBackgroundSettingOnLoad(){
+            try {
+                if (!(window.hubDatabase && window.hubDatabaseReady)) return;
+                const v = await hubDatabase.getSiteSetting('backgrounds');
+                const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                if (force) {
+                    try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
+                }
+                updateBackgroundToggleButton();
+            } catch(_) {}
+        })();
 
         // Admin: Get current user from Supabase
         async function currentUser() {

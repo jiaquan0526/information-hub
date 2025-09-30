@@ -620,6 +620,59 @@ class HubDatabase {
         }
     }
 
+    // Site settings (global key/value store)
+    async getSiteSetting(key) {
+        try {
+            if (!key) throw new Error('Missing setting key');
+            const { data, error } = await this.supabase
+                .from('site_settings')
+                .select('value')
+                .eq('key', key)
+                .single();
+            if (error) {
+                // If no rows, return null instead of throwing
+                if (String(error.message || '').toLowerCase().includes('no rows')) return null;
+                throw error;
+            }
+            return data ? (data.value || null) : null;
+        } catch (error) {
+            console.error('Error getting site setting:', error);
+            return null;
+        }
+    }
+
+    async setSiteSetting(key, value) {
+        try {
+            if (!key) throw new Error('Missing setting key');
+            // Admin-only guard using profiles table
+            const userId = await this.getCurrentUserId();
+            if (!userId) throw new Error('Not authenticated');
+            const { data: prof, error: pErr } = await this.supabase
+                .from('profiles')
+                .select('role, permissions')
+                .eq('id', userId)
+                .single();
+            if (pErr) throw pErr;
+            const role = String(prof?.role || '').toLowerCase();
+            const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+            if (!(role === 'admin' || canManage)) {
+                throw new Error('Only admins can update site settings');
+            }
+
+            const payload = { key, value: value == null ? {} : value, updated_at: new Date() };
+            const { data, error } = await this.supabase
+                .from('site_settings')
+                .upsert(payload, { onConflict: 'key' })
+                .select('key')
+                .single();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error setting site setting:', error);
+            throw error;
+        }
+    }
+
     // Export all data (tolerant of RLS: missing datasets return as empty arrays)
     async exportAllData() {
         const safe = async (fn, fallback = []) => {
