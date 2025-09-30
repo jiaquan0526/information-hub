@@ -269,7 +269,7 @@ class SectionManager {
             if (window.supabaseClient) {
                 const { data, error } = await window.supabaseClient
                     .from('sections')
-                    .select('section_id, name, icon, image, config, description')
+                    .select('section_id, name, icon, color, config')
                     .eq('section_id', this.currentSection)
                     .single();
                 if (!error && data) {
@@ -311,15 +311,12 @@ class SectionManager {
             }
         }
         if (iconEl) {
-            const img = sectionConfig && sectionConfig.image ? String(sectionConfig.image).trim() : '';
             const icn = sectionConfig && sectionConfig.icon ? String(sectionConfig.icon).trim() : '';
             try {
-                if (img) {
-                    iconEl.outerHTML = `<img id="sectionIcon" src="${img}" style="width:22px;height:22px;object-fit:contain;margin-right:8px;" />`;
-                } else if (icn) {
+                if (icn) {
                     iconEl.className = this.normalizeIconClass(icn);
                 } else {
-                    // No image or icon: show default icon so header is visible
+                    // No icon: show default icon so header is visible
                     if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
                         iconEl.outerHTML = '<i id="sectionIcon" class="fa-solid fa-table-cells-large"></i>';
                     } else {
@@ -1316,7 +1313,7 @@ class SectionManager {
             try {
                 const cur = await window.supabaseClient
                     .from('sections')
-                    .select('config, name, icon, image, color')
+                    .select('config, name, icon, color')
                     .eq('section_id', this.currentSection)
                     .single();
                 if (cur && !cur.error) {
@@ -1365,14 +1362,13 @@ class SectionManager {
                 try {
                     const { data: existing } = await window.supabaseClient
                         .from('sections')
-                        .select('name, icon, image, color')
+                        .select('name, icon, color')
                         .eq('section_id', this.currentSection)
                         .single();
                     ensure.name = (existing && existing.name && String(existing.name).trim())
                         ? existing.name
                         : (document.getElementById('sectionName')?.textContent?.trim() || this.currentSection);
                     if (existing && existing.icon) ensure.icon = existing.icon;
-                    if (existing && existing.image) ensure.image = existing.image;
                     if (existing && existing.color) ensure.color = existing.color;
                 } catch (_) {
                     ensure.name = document.getElementById('sectionName')?.textContent?.trim() || this.currentSection;
@@ -1414,7 +1410,7 @@ class SectionManager {
             if (!window.supabaseClient) return;
             const { data, error } = await window.supabaseClient
                 .from('sections')
-                .select('name, icon, image, config')
+                .select('name, icon, color, config')
                 .eq('section_id', this.currentSection)
                 .single();
             if (error) return;
@@ -1432,9 +1428,9 @@ class SectionManager {
             if (cfg) {
                 this.sectionConfig = cfg;
             }
-            // Update header name and icon if available
+            // Update header name and icon/image if available
             try {
-                if (data && (data.name || data.icon || data.image)) {
+                if (data && (data.name || data.icon || cfg)) {
                     const nameEl = document.getElementById('sectionName');
                     const iconEl = document.getElementById('sectionIcon');
                     if (nameEl) {
@@ -1449,16 +1445,10 @@ class SectionManager {
                         }
                     }
                     if (iconEl) {
-                        if (data.image) {
-                            try {
-                                iconEl.outerHTML = `<img id="sectionIcon" src="${data.image}" style="width:22px;height:22px;object-fit:contain;margin-right:8px;" />`;
-                            } catch (_) {
-                                iconEl.className = this.normalizeIconClass(data.icon || 'fa-solid fa-table-cells-large');
-                            }
-                        } else if (data.icon) {
+                        if (data.icon) {
                             iconEl.className = this.normalizeIconClass(data.icon);
                         } else {
-                            // Ensure a default icon when DB has no icon/image
+                            // Ensure a default icon when DB has no icon
                             if (iconEl.tagName && iconEl.tagName.toLowerCase() === 'img') {
                                 iconEl.outerHTML = '<i id="sectionIcon" class="fa-solid fa-table-cells-large"></i>';
                             } else {
