@@ -915,6 +915,7 @@ class SectionManager {
         } catch (error) {
             console.error('Error saving resource:', error);
             const msg = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Unknown error';
+            try { this.showModalAlert(document.querySelector('.modal'), `Error saving resource: ${msg}`, 'error'); } catch(_) {}
             this.showMessage(`Error saving resource: ${msg}`, 'error');
             return false;
         }
@@ -1245,15 +1246,52 @@ class SectionManager {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
         messageDiv.textContent = message;
-
-        // Insert at the top of the container
-        const container = document.querySelector('.container');
-        container.insertBefore(messageDiv, container.firstChild);
+        // Ensure message is visible above modals
+        try {
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '12px';
+            messageDiv.style.left = '50%';
+            messageDiv.style.transform = 'translateX(-50%)';
+            messageDiv.style.zIndex = '10000';
+            messageDiv.style.padding = '10px 14px';
+            messageDiv.style.borderRadius = '8px';
+            messageDiv.style.background = type === 'error' ? '#fff5f5' : (type === 'success' ? '#edfdf2' : '#f6f9ff');
+            messageDiv.style.border = '1px solid ' + (type === 'error' ? '#ffd6d6' : (type === 'success' ? '#d1fadf' : '#dbe7ff'));
+            messageDiv.style.color = type === 'error' ? '#8a1f1f' : (type === 'success' ? '#034d2a' : '#1b3a6b');
+        } catch (_) {}
+        document.body.appendChild(messageDiv);
 
         // Auto-remove after 3 seconds
         setTimeout(() => {
-            messageDiv.remove();
+            try { messageDiv.remove(); } catch(_) {}
         }, 3000);
+    }
+
+    // Inline alert inside modals so errors are visible above overlay
+    showModalAlert(modalEl, message, type = 'error') {
+        try {
+            const host = modalEl && modalEl.querySelector('.modal-content');
+            if (!host) { this.showMessage(message, type); return; }
+            let alertBox = host.querySelector('.modal-inline-alert');
+            if (!alertBox) {
+                alertBox = document.createElement('div');
+                alertBox.className = 'modal-inline-alert';
+                alertBox.style.margin = '8px 0 10px 0';
+                alertBox.style.padding = '8px 10px';
+                alertBox.style.borderRadius = '6px';
+                alertBox.style.border = '1px solid #ffd6d6';
+                alertBox.style.background = '#fff5f5';
+                alertBox.style.color = '#8a1f1f';
+                const header = host.querySelector('.modal-header');
+                if (header && header.parentNode) {
+                    header.parentNode.insertBefore(alertBox, header.nextSibling);
+                } else {
+                    host.insertBefore(alertBox, host.firstChild);
+                }
+            }
+            alertBox.textContent = message;
+            alertBox.style.display = 'block';
+        } catch (_) { this.showMessage(message, type); }
     }
 
     goBackToHub() {
