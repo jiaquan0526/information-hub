@@ -1382,24 +1382,50 @@ class SectionManager {
         if (customizeBtn) {
             customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
         }
-				// Build visible types from tabs + tab_names; use types[] only for icon lookup
+				// Build visible types from tabs + tab_names; robust fallbacks when config is partial
 			const cfg = this.sectionConfig || {};
 			const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
 			const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
 			const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
 			const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+			const normalizeId = (raw) => {
+				try {
+					let t = String(raw || '').toLowerCase().trim();
+					t = t.replace(/\s+/g, '-').replace(/_/g, '-');
+					t = t.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+					if (t === 'playbook') t = 'playbooks';
+					if (t === 'boxlink' || t === 'box-links' || t === 'boxlinks' || t === 'box') t = 'box-links';
+					if (t === 'dashboard') t = 'dashboards';
+					return t;
+				} catch (_) { return String(raw || '').toLowerCase().trim(); }
+			};
 			let visibleTypes = [];
 			if (tabsArr.length > 0) {
 				visibleTypes = tabsArr.map((rawId, i) => {
-					const id = String(rawId || '').trim();
+					const id = normalizeId(rawId);
 					const base = typesById.get(id) || {};
 					const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
 					const icon = String(base.icon || '').trim();
 					return { id, name, icon };
 				}).filter(t => t.id);
 			} else {
-				// Fallback to configured types when tabs array is not present
-				visibleTypes = (typesArr || []).filter(t => !t.hidden).map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon || '' }));
+				// Fallback 1: configured types
+				visibleTypes = (typesArr || [])
+					.filter(t => t && !t.hidden)
+					.map(t => {
+						const id = normalizeId(t.id || t.name || '');
+						return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
+					})
+					.filter(Boolean);
+				// Fallback 2: derive ids from tab_names if still empty
+				if (visibleTypes.length === 0 && tabNames.length > 0) {
+					visibleTypes = tabNames.map((nm) => {
+						const id = normalizeId(nm);
+						const base = typesById.get(id) || {};
+						const icon = String(base.icon || '').trim();
+						return id ? { id, name: String(nm || id).trim(), icon } : null;
+					}).filter(Boolean);
+				}
 			}
 			// Render tabs
 			const tabs = document.getElementById('navTabs');
@@ -1639,7 +1665,7 @@ class SectionManager {
             showAlert('Added a new type row', 'info');
         });
 
-        modal.querySelector('#saveCfgBtn').addEventListener('click', async () => {
+			modal.querySelector('#saveCfgBtn').addEventListener('click', async () => {
             // Collect rows in UI order
             const rows = Array.from(typeList.querySelectorAll('.type-row'));
             // Normalize and build last-wins dedup by id while preserving final order
@@ -1661,16 +1687,36 @@ class SectionManager {
                 return;
             }
             const sortedIds = Array.from(lastIndexById.entries()).sort((a, b) => a[1] - b[1]).map(e => e[0]);
-            const secId = this.currentSection;
-            const types = sortedIds
-                .map(id => rowById.get(id))
-                .map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon, key: `${secId}:${t.id}` }));
-            const catsRaw = modal.querySelector('#cfgCats').value || '';
-            const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
-            const tabs = types.map(t => t.id);
-            const tab_names = types.map(t => t.name || t.id);
-            const cfgNew = { types, categories, tabs, tab_names };
-            const ok = await this.saveSectionConfig(cfgNew);
+				const secId = this.currentSection;
+				// Merge with current config in Supabase to avoid overwriting or losing tabs
+				let existingCfg = {};
+				try {
+					if (window.supabaseClient) {
+						const cur = await window.supabaseClient
+							.from('sections')
+							.select('config')
+							.eq('section_id', secId)
+							.single();
+						if (!cur.error && cur.data) {
+							existingCfg = (typeof cur.data.config === 'string') ? JSON.parse(cur.data.config) : (cur.data.config || {});
+						}
+					}
+				} catch (_) { existingCfg = {}; }
+
+				const existingTypesArr = Array.isArray(existingCfg.types) ? existingCfg.types : [];
+				const typesById = new Map(existingTypesArr.map(t => [String(t?.id || '').trim(), { id: t.id, name: t.name || t.id, icon: t.icon || '', key: t.key || `${secId}:${t.id}` }]));
+				// Apply UI rows as last-wins updates
+				sortedIds.forEach(id => {
+					const t = rowById.get(id);
+					typesById.set(id, { id, name: t.name || id, icon: t.icon, key: `${secId}:${id}` });
+				});
+				const types = sortedIds.map(id => typesById.get(id));
+				const catsRaw = modal.querySelector('#cfgCats').value || '';
+				const categories = catsRaw.split(',').map(s => s.trim()).filter(Boolean);
+				const tabs = sortedIds;
+				const tab_names = sortedIds.map(id => (rowById.get(id)?.name || typesById.get(id)?.name || id));
+				const cfgMerged = Object.assign({}, existingCfg, { types, categories, tabs, tab_names });
+				const ok = await this.saveSectionConfig(cfgMerged);
             if (!ok) { showAlert('Failed to save configuration', 'error'); return; }
             // Seed example resources for any types that have none yet in Supabase
             try { await this._seedExampleResourcesIfMissing(types); } catch (_) {}
