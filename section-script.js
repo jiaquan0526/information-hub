@@ -424,24 +424,13 @@ class SectionManager {
     _normalizeConfig(raw) {
         try {
             const cfg = (raw && typeof raw === 'object') ? raw : {};
-            const normId = (s) => {
-                try {
-                    let t = String(s || '').toLowerCase().trim();
-                    t = t.replace(/\s+/g, '-').replace(/_/g, '-');
-                    t = t.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                    if (t === 'playbook') t = 'playbooks';
-                    if (t === 'boxlink' || t === 'box-links' || t === 'boxlinks' || t === 'box') t = 'box-links';
-                    if (t === 'dashboard') t = 'dashboards';
-                    return t;
-                } catch (_) { return String(s || '').toLowerCase().trim(); }
-            };
-            const tabs = Array.isArray(cfg.tabs) ? cfg.tabs.map(normId).filter(Boolean) : [];
+            const tabs = Array.isArray(cfg.tabs) ? cfg.tabs.map(s => String(s||'').trim()).filter(Boolean) : [];
             const names = Array.isArray(cfg.tab_names) ? cfg.tab_names.map(s => String(s||'').trim()) : [];
             const types = Array.isArray(cfg.types) ? cfg.types.map(t => ({
-                id: normId(t?.id || t?.name || ''),
+                id: String(t?.id || t?.name || '').trim(),
                 name: String(t?.name || t?.id || '').trim(),
                 icon: String(t?.icon || '').trim(),
-                key: t?.key || (this.currentSection ? `${this.currentSection}:${normId(t?.id || t?.name || '')}` : undefined)
+                key: t?.key || (this.currentSection ? `${this.currentSection}:${String(t?.id || t?.name || '').trim()}` : undefined)
             })).filter(t => t.id) : [];
             const categories = Array.isArray(cfg.categories) ? cfg.categories : ['process','procedure','guide','template','checklist'];
             return { tabs, tab_names: names, types, categories, intro: cfg.intro || '', visible: cfg.visible !== false, order: cfg.order || 0 };
@@ -1441,21 +1430,10 @@ class SectionManager {
 			const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
 			const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
 			const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
-			const normalizeId = (raw) => {
-				try {
-					let t = String(raw || '').toLowerCase().trim();
-					t = t.replace(/\s+/g, '-').replace(/_/g, '-');
-					t = t.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-					if (t === 'playbook') t = 'playbooks';
-					if (t === 'boxlink' || t === 'box-links' || t === 'boxlinks' || t === 'box') t = 'box-links';
-					if (t === 'dashboard') t = 'dashboards';
-					return t;
-				} catch (_) { return String(raw || '').toLowerCase().trim(); }
-			};
 			let visibleTypes = [];
 			if (tabsArr.length > 0) {
 				visibleTypes = tabsArr.map((rawId, i) => {
-					const id = normalizeId(rawId);
+					const id = String(rawId || '').trim();
 					const base = typesById.get(id) || {};
 					const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
 					const icon = String(base.icon || '').trim();
@@ -1466,14 +1444,14 @@ class SectionManager {
 				visibleTypes = (typesArr || [])
 					.filter(t => t && !t.hidden)
 					.map(t => {
-						const id = normalizeId(t.id || t.name || '');
+						const id = String(t.id || t.name || '').trim();
 						return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
 					})
 					.filter(Boolean);
 				// Fallback 2: derive ids from tab_names if still empty
 				if (visibleTypes.length === 0 && tabNames.length > 0) {
 					visibleTypes = tabNames.map((nm) => {
-						const id = normalizeId(nm);
+						const id = String(nm || '').trim();
 						const base = typesById.get(id) || {};
 						const icon = String(base.icon || '').trim();
 						return id ? { id, name: String(nm || id).trim(), icon } : null;
