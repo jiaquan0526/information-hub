@@ -1319,21 +1319,57 @@ class SectionManager {
 	}
 
     async saveSectionConfig(cfg) {
-        this.sectionConfig = cfg;
-        // Primary: use DB wrapper; Fallback: direct Supabase upsert; Finally: verify read-back
+        // Defensive merge to avoid blank overwrites
+        const incoming = (cfg && typeof cfg === 'object') ? cfg : {};
         try {
+            if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            // Load existing config
+            let existingCfg = {};
+            try {
+                const cur = await window.supabaseClient
+                    .from('sections')
+                    .select('config, name, icon, image, color')
+                    .eq('section_id', this.currentSection)
+                    .single();
+                if (cur && !cur.error) {
+                    existingCfg = (typeof cur.data?.config === 'string') ? JSON.parse(cur.data.config) : (cur.data?.config || {});
+                }
+            } catch (_) { existingCfg = {}; }
+
+            const pickArray = (next, prev) => (Array.isArray(next) && next.length > 0) ? next : (Array.isArray(prev) ? prev : []);
+            const merged = {
+                // Arrays: only replace when incoming is non-empty
+                tabs: pickArray(incoming.tabs, existingCfg.tabs),
+                tab_names: pickArray(incoming.tab_names, existingCfg.tab_names),
+                types: pickArray(incoming.types, existingCfg.types),
+                categories: pickArray(incoming.categories, existingCfg.categories),
+                // Scalars: prefer incoming if defined, else keep existing
+                intro: (incoming.intro !== undefined ? incoming.intro : (existingCfg.intro || '')),
+                visible: (incoming.visible !== undefined ? incoming.visible : (existingCfg.visible !== false)),
+                order: (incoming.order !== undefined ? incoming.order : (existingCfg.order || 0))
+            };
+
+            // If nothing would change, skip write
+            try {
+                const before = JSON.stringify(existingCfg);
+                const after = JSON.stringify(merged);
+                if (before === after) {
+                    this.sectionConfig = merged;
+                    return true;
+                }
+            } catch (_) {}
+
+            // Use wrapper first
             let writeOk = false;
             let lastErr = null;
-            // Attempt wrapper update first
             try {
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
-                    const res = await hubDatabase.saveSectionConfig(this.currentSection, cfg);
-                    writeOk = true; // wrapper throws on error
+                    await hubDatabase.saveSectionConfig(this.currentSection, merged);
+                    writeOk = true;
                 }
-            } catch (we) {
-                lastErr = we;
-            }
-            // Fallback to direct upsert when wrapper not available or failed
+            } catch (we) { lastErr = we; }
+
+            // Fallback: direct upsert with merged config
             if (!writeOk) {
                 if (!window.supabaseClient) throw (lastErr || new Error('Supabase unavailable'));
                 // Ensure required non-null columns (e.g., name) are present on insert
@@ -1351,16 +1387,16 @@ class SectionManager {
                     if (existing && existing.image) ensure.image = existing.image;
                     if (existing && existing.color) ensure.color = existing.color;
                 } catch (_) {
-                    // If select fails (row doesn't exist), default name to section id to satisfy NOT NULL
                     ensure.name = document.getElementById('sectionName')?.textContent?.trim() || this.currentSection;
                 }
-                const payload = { section_id: this.currentSection, ...ensure, config: cfg };
+                const payload = { section_id: this.currentSection, ...ensure, config: merged };
                 const { error: upErr } = await window.supabaseClient
                     .from('sections')
                     .upsert(payload, { onConflict: 'section_id' });
                 if (upErr) throw upErr;
                 writeOk = true;
             }
+
             // Verify persisted value matches (best-effort)
             try {
                 const { data: verifyRow } = await window.supabaseClient
@@ -1369,16 +1405,14 @@ class SectionManager {
                     .eq('section_id', this.currentSection)
                     .single();
                 if (verifyRow && verifyRow.config) {
-                    // Minimal structural check
-                    const a = JSON.stringify(cfg);
+                    const a = JSON.stringify(merged);
                     const b = JSON.stringify(verifyRow.config);
-                    if (a !== b) {
-                        console.warn('Section config verify mismatch; DB value differs. DB:', verifyRow.config);
-                    }
+                    if (a !== b) console.warn('Section config verify mismatch; DB value differs. DB:', verifyRow.config);
                 }
             } catch (_) {}
-        // Notify hub via BroadcastChannel only
-        this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
+
+            this.sectionConfig = merged;
+            this._notifyHub({ type: 'SECTION_CUSTOMIZE' });
             return true;
         } catch (e) {
             const detail = (e && (e.message || e.details || e.code)) ? (e.message || e.details || e.code) : 'Unknown error';
