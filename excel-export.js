@@ -182,8 +182,12 @@ class ExcelExporter {
                     };
                 }
             } catch (_) {}
-            // If DB unavailable or empty, stop (no fallbacks by design)
+            // If DB unavailable, stop
             if (!data) throw new Error('Database unavailable for export');
+            // If DB returned no rows across all datasets, error out (likely RLS/permissions)
+            const totals = data.totalRecords || {};
+            const sumTotals = (totals.users||0)+(totals.sections||0)+(totals.resources||0)+(totals.activities||0)+(totals.views||0);
+            if (sumTotals === 0) throw new Error('No data available from database (check RLS/permissions)');
 
             this.workbook = XLSX.utils.book_new();
 

@@ -862,7 +862,7 @@ class InformationHub {
         if (!auditLog) return;
         auditLog.innerHTML = '<div style="padding:10px;color:#666;">Loading audit log…</div>';
         let offset = 0;
-        const pageSize = 200; // larger page size for fuller history
+        const pageSize = 500; // larger page size and no hard cap
         const all = [];
         try {
             while (true) {
@@ -873,7 +873,7 @@ class InformationHub {
                 all.push(...rows);
                 if (rows.length < pageSize) break;
                 offset += rows.length;
-                if (offset >= 2000) break; // hard cap to avoid infinite scrolling bloat
+                // No hard cap; rely on pageSize and rows.length to terminate
             }
         } catch (_) {}
 
@@ -1475,7 +1475,25 @@ window.exportUserData = async () => {
 window.exportAuditLog = async () => {
     try {
         informationHub.showMessage('Preparing audit log export...', 'success');
-        const activities = await hubDatabase.getActivities();
+        // Paginate to fetch full history
+        let activities = [];
+        try {
+            if (window.hubDatabase && window.hubDatabaseReady) {
+                const page = 1000;
+                let off = 0;
+                while (true) {
+                    const chunk = await hubDatabase.getActivities(page, off);
+                    if (!Array.isArray(chunk) || chunk.length === 0) break;
+                    activities.push(...chunk);
+                    if (chunk.length < page) break;
+                    off += chunk.length;
+                }
+            }
+        } catch (_) {}
+        // Fallback single call if above failed
+        if (!Array.isArray(activities) || activities.length === 0) {
+            try { activities = await hubDatabase.getActivities(); } catch (_) { activities = []; }
+        }
 
         // Ensure XLSX is available (use the shared loader if present)
         try {
