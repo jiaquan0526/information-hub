@@ -822,7 +822,10 @@ class SectionManager {
 
     canDeleteResource() {
         if (!this.currentUser) return false;
-        return this.currentUser.permissions.canDeleteResources && this.canEditResource();
+        const role = String(this.currentUser.role || '').toLowerCase();
+        const perms = this.currentUser.permissions || {};
+        const roleAllowed = role === 'admin' || role === 'editor' || perms.canEditAllSections === true;
+        return (perms.canDeleteResources === true || roleAllowed) && this.canEditResource();
     }
 
     isResourceOwner(resource) {
@@ -1182,7 +1185,7 @@ class SectionManager {
 
         const resources = await this.getResources(type);
         const resource = resources.find(r => String(r.id) === String(id));
-        if (!this.isAdmin() && !this.isResourceOwner(resource)) {
+        if (!(this.isAdmin() || this.currentUser.role === 'editor') && !this.isResourceOwner(resource)) {
             this.showMessage('You can only delete resources assigned to you', 'error');
             return;
         }
