@@ -101,7 +101,9 @@ class HubDatabase {
 
     async getUser(id) {
         try {
-            const { data, error } = await this.supabase
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
+            const { data, error } = await client
                 .from('profiles')
                 .select('*')
                 .eq('id', id)
@@ -117,13 +119,15 @@ class HubDatabase {
 
     async getAllUsers() {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             // Prefer username, fallback to name, then no ordering
-            let resp = await this.supabase.from('profiles').select('*').order('username', { ascending: true });
+            let resp = await client.from('profiles').select('*').order('username', { ascending: true });
             if (resp.error) {
-                resp = await this.supabase.from('profiles').select('*').order('name', { ascending: true });
+                resp = await client.from('profiles').select('*').order('name', { ascending: true });
             }
             if (resp.error) {
-                resp = await this.supabase.from('profiles').select('*');
+                resp = await client.from('profiles').select('*');
             }
             if (resp.error) throw resp.error;
             return resp.data || [];
@@ -172,7 +176,9 @@ class HubDatabase {
     // Section Management
     async saveSection(section) {
         try {
-            const { data, error } = await this.supabase
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
+            const { data, error } = await client
                 .from('sections')
                 .upsert({
                     section_id: section.sectionId || section.id,
@@ -193,7 +199,9 @@ class HubDatabase {
 
     async getSection(sectionId) {
         try {
-            const { data, error } = await this.supabase
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
+            const { data, error } = await client
                 .from('sections')
                 .select('*')
                 .eq('section_id', sectionId)
@@ -209,13 +217,15 @@ class HubDatabase {
 
     async getAllSections() {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             // Prefer name, fallback to section_id, then no ordering
-            let resp = await this.supabase.from('sections').select('*').order('name', { ascending: true });
+            let resp = await client.from('sections').select('*').order('name', { ascending: true });
             if (resp.error) {
-                resp = await this.supabase.from('sections').select('*').order('section_id', { ascending: true });
+                resp = await client.from('sections').select('*').order('section_id', { ascending: true });
             }
             if (resp.error) {
-                resp = await this.supabase.from('sections').select('*');
+                resp = await client.from('sections').select('*');
             }
             if (resp.error) throw resp.error;
             return resp.data || [];
@@ -427,7 +437,9 @@ class HubDatabase {
 
     async deleteResource(id) {
         try {
-            const { error } = await this.supabase
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
+            const { error } = await client
                 .from('resources')
                 .delete()
                 .eq('id', id);
@@ -442,13 +454,15 @@ class HubDatabase {
 
     async getAllResources() {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             // Prefer created_at desc, fallback to title asc, then no ordering
-            let resp = await this.supabase.from('resources').select('*').order('created_at', { ascending: false });
+            let resp = await client.from('resources').select('*').order('created_at', { ascending: false });
             if (resp.error) {
-                resp = await this.supabase.from('resources').select('*').order('title', { ascending: true });
+                resp = await client.from('resources').select('*').order('title', { ascending: true });
             }
             if (resp.error) {
-                resp = await this.supabase.from('resources').select('*');
+                resp = await client.from('resources').select('*');
             }
             if (resp.error) throw resp.error;
             return resp.data || [];
@@ -461,6 +475,8 @@ class HubDatabase {
     // Activity Management
     async saveActivity(activity) {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             const currentUserId = await this.getCurrentUserId();
             const userId = activity.userId || currentUserId || null;
             const meta = Object.assign({}, activity.metadata || {}, {
@@ -482,7 +498,7 @@ class HubDatabase {
             if (activity.timestamp) {
                 payload.timestamp = new Date(activity.timestamp);
             }
-            const { data, error } = await this.supabase
+            const { data, error } = await client
                 .from('activities')
                 .insert(payload);
             if (error) throw error;
@@ -496,6 +512,8 @@ class HubDatabase {
     // Convenience method used by the hub UI to record content updates
     async addActivity(entry) {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             const currentUserId = await this.getCurrentUserId();
             const userId = currentUserId || null;
             const payload = {
@@ -514,7 +532,7 @@ class HubDatabase {
             if (entry.timestamp) {
                 payload.timestamp = new Date(entry.timestamp);
             }
-            const { data, error } = await this.supabase.from('activities').insert(payload);
+            const { data, error } = await client.from('activities').insert(payload);
             if (error) throw error;
             return data;
         } catch (error) {
@@ -525,12 +543,14 @@ class HubDatabase {
 
     async getActivities(limit = 1000, offset = 0) {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             const from = offset;
             const to = Math.max(offset, offset + limit - 1);
             let data = null, error = null;
             // Try ordering by 'timestamp' (newer schema)
             try {
-                const res = await this.supabase
+                const res = await client
                     .from('activities')
                     .select('*')
                     .order('timestamp', { ascending: false })
@@ -540,7 +560,7 @@ class HubDatabase {
             // Fallback: order by 'created_at' (older schema)
             if (error) {
                 try {
-                    const res2 = await this.supabase
+                    const res2 = await client
                         .from('activities')
                         .select('*')
                         .order('created_at', { ascending: false })
@@ -550,7 +570,7 @@ class HubDatabase {
             }
             // Final fallback: no explicit ordering
             if (error) {
-                const res3 = await this.supabase
+                const res3 = await client
                     .from('activities')
                     .select('*')
                     .range(from, to);
@@ -590,8 +610,10 @@ class HubDatabase {
     // Views Management
     async recordView(userId, resourceId) {
         try {
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
             // Use the RPC function for safe increment
-            const { error } = await this.supabase
+            const { error } = await client
                 .rpc('increment_view', {
                     p_user_id: userId,
                     p_resource_id: resourceId
@@ -607,7 +629,9 @@ class HubDatabase {
 
     async getAllViews() {
         try {
-            const { data, error } = await this.supabase
+            const client = window.supabaseClient || this.supabase;
+            if (!client) throw new Error('Supabase client not ready');
+            const { data, error } = await client
                 .from('views')
                 .select('*')
                 .order('last_viewed_at', { ascending: false });
