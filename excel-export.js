@@ -464,22 +464,7 @@ class ExcelExporter {
             try {
                 await this.ensureXlsxLoaded();
             } catch (e) {
-                // Fallback to JSON when XLSX can't be loaded
-                const payload = { sectionId, section: null, resources: [], usersWithAccess: [] };
-                try {
-                    const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                    if (hub && hub[sectionId]) {
-                        payload.section = { id: sectionId, name: hub[sectionId].name || sectionId };
-                        ['playbooks','boxLinks','dashboards'].forEach(t => (hub[sectionId][t]||[]).forEach(r => payload.resources.push({ ...r, type: t })));
-                    }
-                } catch(_) {}
-                try {
-                    const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                    payload.usersWithAccess = (lsUsers || []).filter(u => (u.permissions?.canEditAllSections) || (u.permissions?.sections || []).includes(sectionId)).map(u => ({ id: u.id, username: u.username, role: u.role || 'user', name: u.name || '', email: u.email || '' }));
-                } catch(_) {}
-                const jsonName = `${sectionId}_Export_${new Date().toISOString().split('T')[0]}.json`;
-                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
-                return { success: true, fileName: jsonName, fallback: 'json' };
+                throw new Error('Failed to load XLSX library');
             }
             let section = null;
             let resources = [];
@@ -494,27 +479,9 @@ class ExcelExporter {
                 }
             } catch (_) { resources = []; }
 
-            // Fallback: derive section + resources from localStorage if DB is empty
+            // No local fallback paths; require DB
             if (!section) {
-                try {
-                    let name = sectionId;
-                    try {
-                        const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
-                        const found = (order || []).find(s => String(s.id) === String(sectionId));
-                        if (found && found.name) name = found.name;
-                    } catch (_) {}
-                    try {
-                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                        if (hub && hub[sectionId] && hub[sectionId].name) name = hub[sectionId].name;
-                        if (resources.length === 0 && hub && hub[sectionId]) {
-                            const s = hub[sectionId];
-                            ['playbooks','boxLinks','dashboards'].forEach(type => {
-                                (s[type] || []).forEach(r => resources.push({ ...r, sectionId, type }));
-                            });
-                        }
-                    } catch (_) {}
-                    section = { sectionId, id: sectionId, name, icon: '', color: '', data: { playbooks: [], boxLinks: [], dashboards: [] } };
-                } catch (_) {}
+                throw new Error('Section not found in database');
             }
 
             if (!section) {
@@ -580,11 +547,7 @@ class ExcelExporter {
             try {
                 XLSX.writeFile(this.workbook, fileName);
             } catch (e) {
-                // Last-resort fallback to JSON
-                const payload = { sectionId, section: { id: section.sectionId || section.id, name: section.name }, resources };
-                const jsonName = `${section.sectionId || section.id}_Export_${new Date().toISOString().split('T')[0]}.json`;
-                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
-                return { success: true, fileName: jsonName, fallback: 'json' };
+                throw e;
             }
 
             return {
@@ -608,42 +571,14 @@ class ExcelExporter {
             try {
                 await this.ensureXlsxLoaded();
             } catch (e) {
-                // Fallback to JSON when XLSX can't be loaded
-                const payload = { userId, user: null, activities: [], accessibleResources: [] };
-                try {
-                    const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                    payload.user = (lsUsers || []).find(u => String(u.id) === String(userId)) || null;
-                    const acts = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-                    payload.activities = (acts || []).filter(a => a.userId === userId);
-                    if (payload.user) {
-                        const perms = payload.user.permissions || {};
-                        const canAll = !!perms.canEditAllSections;
-                        const allowed = new Set(perms.sections || []);
-                        const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                        Object.entries(hub).forEach(([sid, s]) => {
-                            if (!canAll && !allowed.has(sid)) return;
-                            ['playbooks','boxLinks','dashboards'].forEach(type => {
-                                (s?.[type] || []).forEach(r => payload.accessibleResources.push({ ...r, sectionId: sid, type }));
-                            });
-                        });
-                    }
-                } catch(_) {}
-                const jsonName = `User_${userId}_Data_Export_${new Date().toISOString().split('T')[0]}.json`;
-                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
-                return { success: true, fileName: jsonName, fallback: 'json' };
+                throw new Error('Failed to load XLSX library');
             }
             let user = null;
             let activities = [];
             try { if (window.hubDatabase && hubDatabase.getUser) user = await hubDatabase.getUser(userId); } catch(_) {}
             try { if (window.hubDatabase && hubDatabase.getActivities) activities = await hubDatabase.getActivities(); } catch(_) { activities = []; }
 
-            if (!user) {
-                // Fallback: find in localStorage
-                try {
-                    const lsUsers = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-                    user = (lsUsers || []).find(u => String(u.id) === String(userId) || String(u.username) === String(userId));
-                } catch (_) {}
-            }
+            // No local fallback; require DB
             if (!user) throw new Error('User not found');
 
             const userActivities = activities.filter(a => a.userId === userId);
@@ -715,10 +650,7 @@ class ExcelExporter {
             try {
                 XLSX.writeFile(this.workbook, fileName);
             } catch (e) {
-                const payload = { userId, user, activities: userActivities };
-                const jsonName = `User_${user.username}_Data_Export_${new Date().toISOString().split('T')[0]}.json`;
-                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
-                return { success: true, fileName: jsonName, fallback: 'json' };
+                throw e;
             }
 
             return {
