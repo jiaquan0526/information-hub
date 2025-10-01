@@ -150,9 +150,10 @@ class ExcelExporter {
                         const sid = String(r.sectionId || '');
                         if (!countsBySection.has(sid)) countsBySection.set(sid, { playbooks: 0, boxLinks: 0, dashboards: 0 });
                         const c = countsBySection.get(sid);
-                        if (r.type === 'playbooks') c.playbooks++;
-                        else if (r.type === 'boxLinks') c.boxLinks++;
-                        else if (r.type === 'dashboards') c.dashboards++;
+                        const typeId = this._normalizeTypeId(r.type);
+                        if (typeId === 'playbooks') c.playbooks++;
+                        else if (typeId === 'boxLinks') c.boxLinks++;
+                        else if (typeId === 'dashboards') c.dashboards++;
                     });
                     sectionsNorm.forEach(s => { const c = countsBySection.get(String(s.sectionId)) || { playbooks: 0, boxLinks: 0, dashboards: 0 }; s.data = { ...s.data, ...c }; });
                     data = {
@@ -186,8 +187,8 @@ class ExcelExporter {
             this.exportUsers(data.users);
             this.exportUserAccess(data.users, data.sections);
 
-            // Export Sections
-            this.exportSections(data.sections);
+            // Export Sections (dynamic counts from actual resource types)
+            this.exportSections(data.sections, data.resources);
 
             // Export Resources (use section names)
             this.exportResources(data.resources, data.sections);
@@ -247,28 +248,31 @@ class ExcelExporter {
         XLSX.utils.book_append_sheet(this.workbook, worksheet, 'Users');
     }
 
-    exportSections(sections) {
-        const byId = {};
-        (sections || []).forEach(s => { byId[String(s.sectionId || s.id || '')] = s; });
-        const sectionData = (sections || []).map(section => {
-            const pb = section && section.data ? section.data.playbooks : 0;
-            const bl = section && section.data ? section.data.boxLinks : 0;
-            const db = section && section.data ? section.data.dashboards : 0;
-            const pbCount = Array.isArray(pb) ? pb.length : (typeof pb === 'number' ? pb : 0);
-            const blCount = Array.isArray(bl) ? bl.length : (typeof bl === 'number' ? bl : 0);
-            const dbCount = Array.isArray(db) ? db.length : (typeof db === 'number' ? db : 0);
-            return ({
+    exportSections(sections, resourcesAll = []) {
+        const resourcesBySection = new Map();
+        (resourcesAll || []).forEach(r => {
+            const sid = String(r.sectionId || r.section_id || '');
+            if (!resourcesBySection.has(sid)) resourcesBySection.set(sid, []);
+            resourcesBySection.get(sid).push(r);
+        });
+        const rows = (sections || []).map(section => {
+            const sid = String(section.sectionId || section.id || '');
+            const resources = resourcesBySection.get(sid) || [];
+            const typeCounts = {};
+            resources.forEach(r => {
+                const t = this._normalizeTypeId(r.type);
+                const key = this._displayTypeName(t);
+                typeCounts[key] = (typeCounts[key] || 0) + 1;
+            });
+            return Object.assign({
                 'Section ID': section.sectionId || section.id,
                 'Name': section.name,
                 'Icon': section.icon,
-                'Color': section.color,
-                'Playbooks Count': pbCount,
-                'Box Links Count': blCount,
-                'Dashboards Count': dbCount
-            });
+                'Color': section.color
+            }, typeCounts);
         });
 
-        const worksheet = XLSX.utils.json_to_sheet(sectionData);
+        const worksheet = XLSX.utils.json_to_sheet(rows);
         XLSX.utils.book_append_sheet(this.workbook, worksheet, 'Sections');
     }
 
@@ -280,7 +284,7 @@ class ExcelExporter {
             'Title': resource.title,
             'Description': resource.description || '',
             'URL': resource.url,
-            'Type': resource.type,
+            'Type': this._displayTypeName(this._normalizeTypeId(resource.type)),
             'Section': nameById[String(resource.sectionId || '')] || String(resource.sectionId || ''),
             'Category': resource.category || '',
             'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
@@ -447,16 +451,21 @@ class ExcelExporter {
     }
 
     exportSummary(data) {
-        const summaryData = [
+        const base = [
             { 'Metric': 'Total Users', 'Count': data.totalRecords?.users || 0 },
             { 'Metric': 'Total Sections', 'Count': data.totalRecords?.sections || 0 },
             { 'Metric': 'Total Resources', 'Count': data.totalRecords?.resources || 0 },
             { 'Metric': 'Total Activities', 'Count': data.totalRecords?.activities || 0 },
-            { 'Metric': 'Export Date', 'Count': data.exportDate ? new Date(data.exportDate).toLocaleString() : new Date().toLocaleString() },
-            { 'Metric': 'Playbooks', 'Count': (data.resources || []).filter(r => r.type === 'playbooks').length },
-            { 'Metric': 'Box Links', 'Count': (data.resources || []).filter(r => r.type === 'boxLinks').length },
-            { 'Metric': 'Dashboards', 'Count': (data.resources || []).filter(r => r.type === 'dashboards').length }
+            { 'Metric': 'Export Date', 'Count': data.exportDate ? new Date(data.exportDate).toLocaleString() : new Date().toLocaleString() }
         ];
+        const typeCounts = {};
+        (data.resources || []).forEach(r => {
+            const t = this._normalizeTypeId(r.type);
+            const label = this._displayTypeName(t);
+            typeCounts[label] = (typeCounts[label] || 0) + 1;
+        });
+        const typeRows = Object.entries(typeCounts).map(([label, count]) => ({ Metric: label, Count: count }));
+        const summaryData = base.concat(typeRows);
 
         const worksheet = XLSX.utils.json_to_sheet(summaryData);
         XLSX.utils.book_append_sheet(this.workbook, worksheet, 'Summary');
@@ -523,19 +532,19 @@ class ExcelExporter {
             // Resources by type
             const types = ['playbooks', 'boxLinks', 'dashboards'];
             for (const type of types) {
-                const typeResources = resources.filter(r => r.type === type);
+                const typeResources = resources.filter(r => this._normalizeTypeId(r.type) === type);
                 if (typeResources.length > 0) {
                     const typeData = typeResources.map(resource => ({
                         'Title': resource.title,
                         'Description': resource.description || '',
                         'URL': resource.url,
                         'Category': resource.category || '',
-                        'Tags': resource.tags ? resource.tags.join(', ') : '',
+                        'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
                         'Created At': new Date(resource.createdAt).toLocaleString()
                     }));
 
                     const worksheet = XLSX.utils.json_to_sheet(typeData);
-                    XLSX.utils.book_append_sheet(this.workbook, worksheet, type.charAt(0).toUpperCase() + type.slice(1));
+                    XLSX.utils.book_append_sheet(this.workbook, worksheet, this._displayTypeName(type));
                 }
             }
 
@@ -676,6 +685,26 @@ class ExcelExporter {
         const role = (user.role || 'user').toLowerCase();
         const perms = user.permissions || {};
         return { ...user, role, permissions: { sections: perms.sections || [], editableSections: perms.editableSections || [], ...perms } };
+    }
+
+    // Normalize legacy/new type identifiers to canonical ids
+    _normalizeTypeId(type) {
+        const t = String(type || '').toLowerCase().trim();
+        if (!t) return '';
+        if (t === 'playbook' || t === 'playbooks') return 'playbooks';
+        if (t === 'boxlinks' || t === 'box-link' || t === 'box-links' || t === 'box_link' || t === 'box') return 'boxLinks';
+        if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
+        return t;
+    }
+
+    // Human-friendly display names for sheet/column labels
+    _displayTypeName(typeId) {
+        const id = String(typeId || '').trim();
+        if (id === 'playbooks') return 'Playbooks';
+        if (id === 'boxLinks') return 'Box Links';
+        if (id === 'dashboards') return 'Dashboards';
+        if (!id) return 'Other';
+        return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     }
 }
 
