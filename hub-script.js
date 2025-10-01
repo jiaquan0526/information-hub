@@ -1402,7 +1402,51 @@ window.exportAuditLog = async () => {
     try {
         informationHub.showMessage('Preparing audit log export...', 'success');
         const activities = await hubDatabase.getActivities();
-        
+
+        // Ensure XLSX is available (use the shared loader if present)
+        try {
+            if (window.excelExporter && typeof window.excelExporter.ensureXlsxLoaded === 'function') {
+                await window.excelExporter.ensureXlsxLoaded();
+            } else if (typeof XLSX === 'undefined') {
+                // Minimal inline loader as a fallback
+                const sources = [
+                    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+                    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+                    'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+                ];
+                let loaded = false;
+                for (const src of sources) {
+                    try {
+                        await new Promise((resolve, reject) => {
+                            const timer = setTimeout(() => reject(new Error('timeout')), 6000);
+                            const script = document.createElement('script');
+                            script.src = src;
+                            script.async = true;
+                            script.onload = () => { clearTimeout(timer); resolve(); };
+                            script.onerror = () => { clearTimeout(timer); reject(new Error('failed')); };
+                            document.head.appendChild(script);
+                        });
+                        if (typeof XLSX !== 'undefined') { loaded = true; break; }
+                    } catch (_) { /* try next */ }
+                }
+                if (!loaded) throw new Error('Failed to load XLSX library');
+            }
+        } catch (e) {
+            // If XLSX can't be loaded, fallback to JSON download of activities
+            const jsonName = `Audit_Log_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            const blob = new Blob([JSON.stringify(activities || [], null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = jsonName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            informationHub.showMessage(`XLSX unavailable. Downloaded JSON backup: ${jsonName}`, 'error');
+            return;
+        }
+
         // Create workbook
         const workbook = XLSX.utils.book_new();
         const activityData = activities.map(activity => ({
