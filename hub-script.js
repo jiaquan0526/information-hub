@@ -1314,13 +1314,87 @@ window.deleteUser = async (userId) => {
 window.exportAllData = async () => {
     try {
         informationHub.showMessage('Preparing export...', 'success');
-        const result = await excelExporter.exportToExcel();
-        if (result.success) {
-            informationHub.showMessage(`Export completed! File: ${result.fileName}`, 'success');
-            informationHub.logActivity('EXPORT', `Exported all data - ${result.fileName}`);
-        } else {
-            informationHub.showMessage(`Export failed: ${result.error}`, 'error');
+
+        // Primary path: Excel export via excelExporter
+        try {
+            if (window.excelExporter && typeof window.excelExporter.exportToExcel === 'function') {
+                const result = await window.excelExporter.exportToExcel();
+                if (result && result.success) {
+                    informationHub.showMessage(`Export completed! File: ${result.fileName}`, 'success');
+                    informationHub.logActivity('EXPORT', `Exported all data - ${result.fileName}`);
+                    return;
+                }
+            }
+        } catch (e) {
+            // Fall through to JSON/CSV fallbacks
         }
+
+        // Fallback 1: JSON backup from database (if available)
+        try {
+            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function') {
+                const payload = await hubDatabase.exportAllData();
+                const jsonName = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.json`;
+                const blob = new Blob([JSON.stringify(payload || {}, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = jsonName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                informationHub.showMessage(`Downloaded JSON backup: ${jsonName}`, 'error');
+                informationHub.logActivity('EXPORT', `Exported JSON backup - ${jsonName}`);
+                return;
+            }
+        } catch (_) {
+            // Continue to CSV fallback
+        }
+
+        // Fallback 2: CSV from localStorage (legacy)
+        try {
+            const data = [];
+            const sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+            sections.forEach(section => {
+                const sectionData = localStorage.getItem(`section_${section}`);
+                if (sectionData) {
+                    const parsed = JSON.parse(sectionData);
+                    ['playbooks', 'boxLinks', 'dashboards'].forEach(type => {
+                        (parsed[type] || []).forEach(item => {
+                            data.push({
+                                'Section': section.replace('-', ' ').toUpperCase(),
+                                'Type': type.replace('boxLinks', 'Box Links').replace(/([A-Z])/g, ' $1').trim(),
+                                'Title': item.title,
+                                'Description': item.description || '',
+                                'URL': item.url,
+                                'Tags': (item.tags || []).join(', '),
+                                'Created': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''
+                            });
+                        });
+                    });
+                }
+            });
+            if (data.length > 0) {
+                const headers = Object.keys(data[0]);
+                const csvContent = [
+                    headers.join(','),
+                    ...data.map(row => headers.map(header => `"${(row[header] || '').toString().replace(/"/g, '""')}"`).join(','))
+                ].join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                informationHub.showMessage('Downloaded CSV fallback', 'error');
+                return;
+            }
+        } catch (_) {}
+
+        // If all paths fail, notify
+        informationHub.showMessage('Export failed: No data source available', 'error');
     } catch (error) {
         informationHub.showMessage(`Export failed: ${error.message}`, 'error');
     }
