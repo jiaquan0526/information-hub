@@ -126,20 +126,11 @@ class ExcelExporter {
     // Create Excel file (Supabase only for data; no GitHub/local fallbacks)
     async exportToExcel() {
         try {
-            // 1) Try to load XLSX; if it fails, produce a JSON export instead
+            // 1) Load XLSX; if it fails, error out (no JSON fallback)
             try {
                 await this.ensureXlsxLoaded();
             } catch (e) {
-                // XLSX unavailable: fallback to JSON built from Supabase only
-                await this._waitForDbReady(4000);
-                if (!(window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function')) {
-                    throw new Error('Database unavailable for export');
-                }
-                const payload = await hubDatabase.exportAllData();
-                payload.source = 'database';
-                const jsonName = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.json`;
-                this._downloadTextFile(jsonName, JSON.stringify(payload, null, 2));
-                return { success: true, fileName: jsonName, fallback: 'json' };
+                throw new Error('Failed to load XLSX library');
             }
 
             // 2) Supabase DB data only
