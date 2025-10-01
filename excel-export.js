@@ -204,7 +204,12 @@ class ExcelExporter {
             // Export Activities
             this.exportActivities(data.activities);
 
-            // Skip exporting Views to avoid RLS/empty data delays
+            // Export Views if available
+            try {
+                if (Array.isArray(data.views) && data.views.length > 0) {
+                    this.exportViews(data.views);
+                }
+            } catch (_) {}
 
             // Export Usage summaries
             this.exportUsageSummary(data);
@@ -254,15 +259,23 @@ class ExcelExporter {
     exportSections(sections) {
         const byId = {};
         (sections || []).forEach(s => { byId[String(s.sectionId || s.id || '')] = s; });
-        const sectionData = (sections || []).map(section => ({
-            'Section ID': section.sectionId || section.id,
-            'Name': section.name,
-            'Icon': section.icon,
-            'Color': section.color,
-            'Playbooks Count': section.data?.playbooks ? section.data.playbooks.length : 0,
-            'Box Links Count': section.data?.boxLinks ? section.data.boxLinks.length : 0,
-            'Dashboards Count': section.data?.dashboards ? section.data.dashboards.length : 0
-        }));
+        const sectionData = (sections || []).map(section => {
+            const pb = section && section.data ? section.data.playbooks : 0;
+            const bl = section && section.data ? section.data.boxLinks : 0;
+            const db = section && section.data ? section.data.dashboards : 0;
+            const pbCount = Array.isArray(pb) ? pb.length : (typeof pb === 'number' ? pb : 0);
+            const blCount = Array.isArray(bl) ? bl.length : (typeof bl === 'number' ? bl : 0);
+            const dbCount = Array.isArray(db) ? db.length : (typeof db === 'number' ? db : 0);
+            return ({
+                'Section ID': section.sectionId || section.id,
+                'Name': section.name,
+                'Icon': section.icon,
+                'Color': section.color,
+                'Playbooks Count': pbCount,
+                'Box Links Count': blCount,
+                'Dashboards Count': dbCount
+            });
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(sectionData);
         XLSX.utils.book_append_sheet(this.workbook, worksheet, 'Sections');
@@ -279,10 +292,10 @@ class ExcelExporter {
             'Type': resource.type,
             'Section': nameById[String(resource.sectionId || '')] || String(resource.sectionId || ''),
             'Category': resource.category || '',
-            'Tags': resource.tags ? resource.tags.join(', ') : '',
-            'Created By': resource.userId,
-            'Created At': resource.createdAt ? new Date(resource.createdAt).toLocaleString() : '',
-            'Updated At': resource.updatedAt ? new Date(resource.updatedAt).toLocaleString() : ''
+            'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
+            'Created By': resource.userId || resource.user_id || '',
+            'Created At': (resource.createdAt || resource.created_at) ? new Date(resource.createdAt || resource.created_at).toLocaleString() : '',
+            'Updated At': (resource.updatedAt || resource.updated_at) ? new Date(resource.updatedAt || resource.updated_at).toLocaleString() : ''
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(resourceData);
