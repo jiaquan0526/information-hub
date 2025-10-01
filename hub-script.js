@@ -503,7 +503,7 @@ class InformationHub {
                 </div>
                 
                 <div class="resource-footer">
-                    <span>Added: ${new Date(resource.createdAt).toLocaleDateString()}</span>
+                    <span>Added: ${formatUserTZ(resource.createdAt, true)}</span>
                     <div>
                         <button class="action-btn edit-btn" onclick="editResource('${type}', '${resource.id}')" title="Edit">
                             <i class="fas fa-edit"></i>
@@ -945,7 +945,7 @@ class InformationHub {
             const when = (() => {
                 try {
                     const t = a.timestamp || a.created_at;
-                    return t ? new Date(t).toLocaleString() : '';
+                    return formatUserTZ(t);
                 } catch(_) { return ''; }
             })();
             const section = esc(a.section || a.section_id || '');
@@ -1149,6 +1149,22 @@ class InformationHub {
             await hub.loadExportOptions(); 
         } catch (_) {}
     }
+}
+
+let userTimeZone = 'Asia/Shanghai';
+try {
+    // Prefer browser-reported zone; fallback to CST if unavailable
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && typeof tz === 'string') userTimeZone = tz;
+} catch (_) {}
+function formatUserTZ(value, dateOnly) {
+    try {
+        if (!value) return '';
+        const opts = dateOnly
+            ? { timeZone: userTimeZone, year: 'numeric', month: '2-digit', day: '2-digit' }
+            : { timeZone: userTimeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        return new Intl.DateTimeFormat('zh-CN', opts).format(new Date(value));
+    } catch (_) { return String(value || ''); }
 }
 
 // Global functions for index.html
@@ -1368,7 +1384,7 @@ window.exportAllData = async () => {
                                 'Description': item.description || '',
                                 'URL': item.url,
                                 'Tags': (item.tags || []).join(', '),
-                                'Created': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''
+                'Created': formatCST(item.createdAt, true)
                             });
                         });
                     });
@@ -1547,7 +1563,7 @@ window.exportAuditLog = async () => {
             'Username': activity.username,
             'Action': activity.action,
             'Description': activity.description,
-            'Timestamp': new Date(activity.timestamp).toLocaleString(),
+            'Timestamp': formatUserTZ(activity.timestamp),
             'IP Address': activity.ip || ''
         }));
 

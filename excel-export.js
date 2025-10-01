@@ -241,7 +241,7 @@ class ExcelExporter {
             'Can Manage Roles': user.permissions?.canManageRoles ? 'Yes' : 'No',
             'Accessible Sections': (user.permissions?.sections || []).join(', '),
             'Editable Sections': (user.permissions?.editableSections || []).join(', '),
-            'Created At': user.createdAt ? new Date(user.createdAt).toLocaleString() : ''
+            'Created At (CST)': user.createdAt ? this._formatDateChina(user.createdAt) : ''
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(userData);
@@ -289,8 +289,8 @@ class ExcelExporter {
             'Category': resource.category || '',
             'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
             'Created By': resource.userId || resource.user_id || '',
-            'Created At': (resource.createdAt || resource.created_at) ? new Date(resource.createdAt || resource.created_at).toLocaleString() : '',
-            'Updated At': (resource.updatedAt || resource.updated_at) ? new Date(resource.updatedAt || resource.updated_at).toLocaleString() : ''
+            'Created At (CST)': (resource.createdAt || resource.created_at) ? this._formatDateChina(resource.createdAt || resource.created_at) : '',
+            'Updated At (CST)': (resource.updatedAt || resource.updated_at) ? this._formatDateChina(resource.updatedAt || resource.updated_at) : ''
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(resourceData);
@@ -377,7 +377,7 @@ class ExcelExporter {
                         'Action': a.action,
                         'Section': sectionName,
                         'Duration (s)': seconds,
-                        'Timestamp': a.timestamp ? new Date(a.timestamp).toLocaleString() : ''
+                        'Timestamp (CST)': a.timestamp ? this._formatDateChina(a.timestamp) : ''
                     };
                 });
             if (durationRows.length > 0) {
@@ -436,13 +436,13 @@ class ExcelExporter {
     }
 
     exportActivities(activities) {
-        const activityData = (activities || []).map(activity => ({
+            const activityData = (activities || []).map(activity => ({
             'ID': activity.id,
             'User ID': activity.userId,
             'Username': activity.username,
             'Action': activity.action,
             'Description': activity.description,
-            'Timestamp': activity.timestamp ? new Date(activity.timestamp).toLocaleString() : '',
+                'Timestamp (CST)': activity.timestamp ? this._formatDateChina(activity.timestamp) : '',
             'IP Address': activity.ip || ''
         }));
 
@@ -540,7 +540,7 @@ class ExcelExporter {
                         'URL': resource.url,
                         'Category': resource.category || '',
                         'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
-                        'Created At': new Date(resource.createdAt).toLocaleString()
+                        'Created At (CST)': this._formatDateChina(resource.createdAt)
                     }));
 
                     const worksheet = XLSX.utils.json_to_sheet(typeData);
@@ -705,6 +705,19 @@ class ExcelExporter {
         if (id === 'dashboards') return 'Dashboards';
         if (!id) return 'Other';
         return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // Format date/time in China Standard Time (Asia/Shanghai)
+    _formatDateChina(value) {
+        try {
+            if (!value) return '';
+            const d = value instanceof Date ? value : new Date(value);
+            return new Intl.DateTimeFormat('zh-CN', {
+                timeZone: 'Asia/Shanghai',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            }).format(d);
+        } catch (_) { return String(value || ''); }
     }
 }
 
