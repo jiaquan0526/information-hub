@@ -690,7 +690,8 @@ class SectionManager {
         const iconClass = (base && base.icon) ? this.normalizeIconClass(base.icon) : (storageType === 'playbooks' ? 'fas fa-book' : storageType === 'boxLinks' ? 'fas fa-link' : storageType === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder');
 
         const canEdit = this.canEditResource() && (this.isAdmin() || this.isResourceOwner(resource));
-        const canDelete = this.currentUser && this.currentUser.permissions.canDeleteResources && (this.isAdmin() || this.isResourceOwner(resource)) && this.canEditResource();
+        const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
+        const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
         return `
             <div class="resource-card" data-id="${resource.id}">
