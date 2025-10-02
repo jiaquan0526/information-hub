@@ -78,8 +78,13 @@ class SectionManager {
     async logContentActivity(action, resourceType, title) {
         try {
             if (!window.hubDatabase || !window.hubDatabaseReady) return;
+            const upper = String(action || 'updated').toUpperCase();
+            const mapped = upper === 'CREATED' ? 'CREATE_RESOURCE'
+                : upper === 'UPDATED' ? 'UPDATE_RESOURCE'
+                : upper === 'DELETED' ? 'DELETE_RESOURCE'
+                : upper;
             await hubDatabase.addActivity({
-                action: String(action || 'updated').toUpperCase(),
+                action: mapped,
                 type: resourceType || '',
                 title: title || '',
                 section: this.currentSection || null

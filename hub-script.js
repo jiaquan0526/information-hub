@@ -943,10 +943,21 @@ class InformationHub {
             const userSel = document.getElementById('auditUserFilter');
             const actionSel = document.getElementById('auditActionFilter');
             if (userSel) {
-                const users = Array.from(new Set((all||[]).map(a => a.username).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
+                const entries = [];
+                const seen = new Set();
+                (all || []).forEach(a => {
+                    const id = a.user_id || a.userId || null;
+                    if (!id) return;
+                    const key = String(id);
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    const label = (a.username || a.user || a.email || '').toString() || 'Unknown';
+                    entries.push({ id: key, label });
+                });
+                entries.sort((a,b) => String(a.label).localeCompare(String(b.label)));
                 const current = userSel.value;
-                userSel.innerHTML = '<option value="">All Users</option>' + users.map(u => `<option value="${u}">${u}</option>`).join('');
-                if (current && users.includes(current)) userSel.value = current;
+                userSel.innerHTML = '<option value="">All Users</option>' + entries.map(e => `<option value="${e.id}">${e.label}</option>`).join('');
+                if (current && entries.some(e => e.id === current)) userSel.value = current;
             }
             if (actionSel) {
                 const actions = Array.from(new Set((all||[]).map(a => a.action).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
@@ -1030,7 +1041,7 @@ class InformationHub {
             const u = (userSel && userSel.value) ? String(userSel.value) : '';
             const act = (actionSel && actionSel.value) ? String(actionSel.value) : '';
             const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
-            const filtered = (rows || []).filter(r => (!u || String(r.username||'') === u) && (!act || String(r.action||'') === act));
+            const filtered = (rows || []).filter(r => (!u || String(r.user_id||r.userId||'') === u) && (!act || String(r.action||'') === act));
             if (filtered.length === 0) { auditLog.innerHTML = '<div style="padding:10px;color:#666;">No entries match the selected filters.</div>'; return; }
             const html = filtered.map(a => {
                 const who = esc(a.username || 'Unknown');
