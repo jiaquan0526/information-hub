@@ -763,7 +763,7 @@ class InformationHub {
         const user = this.currentUser;
         if (!user) return;
 
-        document.getElementById('profileName').textContent = user.name || user.username;
+        document.getElementById('profileName').textContent = user.username || user.email;
         document.getElementById('profileUsername').textContent = user.username;
         document.getElementById('profileRole').textContent = user.role;
         document.getElementById('profileEmail').textContent = user.email || 'Not provided';
@@ -838,7 +838,7 @@ class InformationHub {
             usersList.innerHTML = users.map(user => `
                 <div class="user-item">
                     <div class="user-details-info">
-                        <div class="name">${this.escapeHtml(user.name || user.username || user.email || '')}</div>
+                        <div class="name">${this.escapeHtml(user.username || user.email || '')}</div>
                         <div class="role">${this.escapeHtml(user.role || '')}</div>
                         <div class="sections">Access: ${(user.permissions && Array.isArray(user.permissions.sections)) ? user.permissions.sections.length : 0} sections</div>
                     </div>

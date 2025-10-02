@@ -2935,7 +2935,7 @@ Permissions:
             usersList.innerHTML = manageableUsers.map(user => `
                 <div class="user-item">
                     <div class="user-details-info">
-                        <div class="name">${user.name || user.username}</div>
+                        <div class="name">${user.username || user.email}</div>
                         <div class="role">${(user.role || '').toUpperCase()}</div>
                         <div class="sections">Access: ${user.permissions.sections.length} · Edit: ${user.permissions.editableSections.length}</div>
                     </div>
@@ -5093,7 +5093,7 @@ Permissions:
             assignmentsList.innerHTML = filteredUsers.map(user => {
                 const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
                 return `
-                    <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.name || user.username} (${user.username})</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
+                    <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.username || user.email}</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
                 `;
             }).join('');
         };
@@ -5120,7 +5120,7 @@ Permissions:
                 const userInfo = document.createElement('div');
                 userInfo.className = 'user-info';
                 const h4 = document.createElement('h4');
-                h4.textContent = `${user.name || user.username} (${user.username})`;
+                h4.textContent = `${user.username || user.email}`;
                 const roleSpan = document.createElement('span');
                 roleSpan.className = 'user-role';
                 roleSpan.textContent = user.role || '';
