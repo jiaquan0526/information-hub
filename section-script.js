@@ -357,8 +357,27 @@ class SectionManager {
 
         // Apply persistent background image per section (defer heavy images)
         try {
-            // Use Supabase-driven global flag derived on the hub page
-            const disable = !(window && window.globalBackgroundsEnabled === true);
+            // Determine enablement via Supabase (fallback to hub page flag)
+            let enabled = false;
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSiteSetting === 'function') {
+                    const v = await hubDatabase.getSiteSetting('backgrounds');
+                    enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                } else if (window.supabaseClient && window.supabaseClient.from) {
+                    try {
+                        const { data } = await window.supabaseClient
+                            .from('site_settings')
+                            .select('value')
+                            .eq('key', 'backgrounds')
+                            .single();
+                        const v = data && data.value;
+                        enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                    } catch (_) {}
+                } else if (typeof window.globalBackgroundsEnabled !== 'undefined') {
+                    enabled = window.globalBackgroundsEnabled === true;
+                }
+            } catch (_) { enabled = false; }
+            const disable = !enabled;
             const map = {}; // No local storage for background images
             let img = map[this.currentSection];
             const container = document.querySelector('.container');

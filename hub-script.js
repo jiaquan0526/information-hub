@@ -1732,6 +1732,255 @@ window.restoreJson = async () => {
     }
 };
 
+// Sections-only JSON restore (mass create/update sections from backup JSON)
+window.restoreSectionsOnly = async () => {
+    try {
+        // Admin-only guard similar to restoreJson
+        const me = informationHub && informationHub.currentUser ? informationHub.currentUser : null;
+        if (!(me && (String(me.role||'').toLowerCase()==='admin' || (me.permissions && me.permissions.canManageUsers)))) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Only admin can restore sections', 'error');
+            return;
+        }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            let json = null;
+            try {
+                const text = await file.text();
+                json = JSON.parse(text);
+            } catch (_) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('Invalid JSON file', 'error');
+                return;
+            }
+            // Build section list from json.sections and localStorage.sectionOrder backup
+            const byId = new Map();
+            const add = (id, name, icon, color, intro, visible, order, cfg) => {
+                if (!id) return;
+                const key = String(id).trim();
+                const prev = byId.get(key) || {};
+                byId.set(key, {
+                    id: key,
+                    name: (name && String(name).trim()) || prev.name || key,
+                    icon: (icon && String(icon).trim()) || prev.icon || '',
+                    color: (color && String(color).trim()) || prev.color || '',
+                    config: Object.assign({}, prev.config || {}, (cfg && typeof cfg === 'object') ? cfg : {}),
+                    intro: (intro && String(intro).trim()) || prev.intro || '',
+                    visible: (visible === undefined || visible === null) ? (prev.visible !== false) : !!visible,
+                    order: (order === undefined || order === null) ? (prev.order || 0) : (parseInt(order, 10) || 0)
+                });
+            };
+            try {
+                const arr = Array.isArray(json.sections) ? json.sections : [];
+                arr.forEach(s => {
+                    const sid = s.sectionId || s.id || '';
+                    const cfg = (s && s.config && typeof s.config === 'object') ? s.config : {};
+                    add(sid, s.name || '', s.icon || '', s.color || '', (cfg && cfg.intro) || '', (cfg && cfg.visible !== undefined) ? cfg.visible : true, (cfg && cfg.order) || 0, cfg);
+                });
+            } catch (_) {}
+            try {
+                const ls = json.localStorage || {};
+                const order = Array.isArray(ls.sectionOrder) ? ls.sectionOrder : [];
+                order.forEach(s => add(s.id, s.name, s.icon, s.color, s.intro, s.visible !== false, s.order || 0, { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 }));
+            } catch (_) {}
+            const sections = Array.from(byId.values());
+            if (sections.length === 0) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('No sections found in JSON', 'error');
+                return;
+            }
+            // Ensure Supabase auth
+            let user = null;
+            try {
+                if (window.supabaseClient) {
+                    const res = await window.supabaseClient.auth.getUser();
+                    user = res && res.data ? res.data.user : null;
+                }
+            } catch (_) {}
+            if (!user) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('Not signed in. Open auth.html and sign in, then retry.', 'error');
+                return;
+            }
+            // Upsert sections
+            let ok = 0, fail = 0;
+            for (const s of sections) {
+                const cfg = Object.assign({}, s.config || {}, { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 });
+                try {
+                    if (window.hubDatabase && typeof hubDatabase.createSection === 'function') {
+                        await hubDatabase.createSection({ sectionId: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg, data: {} });
+                    } else if (window.supabaseClient) {
+                        const { error } = await window.supabaseClient
+                            .from('sections')
+                            .upsert({ section_id: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg }, { onConflict: 'section_id' });
+                        if (error) throw error;
+                    } else {
+                        throw new Error('Database unavailable');
+                    }
+                    ok++;
+                } catch (e) {
+                    console.error('Section upsert failed:', s.id, e);
+                    fail++;
+                }
+            }
+            informationHub && informationHub.showMessage && informationHub.showMessage(`Sections restore finished: ${ok} success, ${fail} failed`, fail ? 'error' : 'success');
+            try { updateMainHubSections && updateMainHubSections(); } catch (_) {}
+        };
+        input.click();
+    } catch (error) {
+        informationHub && informationHub.showMessage && informationHub.showMessage(`Restore failed: ${error.message}`, 'error');
+    }
+};
+
+// Full sections restore: sections + tabs (config) + resources, Supabase-only
+window.restoreSectionsAllData = async () => {
+    try {
+        // Admin-only guard
+        const me = informationHub && informationHub.currentUser ? informationHub.currentUser : null;
+        if (!(me && (String(me.role||'').toLowerCase()==='admin' || (me.permissions && me.permissions.canManageUsers)))) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Only admin can restore', 'error');
+            return;
+        }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            let json = null;
+            try {
+                const text = await file.text();
+                json = JSON.parse(text);
+            } catch (_) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('Invalid JSON file', 'error');
+                return;
+            }
+
+            // Normalize sections from json.sections + json.localStorage.sectionOrder
+            const sectionsById = new Map();
+            const addSec = (id, name, icon, color, cfg) => {
+                if (!id) return;
+                const key = String(id).trim();
+                const prev = sectionsById.get(key) || {};
+                const nextCfg = (cfg && typeof cfg === 'object') ? cfg : {};
+                sectionsById.set(key, {
+                    id: key,
+                    name: (name && String(name).trim()) || prev.name || key,
+                    icon: (icon && String(icon).trim()) || prev.icon || '',
+                    color: (color && String(color).trim()) || prev.color || '',
+                    config: Object.assign({}, prev.config || {}, nextCfg)
+                });
+            };
+            try {
+                const arr = Array.isArray(json.sections) ? json.sections : [];
+                arr.forEach(s => {
+                    const sid = s.sectionId || s.id || '';
+                    let cfg = (s && s.config);
+                    try { if (cfg && typeof cfg === 'string') cfg = JSON.parse(cfg); } catch(_) {}
+                    if (!cfg || typeof cfg !== 'object') cfg = {};
+                    // Derive tabs from types if tabs missing
+                    if (!Array.isArray(cfg.tabs) || cfg.tabs.length === 0) {
+                        const types = Array.isArray(cfg.types) ? cfg.types : [];
+                        cfg.tabs = types.map(t => String(t.id || t.name || '').trim()).filter(Boolean);
+                        cfg.tab_names = types.map(t => String(t.name || t.id || '').trim()).filter(Boolean);
+                    }
+                    addSec(sid, s.name || '', s.icon || '', s.color || '', cfg);
+                });
+            } catch (_) {}
+            try {
+                const ls = json.localStorage || {};
+                const order = Array.isArray(ls.sectionOrder) ? ls.sectionOrder : [];
+                order.forEach(s => {
+                    const cfg = { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 };
+                    addSec(s.id, s.name, s.icon, s.color, cfg);
+                });
+            } catch (_) {}
+            const sections = Array.from(sectionsById.values());
+            if (sections.length === 0) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('No sections found in JSON', 'error');
+                return;
+            }
+
+            // Normalize resources: support array or map-by-section
+            let resourcesAll = [];
+            try {
+                if (Array.isArray(json.resources)) {
+                    resourcesAll = json.resources;
+                } else if (json.resources && typeof json.resources === 'object') {
+                    Object.keys(json.resources).forEach(sid => {
+                        const list = Array.isArray(json.resources[sid]) ? json.resources[sid] : [];
+                        list.forEach(r => resourcesAll.push(Object.assign({}, r, { sectionId: r.sectionId || sid })));
+                    });
+                }
+            } catch (_) { resourcesAll = []; }
+
+            // Require auth
+            let user = null;
+            try { if (window.supabaseClient) { const res = await window.supabaseClient.auth.getUser(); user = res && res.data ? res.data.user : null; } } catch(_) {}
+            if (!user) { informationHub && informationHub.showMessage && informationHub.showMessage('Not signed in. Open auth.html and sign in, then retry.', 'error'); return; }
+
+            // Upsert sections (overwrite config)
+            let secOk = 0, secFail = 0;
+            for (const s of sections) {
+                try {
+                    const cfg = (s.config && typeof s.config === 'object') ? s.config : {};
+                    // Ensure tabs/tab_names coherence when types exist
+                    if ((!Array.isArray(cfg.tabs) || cfg.tabs.length === 0) && Array.isArray(cfg.types)) {
+                        cfg.tabs = (cfg.types || []).map(t => String(t.id || t.name || '').trim()).filter(Boolean);
+                        cfg.tab_names = (cfg.types || []).map(t => String(t.name || t.id || '').trim()).filter(Boolean);
+                    }
+                    const row = { section_id: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg };
+                    const { error } = await window.supabaseClient
+                        .from('sections')
+                        .upsert(row, { onConflict: 'section_id' });
+                    if (error) throw error;
+                    secOk++;
+                } catch (e) { console.error('Section upsert failed:', s.id, e); secFail++; }
+            }
+
+            // Upsert resources (overwrite by id when present)
+            let resOk = 0, resFail = 0;
+            for (const r of (resourcesAll || [])) {
+                try {
+                    const sid = r.sectionId || r.section_id || '';
+                    if (!sid) { resFail++; continue; }
+                    const typeRaw = r.type || '';
+                    const type = String(typeRaw).toLowerCase().trim();
+                    const payload = {
+                        id: r.id || undefined,
+                        section_id: sid,
+                        type: type,
+                        title: r.title || '',
+                        description: r.description || '',
+                        url: r.url || '',
+                        tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : []),
+                        extra: r.extra && typeof r.extra === 'object' ? r.extra : { category: r.category || '' }
+                    };
+                    if (payload.id) {
+                        const { error } = await window.supabaseClient
+                            .from('resources')
+                            .upsert(payload, { onConflict: 'id' });
+                        if (error) throw error;
+                    } else {
+                        const { error } = await window.supabaseClient
+                            .from('resources')
+                            .insert(payload);
+                        if (error) throw error;
+                    }
+                    resOk++;
+                } catch (e) { console.error('Resource upsert failed:', r && r.title, e); resFail++; }
+            }
+
+            const msg = `Restore finished — Sections: ${secOk} ok, ${secFail} failed; Resources: ${resOk} ok, ${resFail} failed`;
+            informationHub && informationHub.showMessage && informationHub.showMessage(msg, (secFail || resFail) ? 'error' : 'success');
+            try { updateMainHubSections && updateMainHubSections(); } catch (_) {}
+        };
+        input.click();
+    } catch (error) {
+        informationHub && informationHub.showMessage && informationHub.showMessage(`Restore failed: ${error.message}`, 'error');
+    }
+};
+
 // Initialize the application (once) - wait for Supabase
 let informationHub;
 function initInformationHubOnce() {
