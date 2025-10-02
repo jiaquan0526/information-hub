@@ -87,7 +87,9 @@ class SectionManager {
                 action: mapped,
                 type: resourceType || '',
                 title: title || '',
-                section: this.currentSection || null
+                section: this.currentSection || null,
+                username: (this.currentUser && (this.currentUser.username || this.currentUser.email)) || null,
+                timestamp: new Date().toISOString()
             });
         } catch (_) {}
     }
@@ -99,18 +101,20 @@ class SectionManager {
             if (!user) return null;
             let role = 'viewer';
             let permissions = { sections: ['*'], canViewAllSections: true, canEditAllSections: false };
+            let username = '';
             try {
                 const { data: profile } = await window.supabaseClient
                     .from('profiles')
-                    .select('role, permissions')
+                    .select('role, permissions, username, email')
                     .eq('id', user.id)
                     .single();
                 if (profile) {
                     role = profile.role || role;
                     permissions = (profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : permissions;
+                    username = profile.username || profile.email || '';
                 }
             } catch (_) {}
-            return { id: user.id, email: user.email, role, permissions };
+            return { id: user.id, email: user.email, username: username || user.email, role, permissions };
         } catch (_) { return null; }
     }
 

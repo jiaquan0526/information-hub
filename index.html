@@ -4216,6 +4216,18 @@ Permissions:
                         await hubDatabase.createSection(target);
                         console.log('Section created in Supabase:', target);
                         try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { name: target.name || target.id } }); } catch(_) {}
+                        // Log initial tabs/types as CREATE_TAB
+                        try {
+                            const cfg = target && target.config ? target.config : {};
+                            const initTypes = Array.isArray(cfg.types) ? cfg.types.map(t => (t && t.id !== undefined ? String(t.id) : String(t))).filter(Boolean) : (Array.isArray(cfg.tabs) ? cfg.tabs.map(x => String(x)).filter(Boolean) : []);
+                            const names = new Map((Array.isArray(cfg.types) ? cfg.types : []).map(t => [String(t && t.id !== undefined ? t.id : t), String((t && t.name) || (t && t.id) || t || '')]));
+                            if (Array.isArray(cfg.tab_names)) {
+                                (cfg.tabs || []).forEach((id, i) => { const nid = String(id||''); if (!names.has(nid)) names.set(nid, String(cfg.tab_names[i] || nid)); });
+                            }
+                            initTypes.forEach(id => {
+                                try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, name: names.get(id) || id } }); } catch(_) {}
+                            });
+                        } catch(_) {}
                     } catch (wrapperErr) {
                         console.warn('Wrapper create failed, attempting direct Supabase upsert', wrapperErr);
                         if (!window.supabaseClient) throw wrapperErr;
@@ -4235,6 +4247,18 @@ Permissions:
                         if (upErr) throw upErr;
                         console.log('Section created via direct Supabase:', up);
                         try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { name: target.name || target.id } }); } catch(_) {}
+                        // Log initial tabs/types as CREATE_TAB
+                        try {
+                            const cfg = target && target.config ? target.config : {};
+                            const initTypes = Array.isArray(cfg.types) ? cfg.types.map(t => (t && t.id !== undefined ? String(t.id) : String(t))).filter(Boolean) : (Array.isArray(cfg.tabs) ? cfg.tabs.map(x => String(x)).filter(Boolean) : []);
+                            const names = new Map((Array.isArray(cfg.types) ? cfg.types : []).map(t => [String(t && t.id !== undefined ? t.id : t), String((t && t.name) || (t && t.id) || t || '')]));
+                            if (Array.isArray(cfg.tab_names)) {
+                                (cfg.tabs || []).forEach((id, i) => { const nid = String(id||''); if (!names.has(nid)) names.set(nid, String(cfg.tab_names[i] || nid)); });
+                            }
+                            initTypes.forEach(id => {
+                                try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, name: names.get(id) || id } }); } catch(_) {}
+                            });
+                        } catch(_) {}
                     }
                 }
                 __saveOk = true;
@@ -4324,6 +4348,7 @@ Permissions:
                         if (!deleted) throw new Error('No section row deleted');
                         console.log('Section deleted via direct Supabase:', sectionId);
                     }
+                    try { if (window.hubDatabase && window.hubDatabaseReady) hubDatabase.saveActivity({ action: 'DELETE_SECTION', sectionId }); } catch(_) {}
                     
                     // Remove from local sectionOrder array
                     const idx = sectionOrder.findIndex(s => s.id === sectionId);
