@@ -951,7 +951,7 @@ class InformationHub {
             if (actionSel) {
                 const actions = Array.from(new Set((all||[]).map(a => a.action).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
                 const preserved = actionSel.value;
-                // Keep existing static options but try to select preserved value
+                actionSel.innerHTML = '<option value="">All Actions</option>' + actions.map(a => `<option value="${a}">${a}</option>`).join('');
                 if (preserved && actions.includes(preserved)) actionSel.value = preserved;
             }
             if (userSel) userSel.onchange = () => this.renderFilteredAudit(all);
