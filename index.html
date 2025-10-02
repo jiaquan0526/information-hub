@@ -1087,6 +1087,7 @@
                 // Persist to site settings so all clients pick it up
                 await hubDatabase.setSiteSetting('backgrounds', { forceEnabled: next });
                 // Locally reflect immediately
+                try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
                 if (next) {
                     try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
                 } else {
@@ -1108,6 +1109,7 @@
                 if (!(window.hubDatabase && window.hubDatabaseReady)) return;
                 const v = await hubDatabase.getSiteSetting('backgrounds');
                 const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                try { window.globalBackgroundsEnabled = force; } catch(_) {}
                 if (force) {
                     try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
                 } else {
@@ -1132,6 +1134,13 @@
         (async function(){
             try { await window.refreshGlobalBackgrounds(); } catch(_) {}
         })();
+
+        // When the database becomes ready later, re-check and apply backgrounds flag
+        try {
+            document.addEventListener('hubdb-ready', () => {
+                try { window.refreshGlobalBackgrounds(); } catch(_) {}
+            });
+        } catch(_) {}
 
         // Admin: Get current user from Supabase
         async function currentUser() {
