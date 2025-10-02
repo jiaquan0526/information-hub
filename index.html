@@ -151,16 +151,8 @@
     </script>
     
     <script>
-    // Default-disable heavy backgrounds for better performance; user can re-enable via toggle
-    try {
-        (function(){
-            // Default to disabled backgrounds for all users for better performance
-            var hasPref = localStorage.getItem('disableBackgrounds');
-            if (hasPref === null || hasPref === undefined) {
-                localStorage.setItem('disableBackgrounds','1');
-            }
-        })();
-    } catch (_) {}
+    // Backgrounds flag is managed via Supabase site_settings only
+    try { window.globalBackgroundsEnabled = false; } catch (_) {}
     
     </script>
 
@@ -1053,11 +1045,7 @@
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
             try {
-                const forced = localStorage.getItem('forceBackgrounds') === '1';
-                if (forced) return false;
-                const v = localStorage.getItem('disableBackgrounds');
-                if (v === null || v === undefined) return true; // default disabled
-                return String(v) === '1' || String(v).toLowerCase() === 'true';
+                return window.globalBackgroundsEnabled !== true;
             } catch (_) {
                 return true;
             }
@@ -1068,20 +1056,17 @@
             try {
                 const globalBtn = document.getElementById('toggleGlobalBackgroundsBtn');
                 if (globalBtn) {
-                    const forced = localStorage.getItem('forceBackgrounds') === '1';
-                    globalBtn.innerHTML = forced ? '<i class="fas fa-broadcast-tower"></i> Disable Global Backgrounds' : '<i class="fas fa-broadcast-tower"></i> Enable Backgrounds For Everyone';
+                    const enabled = window.globalBackgroundsEnabled === true;
+                    globalBtn.innerHTML = enabled ? '<i class="fas fa-broadcast-tower"></i> Disable Global Backgrounds' : '<i class="fas fa-broadcast-tower"></i> Enable Backgrounds For Everyone';
                 }
             } catch(_) {}
         }
 
         window.toggleBackgrounds = async function() {
             try {
-                const forced = localStorage.getItem('forceBackgrounds') === '1';
-                if (forced) { try { localStorage.removeItem('forceBackgrounds'); } catch(_) {} }
-                const wasOff = backgroundsDisabled();
-                try { localStorage.setItem('disableBackgrounds', wasOff ? '0' : '1'); } catch(_) {}
+                await window.refreshGlobalBackgrounds();
                 updateBackgroundToggleButton();
-                if (wasOff) { try { await ensureBackgroundImagesLoaded(); } catch (_) {} }
+                try { await ensureBackgroundImagesLoaded(); } catch (_) {}
                 try { await updateMainHubSections(); } catch (_) { try { updateMainHubSections(); } catch (_) {} }
             } catch (_) {}
         };
