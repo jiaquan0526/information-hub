@@ -228,21 +228,26 @@ class ExcelExporter {
     }
 
     exportUsers(users) {
-        const userData = (users || []).map(user => ({
+        const userData = (users || []).map(user => {
+            const role = String(user.role || '').toLowerCase();
+            const isAdmin = role === 'admin';
+            const perms = user.permissions || {};
+            return ({
             'ID': user.id,
             'Username': user.username,
             'Name': user.name || '',
             'Email': user.email || '',
-            'Role': user.role,
-            'Can Manage Users': user.permissions?.canManageUsers ? 'Yes' : 'No',
-            'Can Edit All Sections': user.permissions?.canEditAllSections ? 'Yes' : 'No',
-            'Can Delete Resources': user.permissions?.canDeleteResources ? 'Yes' : 'No',
-            'Can View Audit Log': user.permissions?.canViewAuditLog ? 'Yes' : 'No',
-            'Can Manage Roles': user.permissions?.canManageRoles ? 'Yes' : 'No',
-            'Accessible Sections': (user.permissions?.sections || []).join(', '),
-            'Editable Sections': (user.permissions?.editableSections || []).join(', '),
-            'Created At (CST)': user.createdAt ? this._formatDateChina(user.createdAt) : ''
-        }));
+                'Role': user.role,
+                'Can Manage Users': (isAdmin || perms.canManageUsers) ? 'Yes' : 'No',
+                'Can Edit All Sections': (isAdmin || perms.canEditAllSections) ? 'Yes' : 'No',
+                'Can Delete Resources': (isAdmin || perms.canDeleteResources) ? 'Yes' : 'No',
+                'Can View Audit Log': (isAdmin || perms.canViewAuditLog) ? 'Yes' : 'No',
+                'Can Manage Roles': (isAdmin || perms.canManageRoles) ? 'Yes' : 'No',
+                'Accessible Sections': (perms.sections || []).join(', '),
+                'Editable Sections': (perms.editableSections || []).join(', '),
+                'Created At (CST)': user.createdAt ? this._formatDateChina(user.createdAt) : ''
+            });
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(userData);
         XLSX.utils.book_append_sheet(this.workbook, worksheet, 'Users');
@@ -312,14 +317,16 @@ class ExcelExporter {
             if (sectionIds.length === 0 || users.length === 0) return;
             const rows = [];
             users.forEach(user => {
+                const role = String(user.role || '').toLowerCase();
+                const isAdmin = role === 'admin';
                 const perms = user.permissions || {};
-                const canEditAll = !!perms.canEditAllSections;
+                const canEditAll = isAdmin || !!perms.canEditAllSections;
                 const editable = new Set(perms.editableSections || []);
                 const viewable = new Set(perms.sections || []);
                 sectionIds.forEach(sectionId => {
-                    const canView = canEditAll || viewable.has(sectionId) ? 'Yes' : 'No';
-                    const canEdit = canEditAll || editable.has(sectionId) ? 'Yes' : 'No';
-                    const canDelete = perms.canDeleteResources ? 'Yes' : 'No';
+                    const canView = (canEditAll || viewable.has(sectionId) || (perms.canViewAllSections === true)) ? 'Yes' : 'No';
+                    const canEdit = (canEditAll || editable.has(sectionId)) ? 'Yes' : 'No';
+                    const canDelete = (isAdmin || perms.canDeleteResources) ? 'Yes' : 'No';
                     rows.push({
                         'User ID': user.id,
                         'Username': user.username,

@@ -1114,7 +1114,9 @@ class InformationHub {
                 canDeleteResources: false,
                 canViewAuditLog: false,
                 canManageRoles: false,
-                sections: ['costing', 'supply-planning']
+                canViewAllSections: true,
+                sections: ['*'],
+                editableSections: []
             }
         };
         return permissions[role] || permissions['viewer'];
