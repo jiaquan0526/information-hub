@@ -1864,6 +1864,80 @@ class SectionManager {
 				const cfgMerged = Object.assign({}, existingCfg, { types, categories, tabs, tab_names });
 				const ok = await this.saveSectionConfig(cfgMerged);
             if (!ok) { showAlert('Failed to save configuration', 'error'); return; }
+				// Record tab activities (create/update/delete) to activities table
+				try {
+					if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+						const prevIds = Array.isArray(existingCfg.tabs) ? existingCfg.tabs.map(s => String(s || '').trim()).filter(Boolean) : [];
+						const prevNamesArr = Array.isArray(existingCfg.tab_names) ? existingCfg.tab_names.map(s => String(s || '').trim()) : [];
+						const prevTypesArr = Array.isArray(existingCfg.types) ? existingCfg.types : [];
+						const prevNameById = new Map();
+						prevIds.forEach((id, idx) => {
+							let nm = prevNamesArr[idx];
+							if (!nm) {
+								const t = prevTypesArr.find(x => String(x?.id || '').trim() === id);
+								nm = (t && t.name) ? String(t.name).trim() : id;
+							}
+							prevNameById.set(id, (nm && String(nm).trim()) ? String(nm).trim() : id);
+						});
+
+						const nextIds = sortedIds.map(s => String(s || '').trim()).filter(Boolean);
+						const nextNameById = new Map();
+						nextIds.forEach(id => {
+							const row = rowById.get(id);
+							const nm = row && row.name ? String(row.name).trim() : id;
+							nextNameById.set(id, nm || id);
+						});
+
+						const prevSet = new Set(prevIds);
+						const nextSet = new Set(nextIds);
+						const ts = new Date().toISOString();
+						const uname = this.currentUser.username || this.currentUser.email || null;
+						const sid = this.currentSection;
+
+						// Creates
+						nextIds.forEach(id => {
+							if (!prevSet.has(id)) {
+								this._safeDbCall(hubDatabase.saveActivity({
+									action: 'CREATE_TAB',
+									section: sid,
+									timestamp: ts,
+									username: uname,
+									metadata: { tabId: id, name: nextNameById.get(id) || id }
+								}), 1200);
+							}
+						});
+
+						// Deletions
+						prevIds.forEach(id => {
+							if (!nextSet.has(id)) {
+								this._safeDbCall(hubDatabase.saveActivity({
+									action: 'DELETE_TAB',
+									section: sid,
+									timestamp: ts,
+									username: uname,
+									metadata: { tabId: id, name: prevNameById.get(id) || id }
+								}), 1200);
+							}
+						});
+
+						// Renames (ids unchanged, name changed)
+						nextIds.forEach(id => {
+							if (prevSet.has(id)) {
+								const oldName = prevNameById.get(id) || id;
+								const newName = nextNameById.get(id) || id;
+								if (String(oldName).trim() !== String(newName).trim()) {
+									this._safeDbCall(hubDatabase.saveActivity({
+										action: 'UPDATE_TAB',
+										section: sid,
+										timestamp: ts,
+										username: uname,
+										metadata: { tabId: id, oldName, newName }
+									}), 1200);
+								}
+							}
+						});
+					}
+				} catch (_) { /* best-effort logging; ignore */ }
             // Seed example resources for any types that have none yet in Supabase
             try { await this._seedExampleResourcesIfMissing(types); } catch (_) {}
             this.renderDynamicUI();
