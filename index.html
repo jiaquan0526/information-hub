@@ -2952,21 +2952,16 @@ Permissions:
         };
         
         window.loadAuditLog = function() {
-            const activities = JSON.parse(null || '[]');
-            const auditLog = document.getElementById('auditLog');
-            
-            if (!auditLog) return;
-            
-            auditLog.innerHTML = activities.map(activity => `
-                <div class="audit-entry">
-                    <div class="audit-info">
-                        <div class="audit-user">${activity.username}</div>
-                        <div class="audit-action">${activity.action}</div>
-                        <div class="audit-description">${activity.description}</div>
-                    </div>
-                    <div class="audit-time">${new Date(activity.timestamp).toLocaleString()}</div>
-                </div>
-            `).join('');
+            try {
+                if (window.informationHub && typeof window.informationHub.loadAuditLog === 'function') {
+                    return window.informationHub.loadAuditLog();
+                }
+                // Fallback: initialize and retry once
+                if (typeof initInformationHubOnce === 'function') {
+                    initInformationHubOnce();
+                    setTimeout(() => { try { if (window.informationHub) window.informationHub.loadAuditLog(); } catch(_) {} }, 300);
+                }
+            } catch (_) {}
         };
         
         window.editUser = async function(userId) {
