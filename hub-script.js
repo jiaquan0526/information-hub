@@ -1643,6 +1643,219 @@ window.exportAuditLog = async () => {
     }
 };
 
+// Inline Excel Import (admin panel)
+window.downloadExcelTemplateForImport = async () => {
+    try {
+        // Ensure XLSX
+        try {
+            if (window.excelExporter && typeof window.excelExporter.ensureXlsxLoaded === 'function') {
+                await window.excelExporter.ensureXlsxLoaded();
+            } else if (typeof XLSX === 'undefined') {
+                const sources = [
+                    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+                    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+                    'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+                ];
+                let loaded = false;
+                for (const src of sources) {
+                    try {
+                        await new Promise((resolve, reject) => {
+                            const timer = setTimeout(() => reject(new Error('timeout')), 6000);
+                            const script = document.createElement('script');
+                            script.src = src; script.async = true;
+                            script.onload = () => { clearTimeout(timer); resolve(); };
+                            script.onerror = () => { clearTimeout(timer); reject(new Error('failed')); };
+                            document.head.appendChild(script);
+                        });
+                        if (typeof XLSX !== 'undefined') { loaded = true; break; }
+                    } catch (_) {}
+                }
+                if (!loaded) throw new Error('Failed to load XLSX library');
+            }
+        } catch (e) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Failed to load Excel library', 'error');
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        const sectionsRows = [
+            { 'Section ID': 'example', 'Name': 'Example', 'Icon': 'fas fa-table-cells-large', 'Color': '#007bff', 'Intro': 'Intro text (optional)', 'Visible': 'Yes', 'Order': 1 }
+        ];
+        const wsSections = XLSX.utils.json_to_sheet(sectionsRows);
+        XLSX.utils.book_append_sheet(wb, wsSections, 'Sections');
+        const tabsRows = [
+            { 'Section ID': 'example', 'Tab ID': 'playbooks', 'Tab Name': 'Playbooks', 'Icon': 'fas fa-book', 'Index': 1 },
+            { 'Section ID': 'example', 'Tab ID': 'box-links', 'Tab Name': 'Box Links', 'Icon': 'fas fa-link', 'Index': 2 },
+            { 'Section ID': 'example', 'Tab ID': 'dashboards', 'Tab Name': 'Dashboards', 'Icon': 'fas fa-chart-bar', 'Index': 3 }
+        ];
+        const wsTabs = XLSX.utils.json_to_sheet(tabsRows);
+        XLSX.utils.book_append_sheet(wb, wsTabs, 'Tabs');
+        const resourcesRows = [
+            { 'Section ID': 'example', 'Type (tab id)': 'playbooks', 'Title': 'Getting Started', 'Description': 'How to begin', 'URL': 'https://example.com', 'Category': 'guide', 'Tags (comma)': 'onboarding, setup' }
+        ];
+        const wsRes = XLSX.utils.json_to_sheet(resourcesRows);
+        XLSX.utils.book_append_sheet(wb, wsRes, 'Resources');
+        const notes = [
+            { 'Note': 'Fill out the sheets with your data. Section IDs must be unique.' },
+            { 'Note': 'Tabs: Tab ID is the canonical type id (e.g., playbooks, box-links).' },
+            { 'Note': 'Resources: Type must match a Tab ID for its Section.' }
+        ];
+        const wsNotes = XLSX.utils.json_to_sheet(notes);
+        XLSX.utils.book_append_sheet(wb, wsNotes, 'Readme');
+        XLSX.writeFile(wb, 'Information_Hub_Import_Template.xlsx');
+    } catch (error) {
+        informationHub && informationHub.showMessage && informationHub.showMessage(`Template download failed: ${error.message}`, 'error');
+    }
+};
+
+function __parseWorkbookToPayload(wb) {
+    const pick = (name) => wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name]) : [];
+    const sections = pick('Sections');
+    const tabs = pick('Tabs');
+    const resources = pick('Resources');
+    // Normalize
+    const normSections = (sections || []).map(r => ({
+        id: String(r['Section ID'] || r.SectionId || r.sectionId || r.id || '').trim(),
+        name: String(r['Name'] || r.name || '').trim(),
+        icon: String(r['Icon'] || r.icon || '').trim(),
+        color: String(r['Color'] || r.color || '').trim(),
+        intro: String(r['Intro'] || r.intro || '').trim(),
+        visible: /^(yes|true|1)$/i.test(String(r['Visible'] || r.visible || 'yes')),
+        order: parseInt(r['Order'] || r.order || 0, 10) || 0
+    })).filter(s => s.id);
+    const normTabs = (tabs || []).map(r => ({
+        sectionId: String(r['Section ID'] || r.sectionId || '').trim(),
+        id: String(r['Tab ID'] || r.id || '').trim(),
+        name: String(r['Tab Name'] || r.name || '').trim(),
+        icon: String(r['Icon'] || r.icon || '').trim(),
+        index: parseInt(r['Index'] || r.index || 0, 10) || 0
+    })).filter(t => t.sectionId && t.id);
+    const normResources = (resources || []).map(r => ({
+        sectionId: String(r['Section ID'] || r.sectionId || '').trim(),
+        type: String(r['Type (tab id)'] || r['Type'] || r.type || '').trim(),
+        title: String(r['Title'] || r.title || '').trim(),
+        description: String(r['Description'] || r.description || '').trim(),
+        url: String(r['URL'] || r.url || '').trim(),
+        category: String(r['Category'] || r.category || '').trim(),
+        tags: String(r['Tags (comma)'] || r.tags || '').split(',').map(s => s.trim()).filter(Boolean)
+    })).filter(r => r.sectionId && r.type && r.title && r.url);
+    return { sections: normSections, tabs: normTabs, resources: normResources };
+}
+
+async function __upsertExcelPayload(payload) {
+    if (!window.supabaseClient) throw new Error('Supabase not ready');
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+    if (!user) throw new Error('Not authenticated. Open auth.html, sign in, then retry.');
+    // Sections
+    const bySectionId = new Map();
+    for (const s of (payload.sections || [])) {
+        const config = { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 };
+        try {
+            if (window.hubDatabase && typeof hubDatabase.createSection === 'function') {
+                await hubDatabase.createSection({ sectionId: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config, data: {} });
+            } else {
+                const { error } = await window.supabaseClient.from('sections').upsert({ section_id: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config }, { onConflict: 'section_id' });
+                if (error) throw error;
+            }
+            bySectionId.set(s.id, { tabs: [] });
+        } catch (e) { console.error('Section upsert failed', s.id, e); }
+    }
+    // Tabs merge into sections.config
+    const tabsBySection = new Map();
+    (payload.tabs || []).forEach(t => { const list = tabsBySection.get(t.sectionId) || []; list.push(t); tabsBySection.set(t.sectionId, list); });
+    for (const [sectionId, list] of tabsBySection.entries()) {
+        try {
+            let existingCfg = {};
+            try {
+                const { data, error } = await window.supabaseClient.from('sections').select('config').eq('section_id', sectionId).single();
+                if (!error && data && data.config) existingCfg = (typeof data.config === 'string') ? JSON.parse(data.config) : data.config;
+            } catch(_) {}
+            const sorted = list.slice().sort((a,b) => a.index - b.index);
+            const types = sorted.map(t => ({ id: t.id, name: t.name || t.id, icon: t.icon || '', key: `${sectionId}:${t.id}` }));
+            const tabs = sorted.map(t => t.id);
+            const tab_names = sorted.map(t => t.name || t.id);
+            const merged = Object.assign({}, existingCfg, { types, tabs, tab_names });
+            await window.supabaseClient.from('sections').update({ config: merged }).eq('section_id', sectionId);
+        } catch (e) { console.error('Tabs update failed', sectionId, e); }
+    }
+    // Resources
+    for (const r of (payload.resources || [])) {
+        try {
+            const payloadRow = { section_id: r.sectionId, type: String(r.type).toLowerCase(), title: r.title, description: r.description || '', url: r.url, tags: r.tags || [], extra: { category: r.category || '' } };
+            const { error } = await window.supabaseClient.from('resources').insert(payloadRow).select().single();
+            if (error) throw error;
+        } catch (e) { console.error('Resource insert failed', r.title, e); }
+    }
+}
+
+window.loadExcelPreviewFromPanel = async () => {
+    try {
+        const input = document.getElementById('importXlsxInput');
+        const file = input && input.files && input.files[0];
+        if (!file) { informationHub && informationHub.showMessage && informationHub.showMessage('Choose an Excel file first', 'error'); return; }
+        // Ensure XLSX
+        try {
+            if (window.excelExporter && typeof window.excelExporter.ensureXlsxLoaded === 'function') {
+                await window.excelExporter.ensureXlsxLoaded();
+            } else if (typeof XLSX === 'undefined') {
+                const sources = [
+                    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+                    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+                    'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+                ];
+                let loaded = false;
+                for (const src of sources) {
+                    try {
+                        await new Promise((resolve, reject) => {
+                            const timer = setTimeout(() => reject(new Error('timeout')), 6000);
+                            const script = document.createElement('script');
+                            script.src = src; script.async = true;
+                            script.onload = () => { clearTimeout(timer); resolve(); };
+                            script.onerror = () => { clearTimeout(timer); reject(new Error('failed')); };
+                            document.head.appendChild(script);
+                        });
+                        if (typeof XLSX !== 'undefined') { loaded = true; break; }
+                    } catch (_) {}
+                }
+                if (!loaded) throw new Error('Failed to load XLSX library');
+            }
+        } catch (e) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Failed to load Excel library', 'error');
+            return;
+        }
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const payload = __parseWorkbookToPayload(wb);
+        window.__excelPanelPayload = payload;
+        const sc = payload.sections.length, tc = payload.tabs.length, rc = payload.resources.length;
+        try { document.getElementById('excelSecCount').textContent = sc; } catch(_) {}
+        try { document.getElementById('excelTabCount').textContent = tc; } catch(_) {}
+        try { document.getElementById('excelResCount').textContent = rc; } catch(_) {}
+        try { const counts = document.getElementById('excelCounts'); if (counts) counts.style.display = 'grid'; } catch(_) {}
+        try { const sum = document.getElementById('excelImportSummary'); if (sum) { sum.textContent = `Loaded Excel with ${sc} sections, ${tc} tabs, ${rc} resources.`; sum.style.display = 'block'; } } catch(_) {}
+        try { const btn = document.getElementById('excelImportBtn'); if (btn) btn.disabled = (sc + tc + rc) === 0; } catch(_) {}
+        informationHub && informationHub.showMessage && informationHub.showMessage('Excel loaded. Review counts, then Import.', 'success');
+    } catch (error) {
+        informationHub && informationHub.showMessage && informationHub.showMessage('Invalid Excel file', 'error');
+    }
+};
+
+window.importExcelPayloadFromPanel = async () => {
+    try {
+        const payload = window.__excelPanelPayload || { sections: [], tabs: [], resources: [] };
+        if ((!payload.sections.length) && (!payload.tabs.length) && (!payload.resources.length)) { informationHub && informationHub.showMessage && informationHub.showMessage('Nothing to import', 'error'); return; }
+        const btn = document.getElementById('excelImportBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Importing...'; }
+        await __upsertExcelPayload(payload);
+        informationHub && informationHub.showMessage && informationHub.showMessage('Import completed', 'success');
+        try { if (btn) { btn.disabled = false; btn.textContent = 'Import All'; } } catch(_) {}
+        try { updateMainHubSections && updateMainHubSections(); } catch(_) {}
+    } catch (e) {
+        try { const btn = document.getElementById('excelImportBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Import All'; } } catch(_) {}
+        informationHub && informationHub.showMessage && informationHub.showMessage(`Import failed: ${e.message || e}`, 'error');
+    }
+};
+
 // JSON Backup/Restore (raw)
 window.backupJson = async () => {
     try {
