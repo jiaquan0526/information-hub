@@ -4134,9 +4134,60 @@ Permissions:
                     return;
                 }
                 if (isEdit) {
+                    // Fetch previous config for tab/type diff
+                    let __prevCfg = null;
+                    try {
+                        if (window.supabaseClient) {
+                            const { data: prevRow } = await window.supabaseClient
+                                .from('sections')
+                                .select('config')
+                                .eq('section_id', target.id)
+                                .single();
+                            __prevCfg = prevRow && prevRow.config ? prevRow.config : null;
+                        }
+                    } catch(_) {}
                     try {
                         await hubDatabase.updateSection(target);
                         console.log('Section updated in Supabase:', target);
+                        // Diff tabs/types and log changes
+                        try {
+                            const prev = (__prevCfg && typeof __prevCfg === 'object') ? __prevCfg : {};
+                            const next = target && target.config && typeof target.config === 'object' ? target.config : {};
+                            const prevTypes = Array.isArray(prev.types) ? prev.types.map(t => (t && t.id !== undefined ? String(t.id) : String(t))).filter(Boolean) : (Array.isArray(prev.tabs) ? prev.tabs.map(x => String(x)).filter(Boolean) : []);
+                            const prevNames = new Map((Array.isArray(prev.types) ? prev.types : []).map(t => [String(t && t.id !== undefined ? t.id : t), String((t && t.name) || (t && t.id) || t || '')]));
+                            if (Array.isArray(prev.tab_names)) {
+                                (prev.tabs || []).forEach((id, i) => { const pid = String(id||''); if (!prevNames.has(pid)) prevNames.set(pid, String(prev.tab_names[i] || pid)); });
+                            }
+                            const nextTypes = Array.isArray(next.types) ? next.types.map(t => (t && t.id !== undefined ? String(t.id) : String(t))).filter(Boolean) : (Array.isArray(next.tabs) ? next.tabs.map(x => String(x)).filter(Boolean) : []);
+                            const nextNames = new Map((Array.isArray(next.types) ? next.types : []).map(t => [String(t && t.id !== undefined ? t.id : t), String((t && t.name) || (t && t.id) || t || '')]));
+                            if (Array.isArray(next.tab_names)) {
+                                (next.tabs || []).forEach((id, i) => { const nid = String(id||''); if (!nextNames.has(nid)) nextNames.set(nid, String(next.tab_names[i] || nid)); });
+                            }
+                            const prevSet = new Set(prevTypes);
+                            const nextSet = new Set(nextTypes);
+                            // Created tabs
+                            nextTypes.forEach(id => {
+                                if (!prevSet.has(id)) {
+                                    try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, name: nextNames.get(id) || id } }); } catch(_) {}
+                                }
+                            });
+                            // Deleted tabs
+                            prevTypes.forEach(id => {
+                                if (!nextSet.has(id)) {
+                                    try { hubDatabase.saveActivity({ action: 'DELETE_TAB', sectionId: target.id, metadata: { tabId: id, name: prevNames.get(id) || id } }); } catch(_) {}
+                                }
+                            });
+                            // Renamed tabs (id exists in both but name changed)
+                            nextTypes.forEach(id => {
+                                if (prevSet.has(id)) {
+                                    const oldName = prevNames.get(id) || id;
+                                    const newName = nextNames.get(id) || id;
+                                    if (String(oldName) !== String(newName)) {
+                                        try { hubDatabase.saveActivity({ action: 'UPDATE_TAB', sectionId: target.id, metadata: { tabId: id, oldName, newName } }); } catch(_) {}
+                                    }
+                                }
+                            });
+                        } catch(_) {}
                     } catch (wrapperErr) {
                         console.warn('Wrapper update failed, attempting direct Supabase update', wrapperErr);
                         if (!window.supabaseClient) throw wrapperErr;
@@ -4164,6 +4215,7 @@ Permissions:
                     try {
                         await hubDatabase.createSection(target);
                         console.log('Section created in Supabase:', target);
+                        try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { name: target.name || target.id } }); } catch(_) {}
                     } catch (wrapperErr) {
                         console.warn('Wrapper create failed, attempting direct Supabase upsert', wrapperErr);
                         if (!window.supabaseClient) throw wrapperErr;
@@ -4182,6 +4234,7 @@ Permissions:
                             .single();
                         if (upErr) throw upErr;
                         console.log('Section created via direct Supabase:', up);
+                        try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { name: target.name || target.id } }); } catch(_) {}
                     }
                 }
                 __saveOk = true;
