@@ -6383,6 +6383,8 @@ Permissions:
                     if (window.hubDatabase && window.hubDatabase.supabase) {
                         window.hubDatabaseReady = true;
                         console.log('Database initialized');
+                        try { document.dispatchEvent(new Event('hubdb-ready')); } catch(_) {}
+                        try { updateBackgroundToggleButton(); } catch(_) {}
                     } else {
                         setTimeout(initDatabase, 100);
                     }
