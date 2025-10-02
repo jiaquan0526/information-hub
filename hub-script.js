@@ -938,6 +938,26 @@ class InformationHub {
         } catch (_) {}
 
         const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
+        // Populate filters
+        try {
+            const userSel = document.getElementById('auditUserFilter');
+            const actionSel = document.getElementById('auditActionFilter');
+            if (userSel) {
+                const users = Array.from(new Set((all||[]).map(a => a.username).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
+                const current = userSel.value;
+                userSel.innerHTML = '<option value="">All Users</option>' + users.map(u => `<option value="${u}">${u}</option>`).join('');
+                if (current && users.includes(current)) userSel.value = current;
+            }
+            if (actionSel) {
+                const actions = Array.from(new Set((all||[]).map(a => a.action).filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b)));
+                const preserved = actionSel.value;
+                // Keep existing static options but try to select preserved value
+                if (preserved && actions.includes(preserved)) actionSel.value = preserved;
+            }
+            if (userSel) userSel.onchange = () => this.renderFilteredAudit(all);
+            if (actionSel) actionSel.onchange = () => this.renderFilteredAudit(all);
+        } catch (_) {}
+
         const html = (all || []).map(a => {
             const who = esc(a.username || 'Unknown');
             const act = esc(a.action || 'EVENT');
@@ -998,6 +1018,36 @@ class InformationHub {
                     }
                 };
             }
+        } catch (_) {}
+    }
+
+    renderFilteredAudit(rows) {
+        try {
+            const auditLog = document.getElementById('auditLog');
+            const userSel = document.getElementById('auditUserFilter');
+            const actionSel = document.getElementById('auditActionFilter');
+            if (!auditLog) return;
+            const u = (userSel && userSel.value) ? String(userSel.value) : '';
+            const act = (actionSel && actionSel.value) ? String(actionSel.value) : '';
+            const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
+            const filtered = (rows || []).filter(r => (!u || String(r.username||'') === u) && (!act || String(r.action||'') === act));
+            if (filtered.length === 0) { auditLog.innerHTML = '<div style="padding:10px;color:#666;">No entries match the selected filters.</div>'; return; }
+            const html = filtered.map(a => {
+                const who = esc(a.username || 'Unknown');
+                const action = esc(a.action || 'EVENT');
+                const desc = esc(a.description || a.title || '');
+                const when = (() => { try { const t = a.timestamp || a.created_at; return formatUserTZ(t); } catch(_) { return ''; } })();
+                const section = esc(a.section || a.section_id || '');
+                return `<div class="audit-entry">
+                    <div class="audit-info">
+                        <div class="audit-user">${who}</div>
+                        <div class="audit-action">${action}${section ? ` · ${section}` : ''}</div>
+                        <div class="audit-description">${desc}</div>
+                    </div>
+                    <div class="audit-time">${esc(when)}</div>
+                </div>`;
+            }).join('');
+            auditLog.innerHTML = html;
         } catch (_) {}
     }
 
