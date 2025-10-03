@@ -1159,6 +1159,11 @@
                 const v = await hubDatabase.getSiteSetting('backgrounds');
                 const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 try { window.globalBackgroundsEnabled = force; } catch(_) {}
+                // Persist a global seed used to compute consistent backgrounds across clients
+                try {
+                    const seed = (v && (v.shuffleAt || v.shuffle_at || v.seed)) ? String(v.shuffleAt || v.shuffle_at || v.seed) : 'seed0';
+                    localStorage.setItem('globalShuffleAt', seed);
+                } catch(_) {}
                 if (force) {
                     try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
                 } else {
@@ -4635,7 +4640,7 @@ Permissions:
                 try {
                     const local = JSON.parse(localStorage.getItem('bgLocalManifest') || '{}');
                     if (local && Array.isArray(local.files) && local.files.length > 0) {
-                        BACKGROUND_IMAGES = local.files.slice();
+                        BACKGROUND_IMAGES = local.files.slice().sort();
                         return;
                     }
                 } catch (_) {}
@@ -4645,7 +4650,7 @@ Permissions:
                     if (resp && resp.ok) {
                         const data = await resp.json();
                         if (Array.isArray(data) && data.length > 0) {
-                            BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`);
+                            BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`).sort();
                             return;
                         }
                     }
@@ -4655,7 +4660,7 @@ Permissions:
                     'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
                     'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
                     'background-pic/537082_K.png','background-pic/560846_L.png'
-                ];
+                ].sort();
             } catch (_) { /* keep defaults */ }
         }
         // Optimize background images client-side and cache results
@@ -4751,23 +4756,12 @@ Permissions:
 
         function getBackgroundImageForSection(sectionId) {
             try {
-                const key = 'sectionBackgrounds';
-                const raw = localStorage.getItem(key);
-                let map = raw ? JSON.parse(raw) : {};
-                const current = map[sectionId];
-                // If current mapping points to a file no longer present, remap
-                if (current && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.indexOf(current) === -1) {
-                    delete map[sectionId];
-                }
-                if (map[sectionId]) return map[sectionId];
-                // Choose an unused image first
-                const used = new Set(Object.values(map));
-                const pool = BACKGROUND_IMAGES.filter(p => !used.has(p));
-                const list = pool.length > 0 ? pool : BACKGROUND_IMAGES;
-                const choice = list[Math.floor(Math.random() * list.length)];
-                map[sectionId] = choice;
-                localStorage.setItem(key, JSON.stringify(map));
-                return choice;
+                if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) return null;
+                // Use global seed + section to derive a stable index across all clients
+                const seed = String(localStorage.getItem('globalShuffleAt') || 'seed0');
+                const h = hashCode(`${seed}|${sectionId}`);
+                const idx = Math.abs(h) % BACKGROUND_IMAGES.length;
+                return BACKGROUND_IMAGES[idx];
             } catch (_) {
                 // Fallback to a deterministic choice
                 const idx = Math.abs(hashCode(String(sectionId))) % BACKGROUND_IMAGES.length;
