@@ -4876,8 +4876,15 @@ Permissions:
                 if (!src || typeof src !== 'string') return src;
                 if (/^data:/i.test(src)) return src;
                 if (/wsrv\.nl\//i.test(src)) return src; // already proxied
+                // Skip proxy in local/dev or non-http contexts (e.g., file://, localhost)
+                try {
+                    const pageProto = String(location.protocol || '').toLowerCase();
+                    const pageHost = String(location.hostname || '').toLowerCase();
+                    if (pageProto === 'file:' || pageHost === 'localhost' || pageHost === '127.0.0.1') return src;
+                } catch(_) {}
                 // Convert to absolute URL for proxying
                 const abs = (function(p){ try { return new URL(p, document.baseURI).href; } catch(_) { return p; } })(src);
+                if (!/^https?:\/\//i.test(abs)) return src; // only proxy http(s)
                 const w = Math.max(1, Math.floor(Number(width) || 1400));
                 const h = Math.max(0, Math.floor(Number(height) || 0));
                 const q = Math.min(100, Math.max(10, Math.round((Number(quality) || 0.74) * 100)));
@@ -4931,10 +4938,19 @@ Permissions:
                     if (chosen) img = chosen;
                 }
                 if (!img) return;
-                // Resize/convert via online proxy before applying
+                // Resize/convert via online proxy before applying (with fallback)
                 try {
-                    const optimized = await getOptimizedImageUrl(img, 1200, 0, 0.8);
-                    if (optimized) img = optimized;
+                    const cand = await getOptimizedImageUrl(img, 1200, 0, 0.8);
+                    if (cand && cand !== img) {
+                        await new Promise((resolve) => {
+                            try {
+                                const t = new Image();
+                                t.onload = () => resolve(true);
+                                t.onerror = () => resolve(false);
+                                t.src = cand;
+                            } catch(_) { resolve(false); }
+                        }).then((ok)=>{ if (ok) img = cand; });
+                    }
                 } catch (_) {}
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';

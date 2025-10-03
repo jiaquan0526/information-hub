@@ -423,9 +423,19 @@ class SectionManager {
                         let finalUrl = chosen;
                         try {
                             if (typeof window.getOptimizedImageUrl === 'function') {
-                                // Resize/convert via online proxy before applying
-                                const opt = await window.getOptimizedImageUrl(chosen, 1600, 0, 0.8);
-                                if (opt) finalUrl = opt;
+                                // Resize/convert via online proxy before applying (with fallback)
+                                const cand = await window.getOptimizedImageUrl(chosen, 1600, 0, 0.8);
+                                if (cand && cand !== chosen) {
+                                    const ok = await new Promise((resolve)=>{
+                                        try {
+                                            const t = new Image();
+                                            t.onload = () => resolve(true);
+                                            t.onerror = () => resolve(false);
+                                            t.src = cand;
+                                        } catch(_) { resolve(false); }
+                                    });
+                                    if (ok) finalUrl = cand;
+                                }
                             }
                         } catch (_) {}
                         container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${finalUrl}')`;
