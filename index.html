@@ -4807,6 +4807,22 @@ Permissions:
         // Session-only seed and map for background assignment (not persisted)
         let BG_SESSION_SEED = String(Date.now()) + ':' + Math.random();
         let SECTION_BG_MAP = {};
+        let SECTION_BG_READY = false;
+
+        // Load persistent section->image mapping from database (consistent across users)
+        async function loadSectionBackgroundsFromDb() {
+            try {
+                if (!(window.supabaseClient && window.supabaseClient.from)) return;
+                const { data, error } = await window.supabaseClient
+                    .from('section_backgrounds')
+                    .select('section_id, image_url');
+                if (error) return;
+                const map = {};
+                (Array.isArray(data) ? data : []).forEach(r => { if (r && r.section_id && r.image_url) map[r.section_id] = r.image_url; });
+                SECTION_BG_MAP = map;
+                SECTION_BG_READY = true;
+            } catch(_) {}
+        }
         async function ensureBackgroundImagesLoaded() {
             try {
                 if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
@@ -4974,10 +4990,14 @@ Permissions:
                         if (mapped) img = mapped;
                     } catch(_) {}
                 }
-                // Fallback to deterministic chooser
+                // Fallback only if DB map is not yet ready; otherwise, leave blank until ready
                 if (!img) {
-                    const chosen = await resolveValidBackground(sectionCfg.id);
-                    if (chosen) img = chosen;
+                    if (!SECTION_BG_READY) {
+                        const chosen = await resolveValidBackground(sectionCfg.id);
+                        if (chosen) img = chosen;
+                    } else {
+                        return;
+                    }
                 }
                 if (!img) return;
                 // Resize/convert via online proxy before applying (with fallback)
