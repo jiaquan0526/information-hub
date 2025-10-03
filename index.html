@@ -1103,8 +1103,6 @@
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
             try {
-                // Honor local force flag (set by reshuffle) as well as global flag
-                if (typeof localStorage !== 'undefined' && localStorage.getItem('forceBackgrounds') === '1') return false;
                 return window.globalBackgroundsEnabled !== true;
             } catch (_) {
                 return true;
@@ -1141,18 +1139,14 @@
                 const canManage = !!(me && me.permissions && me.permissions.canManageUsers);
                 if (!(role === 'admin' || canManage)) { alert('Admin only'); return; }
 
-                // Flip the global flag: if currently forced, turn off; else turn on
-                const on = localStorage.getItem('forceBackgrounds') === '1';
+                // Read current server setting and flip
+                const current = await hubDatabase.getSiteSetting('backgrounds');
+                const on = !!(current && (current.forceEnabled === true || String(current.forceEnabled).toLowerCase() === 'true'));
                 const next = !on;
                 // Persist to site settings so all clients pick it up
-                await hubDatabase.setSiteSetting('backgrounds', { forceEnabled: next });
+                await hubDatabase.setSiteSetting('backgrounds', Object.assign({}, current || {}, { forceEnabled: next }));
                 // Locally reflect immediately
                 try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
-                if (next) {
-                    try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
-                } else {
-                    try { localStorage.removeItem('forceBackgrounds'); } catch(_) {}
-                }
                 updateBackgroundToggleButton();
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                 try { await updateMainHubSections(); } catch(_) {}
@@ -1175,11 +1169,7 @@
                     const seed = (v && (v.shuffleAt || v.shuffle_at || v.seed)) ? String(v.shuffleAt || v.shuffle_at || v.seed) : 'seed0';
                     localStorage.setItem('globalShuffleAt', seed);
                 } catch(_) {}
-                if (force) {
-                    try { localStorage.setItem('forceBackgrounds','1'); localStorage.setItem('disableBackgrounds','0'); } catch(_) {}
-                } else {
-                    try { localStorage.removeItem('forceBackgrounds'); } catch(_) {}
-                }
+                // No local force flags; rely purely on Supabase site_settings
                 // If a global reshuffle marker exists and changed, clear local mappings so everyone re-picks
                 try {
                     const globalMark = v && (v.shuffleAt || v.shuffle_at || v.seed);
@@ -4887,8 +4877,6 @@ Permissions:
                 // Regenerate the local manifest and thumbnails and then reshuffle mappings
                 await regenerateBackgroundManifestAndThumbnails();
                 localStorage.removeItem('sectionBackgrounds');
-                // Force-enable backgrounds for this and subsequent loads until cleared
-                try { localStorage.setItem('forceBackgrounds', '1'); } catch(_) {}
                 await ensureBackgroundImagesLoaded();
                 updateMainHubSections();
                 // Also set a global reshuffle marker so all clients re-pick
