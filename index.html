@@ -1875,8 +1875,6 @@
                     const showAdminOnly = isAdmin ? '' : 'none';
                     if (usersNavTab) usersNavTab.style.display = showAdminOnly;
                     if (usersContent) usersContent.style.display = showAdminOnly;
-                    if (permissionsNavTab) permissionsNavTab.style.display = showAdminOnly;
-                    if (permissionsContent) permissionsContent.style.display = showAdminOnly;
                     if (auditNavTab) auditNavTab.style.display = showAdminOnly;
                     if (auditContent) auditContent.style.display = showAdminOnly;
                     if (assignmentsNavTab) assignmentsNavTab.style.display = showAdminOnly;
@@ -1888,21 +1886,35 @@
                     if (diagNavTab) diagNavTab.style.display = showAdminOnly;
                     if (diagContent) diagContent.style.display = showAdminOnly;
 
-                    // Sections tab for admins and editors/managers
-                    const showSections = (isAdmin || isEditor) ? '' : 'none';
-                    if (manageSectionsNavTab) manageSectionsNavTab.style.display = showSections;
-                    if (manageSectionsContent) manageSectionsContent.style.display = showSections;
+                    // Permissions tab for admins and editors
+                    const showPerms = (isAdmin || isEditor) ? '' : 'none';
+                    if (permissionsNavTab) permissionsNavTab.style.display = showPerms;
+                    if (permissionsContent) permissionsContent.style.display = showPerms;
 
-                    // If not admin, ensure Sections becomes the active view
+                    // Manage Sections/Assignments visible for admins only
                     if (!isAdmin) {
-                        try { if (typeof switchAdminTab === 'function') switchAdminTab('sections'); } catch(_) {}
-                        if (usersContent && usersContent.classList.contains('active')) usersContent.classList.remove('active');
-                        if (manageSectionsContent) manageSectionsContent.classList.add('active');
+                        if (manageSectionsNavTab) manageSectionsNavTab.style.display = 'none';
+                        if (manageSectionsContent) manageSectionsContent.style.display = 'none';
+                        if (assignmentsNavTab) assignmentsNavTab.style.display = 'none';
+                        if (assignmentsContent) assignmentsContent.style.display = 'none';
+                    } else {
+                        if (manageSectionsNavTab) manageSectionsNavTab.style.display = '';
+                        if (manageSectionsContent) manageSectionsContent.style.display = '';
+                        if (assignmentsNavTab) assignmentsNavTab.style.display = '';
+                        if (assignmentsContent) assignmentsContent.style.display = '';
                     }
 
-                    // Preload sections list when allowed
-                    if ((isAdmin || isEditor) && typeof loadSectionsList === 'function') {
-                        try { loadSectionsList(); } catch (_) {}
+                    // Default active tab
+                    if (isAdmin) {
+                        try { if (typeof switchAdminTab === 'function') switchAdminTab('users'); } catch(_) {}
+                        if (permissionsContent) permissionsContent.classList.remove('active');
+                        if (usersContent) usersContent.classList.add('active');
+                        try { if (typeof loadUsersList === 'function') loadUsersList(); } catch(_) {}
+                    } else if (isEditor) {
+                        try { if (typeof switchAdminTab === 'function') switchAdminTab('permissions'); } catch(_) {}
+                        if (usersContent) usersContent.classList.remove('active');
+                        if (permissionsContent) permissionsContent.classList.add('active');
+                        try { if (typeof loadPermissionUserList === 'function') loadPermissionUserList(); } catch(_) {}
                     }
                 } catch (e) { console.error('role-based tab visibility error', e); } }, 0);
                 
@@ -2442,21 +2454,29 @@ Permissions:
         
         // Role hierarchy management functions
         window.canManageUser = function(currentUser, targetUser) {
-            // Admin can manage everyone
-            if (currentUser.role === 'admin') {
-                return true;
-            }
-            
-            // Users can't manage anyone
-            if (currentUser.role === 'user') {
-                return false;
-            }
-            
-            // Editors cannot manage roles; only admins manage users
-            if (currentUser.role === 'editor') {
-                return false;
-            }
-            
+            try {
+                const myRole = String(currentUser?.role || '').toLowerCase();
+                const targetId = String(targetUser?.id || '');
+                if (!myRole) return false;
+                // Admin can manage everyone
+                if (myRole === 'admin') return true;
+                // Can always manage self
+                if (currentUser && targetId && String(currentUser.id||'') === targetId) return true;
+                // Viewers (or unknown) cannot manage anyone
+                if (myRole === 'viewer' || myRole === 'user') return false;
+                // Editors: only manage users who share at least one section with the editor's editableSections
+                if (myRole === 'editor') {
+                    const myEditable = Array.isArray(currentUser?.permissions?.editableSections) ? currentUser.permissions.editableSections : [];
+                    if (!myEditable || myEditable.length === 0) return false;
+                    const targetSections = Array.isArray(targetUser?.permissions?.sections) ? targetUser.permissions.sections : [];
+                    if (targetSections.includes('*')) return true; // target sees all; overlap implied
+                    const mySet = new Set(myEditable);
+                    for (const s of targetSections) {
+                        if (mySet.has(s)) return true;
+                    }
+                    return false;
+                }
+            } catch (_) {}
             return false;
         };
         
@@ -3727,7 +3747,7 @@ Permissions:
             }
         }
         
-        // Function to update permission form HTML with dynamic sections
+        // Function to update permission form HTML with dynamic sections (filtered for editors)
         async function updatePermissionFormHTML(sections, sectionNames) {
             console.log('updatePermissionFormHTML called with sections:', sections);
             console.log('updatePermissionFormHTML called with sectionNames:', sectionNames);
@@ -3739,8 +3759,32 @@ Permissions:
                 console.error('sectionCheckboxes element not found!');
                 return;
             }
-		// Show all provided sections in the Permissions tab (no role-based filtering here)
-		const filteredSections = Array.isArray(sections) ? sections.slice() : [];
+		// Editors: only show sections they can manage (their editableSections). Admins: show all.
+		let filteredSections = Array.isArray(sections) ? sections.slice() : [];
+		try {
+			let me = null;
+			if (window.supabaseClient) {
+				const { data: { user } } = await window.supabaseClient.auth.getUser();
+				if (user && user.id) {
+					const { data: profile } = await window.supabaseClient
+						.from('profiles')
+						.select('role, permissions')
+						.eq('id', user.id)
+						.single();
+					me = profile || null;
+				}
+			}
+			const myRole = String(me?.role || '').toLowerCase();
+			if (myRole === 'editor') {
+				const editable = Array.isArray(me?.permissions?.editableSections) ? me.permissions.editableSections : [];
+				if (editable && editable.length > 0) {
+					const set = new Set(editable);
+					filteredSections = filteredSections.filter(s => set.has(s));
+				} else {
+					filteredSections = [];
+				}
+			}
+		} catch(_) {}
             
             // Clear existing checkboxes
             sectionCheckboxes.innerHTML = '';
