@@ -1154,7 +1154,12 @@
                 try { informationHub && informationHub.showMessage && informationHub.showMessage(`Global backgrounds ${next ? 'enabled' : 'disabled'}`, 'success'); } catch(_) {}
             } catch (e) {
                 console.error('Global background toggle failed:', e);
-                alert('Failed to toggle global backgrounds');
+                try {
+                    const msg = (e && (e.message || e.error_description || e.hint)) ? (e.message || e.error_description || e.hint) : String(e || 'Unknown error');
+                    alert('Failed to toggle global backgrounds: ' + msg);
+                } catch(_) {
+                    alert('Failed to toggle global backgrounds');
+                }
             }
         };
 
