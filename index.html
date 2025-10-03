@@ -151,8 +151,8 @@
     </script>
     
     <script>
-    // Backgrounds flag default: enabled (site_settings can override)
-    try { window.globalBackgroundsEnabled = true; } catch (_) {}
+    // Backgrounds flag default: disabled; controlled only by Supabase site_settings
+    try { window.globalBackgroundsEnabled = false; } catch (_) {}
     
     </script>
 
@@ -1142,39 +1142,23 @@
                 // Read current server setting and flip (robust to string JSON values)
                 let current = null;
                 try {
-                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSiteSetting === 'function') {
-                        current = await hubDatabase.getSiteSetting('backgrounds');
-                    }
-                } catch(_) {}
-                if (!current) {
-                    try {
-                        const { data } = await window.supabaseClient
-                            .from('site_settings')
-                            .select('value')
-                            .eq('key', 'backgrounds')
-                            .single();
-                        current = data && data.value;
-                    } catch(_) { current = null; }
-                }
+                    const { data } = await window.supabaseClient
+                        .from('site_settings')
+                        .select('value')
+                        .eq('key', 'backgrounds')
+                        .single();
+                    current = data && data.value;
+                } catch(_) { current = null; }
                 try { if (typeof current === 'string') current = JSON.parse(current); } catch(_) {}
                 const on = !!(current && (current.forceEnabled === true || String(current.forceEnabled).toLowerCase() === 'true'));
                 const next = !on;
                 const nextValue = Object.assign({}, current || {}, { forceEnabled: next });
 
-                // Persist to site settings so all clients pick it up (prefer hubDatabase, fallback to Supabase upsert)
-                let persisted = false;
-                try {
-                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.setSiteSetting === 'function') {
-                        await hubDatabase.setSiteSetting('backgrounds', nextValue);
-                        persisted = true;
-                    }
-                } catch(_) { persisted = false; }
-                if (!persisted) {
-                    const { error: upErr } = await window.supabaseClient
-                        .from('site_settings')
-                        .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' });
-                    if (upErr) throw upErr;
-                }
+                // Persist to site settings so all clients pick it up (Supabase only)
+                const { error: upErr } = await window.supabaseClient
+                    .from('site_settings')
+                    .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' });
+                if (upErr) throw upErr;
 
                 // Locally reflect immediately
                 try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
@@ -1195,28 +1179,21 @@
             }
         };
 
-        // Fetch and apply global backgrounds flags (force + reshuffle token)
+        // Fetch and apply global backgrounds flags strictly from Supabase
         window.refreshGlobalBackgrounds = async function() {
             try {
+                if (!(window.supabaseClient && window.supabaseClient.from)) return;
                 let v = null;
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    v = await hubDatabase.getSiteSetting('backgrounds');
-                } else if (window.supabaseClient && window.supabaseClient.from) {
-                    try {
-                        const { data } = await window.supabaseClient
-                            .from('site_settings')
-                            .select('value')
-                            .eq('key', 'backgrounds')
-                            .single();
-                        v = data && data.value;
-                    } catch (_) { v = null; }
-                } else {
-                    return;
-                }
+                try {
+                    const { data } = await window.supabaseClient
+                        .from('site_settings')
+                        .select('value')
+                        .eq('key', 'backgrounds')
+                        .single();
+                    v = data && data.value;
+                } catch (_) { v = null; }
                 try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
-                const force = (v == null)
-                    ? true
-                    : !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 try { window.globalBackgroundsEnabled = force; } catch(_) {}
                 updateBackgroundToggleButton();
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
