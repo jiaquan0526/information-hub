@@ -386,7 +386,7 @@ class SectionManager {
                     try {
                         const local = JSON.parse(localStorage.getItem('bgLocalManifest') || '{}');
                         if (local && Array.isArray(local.files) && local.files.length > 0) {
-                            return local.files.slice().filter(p => !/\.(gif)$/i.test(p)).sort();
+                            return local.files.slice().sort();
                         }
                     } catch (_) {}
                     // Fallback to fetching manifest.json
@@ -396,7 +396,7 @@ class SectionManager {
                         if (resp && resp.ok) {
                             const data = await resp.json();
                             if (Array.isArray(data) && data.length > 0) {
-                                return data.map(p => `background-pic/${p}`).filter(p => !/\.(gif)$/i.test(p)).sort();
+                                return data.map(p => `background-pic/${p}`).sort();
                             }
                         }
                     } catch (_) {}
