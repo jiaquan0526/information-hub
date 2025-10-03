@@ -1139,8 +1139,9 @@
                 const canManage = !!(me && me.permissions && me.permissions.canManageUsers);
                 if (!(role === 'admin' || canManage)) { alert('Admin only'); return; }
 
-                // Read current server setting and flip
-                const current = await hubDatabase.getSiteSetting('backgrounds');
+                // Read current server setting and flip (robust to string JSON values)
+                let current = await hubDatabase.getSiteSetting('backgrounds');
+                try { if (typeof current === 'string') current = JSON.parse(current); } catch(_) {}
                 const on = !!(current && (current.forceEnabled === true || String(current.forceEnabled).toLowerCase() === 'true'));
                 const next = !on;
                 // Persist to site settings so all clients pick it up
@@ -1161,7 +1162,8 @@
         window.refreshGlobalBackgrounds = async function() {
             try {
                 if (!(window.hubDatabase && window.hubDatabaseReady)) return;
-                const v = await hubDatabase.getSiteSetting('backgrounds');
+                let v = await hubDatabase.getSiteSetting('backgrounds');
+                try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
                 const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 try { window.globalBackgroundsEnabled = force; } catch(_) {}
                 // Persist a global seed used to compute consistent backgrounds across clients

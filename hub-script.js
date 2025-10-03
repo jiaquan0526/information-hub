@@ -1944,6 +1944,18 @@ window.importJsonSectionsTabsResources = async () => {
             informationHub && informationHub.showMessage && informationHub.showMessage('Only admin can import', 'error');
             return;
         }
+        // Ensure authenticated supabase session (RLS requires auth)
+        try {
+            if (!window.supabaseClient) throw new Error('no client');
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            if (!user) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('Please open auth.html and sign in, then retry import.', 'error');
+                return;
+            }
+        } catch (_) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Please open auth.html and sign in, then retry import.', 'error');
+            return;
+        }
         if (!window.hubDatabase || !window.hubDatabaseReady) {
             informationHub && informationHub.showMessage && informationHub.showMessage('Supabase database unavailable', 'error');
             return;
@@ -2086,9 +2098,28 @@ window.importJsonSectionsTabsResources = async () => {
                 return out;
             })(json);
 
-            // Upsert using existing helpers
+            // Upsert sections first to ensure tabs/resources attach
             try { document.getElementById('jsonImportSummary').style.display = 'block'; document.getElementById('jsonImportSummary').textContent = 'Importing...'; } catch(_) {}
-            const res = await __upsertExcelPayload(norm);
+            // 1) Upsert sections explicitly
+            let secOk = 0, secErr = [];
+            for (const s of norm.sections) {
+                const cfg = { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 };
+                try {
+                    if (window.hubDatabase && typeof hubDatabase.createSection === 'function') {
+                        await hubDatabase.createSection({ sectionId: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg, data: {} });
+                    } else if (window.supabaseClient) {
+                        const { error } = await window.supabaseClient
+                            .from('sections')
+                            .upsert({ section_id: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg }, { onConflict: 'section_id' });
+                        if (error) throw error;
+                    }
+                    secOk++;
+                } catch (e) { secErr.push({ id: s.id, error: e && e.message ? e.message : String(e) }); }
+            }
+            // 2) Upsert tabs/resources via shared helper
+            const res = await __upsertExcelPayload({ sections: [], tabs: norm.tabs, resources: norm.resources });
+            res.sectionsOk = secOk;
+            res.sectionsErr = secErr;
             const errs = (res.resourcesErr||[]).length + (res.sectionsErr||[]).length + (res.tabsErr||[]).length;
             try {
                 const el = document.getElementById('jsonImportSummary');
@@ -2241,14 +2272,14 @@ window.restoreSectionsOnly = async () => {
             try {
                 const arr = Array.isArray(json.sections) ? json.sections : [];
                 arr.forEach(s => {
-                    const sid = s.sectionId || s.id || '';
+                    const sid = s.section_id || s.sectionId || s.id || '';
                     const cfg = (s && s.config && typeof s.config === 'object') ? s.config : {};
                     add(sid, s.name || '', s.icon || '', s.color || '', (cfg && cfg.intro) || '', (cfg && cfg.visible !== undefined) ? cfg.visible : true, (cfg && cfg.order) || 0, cfg);
                 });
             } catch (_) {}
             try {
                 const ls = json.localStorage || {};
-                const order = Array.isArray(ls.sectionOrder) ? ls.sectionOrder : [];
+                const order = Array.isArray(ls.sectionOrder) ? ls.sectionOrder : (Array.isArray(json.sectionOrder) ? json.sectionOrder : []);
                 order.forEach(s => add(s.id, s.name, s.icon, s.color, s.intro, s.visible !== false, s.order || 0, { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 }));
             } catch (_) {}
             const sections = Array.from(byId.values());
