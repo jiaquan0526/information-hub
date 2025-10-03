@@ -1965,6 +1965,22 @@ window.importJsonSectionsTabsResources = async () => {
             // Normalize into { sections: [], tabs: [], resources: [] }
             const norm = (function normalizeJson(j){
                 const out = { sections: [], tabs: [], resources: [] };
+                const seenSections = new Set();
+                const addSection = (id, name, icon, color, intro, visible, order, cfg) => {
+                    const key = String(id || '').trim();
+                    if (!key || seenSections.has(key)) return;
+                    seenSections.add(key);
+                    out.sections.push({
+                        id: key,
+                        name: name || key,
+                        icon: icon || '',
+                        color: color || '',
+                        intro: intro || '',
+                        visible: visible !== false,
+                        order: parseInt(order || 0, 10) || 0,
+                        config: cfg || {}
+                    });
+                };
                 try {
                     // Sections: from j.sections array (various shapes)
                     const sectionsArr = Array.isArray(j.sections) ? j.sections : [];
@@ -1972,15 +1988,7 @@ window.importJsonSectionsTabsResources = async () => {
                         const id = String(s.section_id || s.sectionId || s.id || '').trim();
                         if (!id) return;
                         const cfg = (s && s.config && typeof s.config === 'object') ? s.config : {};
-                        out.sections.push({
-                            id,
-                            name: s.name || id,
-                            icon: s.icon || '',
-                            color: s.color || '',
-                            intro: cfg.intro || '',
-                            visible: (cfg.visible === undefined) ? true : !!cfg.visible,
-                            order: parseInt(cfg.order || 0, 10) || 0
-                        });
+                        addSection(id, s.name || id, s.icon || '', s.color || '', cfg.intro || '', (cfg.visible === undefined) ? true : !!cfg.visible, parseInt(cfg.order || 0, 10) || 0, cfg);
                         // Tabs from config: types/tabs/tab_names
                         try {
                             const types = Array.isArray(cfg.types) ? cfg.types : [];
@@ -1999,6 +2007,42 @@ window.importJsonSectionsTabsResources = async () => {
                                 });
                             }
                         } catch(_) {}
+                    });
+                } catch(_) {}
+                try {
+                    // Sections from localStorage.sectionOrder inside backup
+                    const ls = j.localStorage || {};
+                    const orderArr = Array.isArray(ls.sectionOrder) ? ls.sectionOrder : (Array.isArray(j.sectionOrder) ? j.sectionOrder : []);
+                    orderArr.forEach(s => {
+                        const id = String(s.id || s.sectionId || '').trim();
+                        if (!id) return;
+                        addSection(id, s.name || id, s.icon || '', s.color || '', s.intro || '', (s.visible === undefined) ? true : !!s.visible, parseInt(s.order || 0, 10) || 0, { intro: s.intro || '', visible: (s.visible === undefined) ? true : !!s.visible, order: parseInt(s.order || 0, 10) || 0 });
+                    });
+                } catch(_) {}
+                try {
+                    // Sections from informationHub/hub maps
+                    const hubMaps = [];
+                    if (j.informationHub && typeof j.informationHub === 'object') hubMaps.push(j.informationHub);
+                    if (j.hub && typeof j.hub === 'object') hubMaps.push(j.hub);
+                    if (j.data && typeof j.data === 'object' && j.data.informationHub) hubMaps.push(j.data.informationHub);
+                    hubMaps.forEach(map => {
+                        Object.keys(map || {}).forEach(sectionId => {
+                            const val = map[sectionId] || {};
+                            const id = String(sectionId || '').trim();
+                            if (!id) return;
+                            addSection(id, val.name || id, val.icon || '', val.color || '', '', true, 0, {});
+                            // Derive tabs from keys that look like arrays of resources
+                            try {
+                                Object.keys(val || {}).forEach(k => {
+                                    if (k === 'name' || k === 'icon' || k === 'color' || k === 'updatedAt' || k === 'config' || k === 'data') return;
+                                    const v = val[k];
+                                    if (Array.isArray(v)) {
+                                        const idx = out.tabs.filter(t => t.sectionId === id).length + 1;
+                                        out.tabs.push({ sectionId: id, id: k, name: k, icon: '', index: idx });
+                                    }
+                                });
+                            } catch(_) {}
+                        });
                     });
                 } catch(_) {}
                 try {
