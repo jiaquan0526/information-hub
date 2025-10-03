@@ -1856,6 +1856,126 @@ window.importExcelPayloadFromPanel = async () => {
     }
 };
 
+// Import JSON focusing only on sections, tabs (config), and resources
+window.importJsonSectionsTabsResources = async () => {
+    try {
+        // Admin-only guard
+        const me = informationHub && informationHub.currentUser ? informationHub.currentUser : null;
+        if (!(me && (String(me.role||'').toLowerCase()==='admin' || (me.permissions && me.permissions.canManageUsers)))) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Only admin can import', 'error');
+            return;
+        }
+        if (!window.hubDatabase || !window.hubDatabaseReady) {
+            informationHub && informationHub.showMessage && informationHub.showMessage('Supabase database unavailable', 'error');
+            return;
+        }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            let json = null;
+            try {
+                const text = await file.text();
+                json = JSON.parse(text);
+            } catch (_) {
+                informationHub && informationHub.showMessage && informationHub.showMessage('Invalid JSON file', 'error');
+                return;
+            }
+            // Normalize into { sections: [], tabs: [], resources: [] }
+            const norm = (function normalizeJson(j){
+                const out = { sections: [], tabs: [], resources: [] };
+                try {
+                    // Sections: from j.sections array (various shapes)
+                    const sectionsArr = Array.isArray(j.sections) ? j.sections : [];
+                    sectionsArr.forEach(s => {
+                        const id = String(s.section_id || s.sectionId || s.id || '').trim();
+                        if (!id) return;
+                        const cfg = (s && s.config && typeof s.config === 'object') ? s.config : {};
+                        out.sections.push({
+                            id,
+                            name: s.name || id,
+                            icon: s.icon || '',
+                            color: s.color || '',
+                            intro: cfg.intro || '',
+                            visible: (cfg.visible === undefined) ? true : !!cfg.visible,
+                            order: parseInt(cfg.order || 0, 10) || 0
+                        });
+                        // Tabs from config: types/tabs/tab_names
+                        try {
+                            const types = Array.isArray(cfg.types) ? cfg.types : [];
+                            if (types.length > 0) {
+                                types.forEach((t, i) => {
+                                    const tabId = String(t.id || '').trim();
+                                    if (!tabId) return;
+                                    out.tabs.push({ sectionId: id, id: tabId, name: t.name || tabId, icon: t.icon || '', index: i+1 });
+                                });
+                            } else {
+                                const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+                                const namesArr = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+                                tabsArr.forEach((tabId, i) => {
+                                    const idClean = String(tabId || '').trim(); if (!idClean) return;
+                                    out.tabs.push({ sectionId: id, id: idClean, name: namesArr[i] || idClean, icon: '', index: i+1 });
+                                });
+                            }
+                        } catch(_) {}
+                    });
+                } catch(_) {}
+                try {
+                    // Resources as array (db export) or map by sectionId (backup)
+                    if (Array.isArray(j.resources)) {
+                        j.resources.forEach(r => {
+                            const sid = String(r.sectionId || r.section_id || '').trim();
+                            const type = String(r.type || '').toLowerCase();
+                            const title = String(r.title || '').trim();
+                            if (!sid || !type || !title) return;
+                            out.resources.push({
+                                sectionId: sid,
+                                type,
+                                title,
+                                description: r.description || '',
+                                url: r.url || '',
+                                category: (r.extra && r.extra.category) ? r.extra.category : (r.category || ''),
+                                tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : [])
+                            });
+                        });
+                    } else if (j.resources && typeof j.resources === 'object') {
+                        Object.keys(j.resources).forEach(sid => {
+                            const list = Array.isArray(j.resources[sid]) ? j.resources[sid] : [];
+                            list.forEach(r => {
+                                const type = String(r.type || '').toLowerCase();
+                                const title = String(r.title || '').trim();
+                                if (!sid || !type || !title) return;
+                                out.resources.push({
+                                    sectionId: sid,
+                                    type,
+                                    title,
+                                    description: r.description || '',
+                                    url: r.url || '',
+                                    category: (r.extra && r.extra.category) ? r.extra.category : (r.category || ''),
+                                    tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : [])
+                                });
+                            });
+                        });
+                    }
+                } catch(_) {}
+                return out;
+            })(json);
+
+            // Upsert using existing helpers
+            try { document.getElementById('jsonImportSummary').style.display = 'block'; document.getElementById('jsonImportSummary').textContent = 'Importing...'; } catch(_) {}
+            await __upsertExcelPayload(norm);
+            try { const el = document.getElementById('jsonImportSummary'); if (el) el.textContent = `Imported ${norm.sections.length} sections, ${norm.tabs.length} tabs, ${norm.resources.length} resources.`; } catch(_) {}
+            informationHub && informationHub.showMessage && informationHub.showMessage('JSON import completed', 'success');
+            try { updateMainHubSections && updateMainHubSections(); } catch(_) {}
+        };
+        input.click();
+    } catch (error) {
+        informationHub && informationHub.showMessage && informationHub.showMessage(`JSON import failed: ${error.message}`, 'error');
+    }
+};
+
 // JSON Backup/Restore (raw)
 window.backupJson = async () => {
     try {
