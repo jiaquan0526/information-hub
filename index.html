@@ -1103,6 +1103,8 @@
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
             try {
+                // Honor local force flag (set by reshuffle) as well as global flag
+                if (typeof localStorage !== 'undefined' && localStorage.getItem('forceBackgrounds') === '1') return false;
                 return window.globalBackgroundsEnabled !== true;
             } catch (_) {
                 return true;

@@ -355,7 +355,7 @@ class SectionManager {
             introEl.style.display = intro ? 'block' : 'none';
         }
 
-        // Apply persistent background image per section (defer heavy images)
+        // Apply persistent background image per section (deterministic and global-seed based)
         try {
             // Determine enablement via Supabase (fallback to hub page flag)
             let enabled = false;
@@ -378,22 +378,38 @@ class SectionManager {
                 }
             } catch (_) { enabled = false; }
             const disable = !enabled;
-            const map = {}; // No local storage for background images
-            let img = map[this.currentSection];
             const container = document.querySelector('.container');
-            const preferList = [
-                'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
-                'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
-                'background-pic/537082_K.png','background-pic/560846_L.png'
-            ];
-            const heavyList = [
-                'background-pic/SU24CBY_FESTIVAL_B_LONGFORM_GIF_1920x1080.gif','background-pic/SU25CBY_RST_GROUP.gif'
-            ];
-            if (!img) {
-                const idx = Math.abs(this._hash(this.currentSection)) % preferList.length;
-                img = preferList[idx];
-            }
-            if (container) {
+            // Deterministic list built from manifest, filtered and sorted
+            const loadImages = async () => {
+                try {
+                    // Try local cached manifest from hub page first
+                    try {
+                        const local = JSON.parse(localStorage.getItem('bgLocalManifest') || '{}');
+                        if (local && Array.isArray(local.files) && local.files.length > 0) {
+                            return local.files.slice().filter(p => !/\.(gif)$/i.test(p)).sort();
+                        }
+                    } catch (_) {}
+                    // Fallback to fetching manifest.json
+                    try {
+                        const bust = Date.now();
+                        const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                        if (resp && resp.ok) {
+                            const data = await resp.json();
+                            if (Array.isArray(data) && data.length > 0) {
+                                return data.map(p => `background-pic/${p}`).filter(p => !/\.(gif)$/i.test(p)).sort();
+                            }
+                        }
+                    } catch (_) {}
+                    // Final fallback static list
+                    return [
+                        'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                        'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
+                        'background-pic/537082_K.png','background-pic/560846_L.png'
+                    ].sort();
+                } catch (_) { return []; }
+            };
+            const images = await loadImages();
+            if (container && Array.isArray(images) && images.length > 0) {
                 container.style.borderRadius = '12px';
                 container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
                 const applyBg = async () => {
@@ -404,7 +420,10 @@ class SectionManager {
                             if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
                         } catch (_) {}
                         if (disable) return;
-                        const chosen = heavyList.includes(img) ? preferList[0] : img;
+                        // Use global seed + sectionId to pick the same image across all clients
+                        const seed = String(localStorage.getItem('globalShuffleAt') || 'seed0');
+                        const idx = Math.abs(this._hash(`${seed}|${this.currentSection}`)) % images.length;
+                        const chosen = images[idx];
                         // Prefer WebP if available using the hub page helper when present
                         let finalUrl = chosen;
                         try {

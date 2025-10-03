@@ -1738,14 +1738,29 @@ function __parseWorkbookToPayload(wb) {
         url: String(r['URL'] || r.url || '').trim(),
         category: String(r['Category'] || r.category || '').trim(),
         tags: String(r['Tags (comma)'] || r.tags || '').split(',').map(s => s.trim()).filter(Boolean)
-    })).filter(r => r.sectionId && r.type && r.title && r.url);
+    })).filter(r => r.sectionId);
     return { sections: normSections, tabs: normTabs, resources: normResources };
+}
+
+function __isValidTypeId(value) {
+    try {
+        const t = String(value || '');
+        return /^[a-z][a-z0-9-]{1,49}$/.test(t);
+    } catch (_) { return false; }
+}
+
+function __randomId(prefix = 't') {
+    try {
+        const rnd = Math.random().toString(36).slice(2, 10);
+        return `${prefix}-${rnd}`;
+    } catch (_) { return `${prefix}-${Date.now()}`; }
 }
 
 async function __upsertExcelPayload(payload) {
     if (!window.supabaseClient) throw new Error('Supabase not ready');
     const { data: { user } } = await window.supabaseClient.auth.getUser();
     if (!user) throw new Error('Not authenticated. Open auth.html, sign in, then retry.');
+    const summary = { sectionsOk: 0, sectionsErr: [], tabsOk: 0, tabsErr: [], resourcesOk: 0, resourcesErr: [] };
     // Sections
     const bySectionId = new Map();
     for (const s of (payload.sections || [])) {
@@ -1758,7 +1773,11 @@ async function __upsertExcelPayload(payload) {
                 if (error) throw error;
             }
             bySectionId.set(s.id, { tabs: [] });
-        } catch (e) { console.error('Section upsert failed', s.id, e); }
+            summary.sectionsOk++;
+        } catch (e) {
+            console.error('Section upsert failed', s.id, e);
+            summary.sectionsErr.push({ id: s.id, error: e && e.message ? e.message : String(e) });
+        }
     }
     // Tabs merge into sections.config
     const tabsBySection = new Map();
@@ -1776,16 +1795,74 @@ async function __upsertExcelPayload(payload) {
             const tab_names = sorted.map(t => t.name || t.id);
             const merged = Object.assign({}, existingCfg, { types, tabs, tab_names });
             await window.supabaseClient.from('sections').update({ config: merged }).eq('section_id', sectionId);
-        } catch (e) { console.error('Tabs update failed', sectionId, e); }
+            summary.tabsOk += list.length;
+        } catch (e) {
+            console.error('Tabs update failed', sectionId, e);
+            summary.tabsErr.push({ sectionId, count: (list||[]).length, error: e && e.message ? e.message : String(e) });
+        }
     }
-    // Resources
+    // Resources (ensure sections and tabs exist, create random when needed)
+    const ensuredSections = new Set();
     for (const r of (payload.resources || [])) {
         try {
-            const payloadRow = { section_id: r.sectionId, type: String(r.type).toLowerCase(), title: r.title, description: r.description || '', url: r.url, tags: r.tags || [], extra: { category: r.category || '' } };
-            const { error } = await window.supabaseClient.from('resources').insert(payloadRow).select().single();
+            let sectionId = String(r.sectionId || '').trim();
+            if (!sectionId) sectionId = __randomId('sec');
+            // Ensure section exists
+            if (!bySectionId.has(sectionId) && !ensuredSections.has(sectionId)) {
+                try {
+                    const { error } = await window.supabaseClient
+                        .from('sections')
+                        .upsert({ section_id: sectionId, name: sectionId, icon: '', color: '', config: {} }, { onConflict: 'section_id' });
+                    if (!error) ensuredSections.add(sectionId);
+                } catch (_) {}
+            }
+            // Determine type id: keep as-is if valid, otherwise random
+            let originalType = String(r.type || '').trim();
+            let typeId = originalType;
+            if (!__isValidTypeId(typeId)) typeId = __randomId('t');
+            // Ensure tab/type exists in section config
+            try {
+                const { data, error } = await window.supabaseClient.from('sections').select('config').eq('section_id', sectionId).single();
+                if (!error) {
+                    let cfg = (data && data.config) ? (typeof data.config === 'string' ? JSON.parse(data.config) : data.config) : {};
+                    const types = Array.isArray(cfg.types) ? cfg.types : [];
+                    const tabs = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+                    const tab_names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+                    const hasType = types.some(t => t && t.id === typeId) || tabs.includes(typeId);
+                    if (!hasType) {
+                        types.push({ id: typeId, name: originalType || typeId, icon: '', key: `${sectionId}:${typeId}` });
+                        tabs.push(typeId);
+                        tab_names.push(originalType || typeId);
+                        const merged = Object.assign({}, cfg, { types, tabs, tab_names });
+                        await window.supabaseClient.from('sections').update({ config: merged }).eq('section_id', sectionId);
+                        summary.tabsOk++;
+                    }
+                }
+            } catch (e) {
+                summary.tabsErr.push({ sectionId, error: e && e.message ? e.message : String(e) });
+            }
+            // Prepare resource row
+            let title = String(r.title || '').trim();
+            let generatedTitle = '';
+            if (!title) { generatedTitle = __randomId('Untitled'); title = generatedTitle; }
+            const payloadRow = {
+                section_id: sectionId,
+                type: typeId,
+                title,
+                description: r.description || '',
+                url: r.url || null,
+                tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : []),
+                extra: { category: r.category || '', originalType: originalType || null, originalTitle: generatedTitle ? (r.title || '') : undefined }
+            };
+            const { error } = await window.supabaseClient.from('resources').insert(payloadRow);
             if (error) throw error;
-        } catch (e) { console.error('Resource insert failed', r.title, e); }
+            summary.resourcesOk++;
+        } catch (e) {
+            console.error('Resource insert failed', r.title, e);
+            summary.resourcesErr.push({ sectionId: r.sectionId, type: r.type, title: r.title, error: e && e.message ? e.message : String(e) });
+        }
     }
+    return summary;
 }
 
 window.loadExcelPreviewFromPanel = async () => {
@@ -1846,8 +1923,10 @@ window.importExcelPayloadFromPanel = async () => {
         if ((!payload.sections.length) && (!payload.tabs.length) && (!payload.resources.length)) { informationHub && informationHub.showMessage && informationHub.showMessage('Nothing to import', 'error'); return; }
         const btn = document.getElementById('excelImportBtn');
         if (btn) { btn.disabled = true; btn.textContent = 'Importing...'; }
-        await __upsertExcelPayload(payload);
-        informationHub && informationHub.showMessage && informationHub.showMessage('Import completed', 'success');
+        const result = await __upsertExcelPayload(payload);
+        const errs = (result.resourcesErr||[]).length + (result.sectionsErr||[]).length + (result.tabsErr||[]).length;
+        const msg = `Imported sections:${result.sectionsOk}, tabs:${result.tabsOk}, resources:${result.resourcesOk}${errs?`, errors:${errs}`:''}`;
+        informationHub && informationHub.showMessage && informationHub.showMessage(msg, errs? 'error':'success');
         try { if (btn) { btn.disabled = false; btn.textContent = 'Import All'; } } catch(_) {}
         try { updateMainHubSections && updateMainHubSections(); } catch(_) {}
     } catch (e) {
@@ -1965,9 +2044,19 @@ window.importJsonSectionsTabsResources = async () => {
 
             // Upsert using existing helpers
             try { document.getElementById('jsonImportSummary').style.display = 'block'; document.getElementById('jsonImportSummary').textContent = 'Importing...'; } catch(_) {}
-            await __upsertExcelPayload(norm);
-            try { const el = document.getElementById('jsonImportSummary'); if (el) el.textContent = `Imported ${norm.sections.length} sections, ${norm.tabs.length} tabs, ${norm.resources.length} resources.`; } catch(_) {}
-            informationHub && informationHub.showMessage && informationHub.showMessage('JSON import completed', 'success');
+            const res = await __upsertExcelPayload(norm);
+            const errs = (res.resourcesErr||[]).length + (res.sectionsErr||[]).length + (res.tabsErr||[]).length;
+            try {
+                const el = document.getElementById('jsonImportSummary');
+                if (el) {
+                    el.textContent = `Imported sections:${res.sectionsOk}, tabs:${res.tabsOk}, resources:${res.resourcesOk}${errs?`, errors:${errs}`:''}`;
+                    if (errs && res.resourcesErr && res.resourcesErr.length) {
+                        const first = res.resourcesErr.slice(0,3).map(e => `(${e.sectionId}|${e.type}) ${e.title}: ${e.error}`).join(' | ');
+                        el.textContent += ` - Sample errors: ${first}`;
+                    }
+                }
+            } catch(_) {}
+            informationHub && informationHub.showMessage && informationHub.showMessage(errs? 'Import completed with some errors':'JSON import completed', errs? 'error':'success');
             try { updateMainHubSections && updateMainHubSections(); } catch(_) {}
         };
         input.click();
