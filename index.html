@@ -4933,6 +4933,14 @@ Permissions:
                         img = String(explicit).trim();
                     }
                 } catch (_) {}
+                // Next prefer pre-assigned unique map if available
+                if (!img) {
+                    try {
+                        const mapped = SECTION_BG_MAP && SECTION_BG_MAP[sectionCfg.id];
+                        if (mapped) img = mapped;
+                    } catch(_) {}
+                }
+                // Fallback to deterministic chooser
                 if (!img) {
                     const chosen = await resolveValidBackground(sectionCfg.id);
                     if (chosen) img = chosen;
@@ -5214,25 +5222,31 @@ Permissions:
             try {
                 if (!backgroundsDisabled() && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
                     const needed = visibleSections.length;
-                    const pool = [];
-                    // Shuffle a copy to vary selections a bit
+                    // Create a pool with no duplicates until we exhaust the list
                     const imgs = BACKGROUND_IMAGES.slice();
+                    // Shuffle
                     for (let i = imgs.length - 1; i > 0; i--) {
                         const j = Math.floor(Math.random() * (i + 1));
                         [imgs[i], imgs[j]] = [imgs[j], imgs[i]];
                     }
-                    let idx = 0;
-                    for (let n = 0; n < needed; n++) {
-                        const img = imgs[idx % imgs.length];
-                        pool.push(img);
-                        idx++;
-                    }
-                    // Assign sequentially to each visible section if not already mapped
-                    visibleSections.forEach((s, i) => {
-                        if (!SECTION_BG_MAP[s.id]) {
-                            SECTION_BG_MAP[s.id] = pool[i];
-                        }
+                    // Assign unique images first, then allow repeats if needed
+                    const used = new Set();
+                    let cursor = 0;
+                    visibleSections.forEach((s) => {
+                        if (SECTION_BG_MAP[s.id]) { used.add(SECTION_BG_MAP[s.id]); }
                     });
+                    for (const s of visibleSections) {
+                        if (SECTION_BG_MAP[s.id]) continue;
+                        // Find next unused image
+                        let picked = null;
+                        for (let k = 0; k < imgs.length; k++) {
+                            const candidate = imgs[(cursor + k) % imgs.length];
+                            if (!used.has(candidate)) { picked = candidate; cursor = (cursor + k + 1) % imgs.length; break; }
+                        }
+                        if (!picked) { picked = imgs[cursor % imgs.length]; cursor = (cursor + 1) % imgs.length; }
+                        SECTION_BG_MAP[s.id] = picked;
+                        used.add(picked);
+                    }
                 }
             } catch (_) {}
 
