@@ -247,12 +247,12 @@ class InformationHub {
         const userRoleEl = document.getElementById('userRole');
         if (userRoleEl) userRoleEl.textContent = this.currentUser.role;
 
-        // Show/hide admin panel button (role-based OR permission flag)
+        // Show/hide admin panel button for admins, editors, or users with canManageUsers
         const adminBtn = document.getElementById('adminPanelBtn');
         if (adminBtn) {
             const role = String(this.currentUser.role || '').toLowerCase();
             const canManage = !!(this.currentUser.permissions && this.currentUser.permissions.canManageUsers);
-            adminBtn.style.display = (role === 'admin' || canManage) ? 'inline-flex' : 'none';
+            adminBtn.style.display = (role === 'admin' || role === 'editor' || canManage) ? 'inline-flex' : 'none';
         }
 
         // Show/hide export button for admins/managers only
