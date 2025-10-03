@@ -1161,13 +1161,6 @@
                 const next = !on;
                 const nextValue = Object.assign({}, current || {}, { forceEnabled: next });
 
-                // Optimistic UI update
-                const prevLocal = window.globalBackgroundsEnabled === true;
-                try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
-                updateBackgroundToggleButton();
-                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                try { await updateMainHubSections(); } catch(_) {}
-
                 // Persist to site settings so all clients pick it up (prefer hubDatabase, fallback to Supabase upsert)
                 let persisted = false;
                 try {
@@ -1179,20 +1172,18 @@
                 if (!persisted) {
                     const { error: upErr } = await window.supabaseClient
                         .from('site_settings')
-                        .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' })
-                        .select('key')
-                        .single();
+                        .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' });
                     if (upErr) throw upErr;
                 }
 
+                // Locally reflect immediately
+                try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
+                updateBackgroundToggleButton();
+                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                try { await updateMainHubSections(); } catch(_) {}
                 try { informationHub && informationHub.showMessage && informationHub.showMessage(`Global backgrounds ${next ? 'enabled' : 'disabled'}`, 'success'); } catch(_) {}
             } catch (e) {
                 console.error('Global background toggle failed:', e);
-                // Revert optimistic UI on failure
-                try { if (typeof window.globalBackgroundsEnabled !== 'undefined') { window.globalBackgroundsEnabled = !window.globalBackgroundsEnabled; } } catch(_) {}
-                try { updateBackgroundToggleButton(); } catch(_) {}
-                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                try { await updateMainHubSections(); } catch(_) {}
                 try {
                     // Enhance error message for generic network issues
                     const base = (e && (e.message || e.error_description || e.hint)) ? (e.message || e.error_description || e.hint) : String(e || 'Unknown error');
@@ -3554,12 +3545,11 @@ Permissions:
                 if (selectedNav) selectedNav.classList.add('active');
             } catch(_) {}
 
-            // Show/hide content sections (force-hide all, then show target to prevent bleed-through)
+            // Show/hide content sections
             document.querySelectorAll('.admin-tab-content').forEach(content => {
                 content.classList.remove('active');
                 try { content.style.display = 'none'; } catch(_) {}
             });
-            try { const secTab = document.getElementById('sections-tab'); if (secTab) secTab.style.display = 'none'; } catch(_) {}
             
             const targetTab = document.getElementById(`${tabName}-tab`);
             if (targetTab) {
@@ -3841,47 +3831,30 @@ Permissions:
         window.loadSectionsList = async function() {
             console.log('loadSectionsList called');
             try {
-                // Wait briefly for either hubDatabase or supabaseClient to be ready to avoid racing into an empty render
-                try {
-                    let _retries = 0;
-                    const _max = 20; // ~3s max wait
-                    while (_retries < _max && (!window.supabaseClient && !(window.hubDatabase && window.hubDatabaseReady))) {
-                        await new Promise(r => setTimeout(r, 150));
-                        _retries++;
-                    }
-                } catch(_) {}
+                // Wait for database or Supabase client readiness to avoid rendering empty state on first load
+                let attempts = 0;
+                const maxAttempts = 30; // ~6s total with 200ms interval
+                while (attempts < maxAttempts && !((window.hubDatabase && window.hubDatabaseReady) || window.supabaseClient)) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    attempts++;
+                }
 
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    let sectionsFromWrapper = [];
-                    let sectionsFromDirect = [];
-                    try {
-                        sectionsFromWrapper = await hubDatabase.getAllSections();
-                    } catch (e) { console.warn('hubDatabase.getAllSections failed', e); }
-                    console.log('Loaded sections from Supabase via hubDatabase:', sectionsFromWrapper);
-                    // Also load directly and merge to avoid partial results due to wrappers/policies
-                    if (window.supabaseClient) {
+                    let sections = await hubDatabase.getAllSections();
+                    console.log('Loaded sections from Supabase via hubDatabase:', sections);
+                    // Fallback to direct Supabase if wrapper returned no rows
+                    if ((!sections || sections.length === 0) && window.supabaseClient) {
                         try {
-                            const { data: directRows } = await window.supabaseClient
+                            const { data: direct } = await window.supabaseClient
                                 .from('sections')
                                 .select('section_id, name, icon, color, config, data')
                                 .order('name', { ascending: true });
-                            sectionsFromDirect = Array.isArray(directRows) ? directRows : [];
-                            console.log('Loaded sections via direct Supabase (merge):', sectionsFromDirect);
+                            sections = Array.isArray(direct) ? direct : [];
+                            console.log('Loaded sections via direct Supabase fallback:', sections);
                         } catch (fallbackErr) {
-                            console.warn('Direct sections load failed', fallbackErr);
+                            console.warn('Direct sections fallback failed', fallbackErr);
                         }
                     }
-                    // Merge unique by section_id (prefer direct row data for freshness)
-                    const byId = {};
-                    (Array.isArray(sectionsFromWrapper) ? sectionsFromWrapper : []).forEach(s => {
-                        const sid = s.section_id || s.id;
-                        if (sid) byId[sid] = s;
-                    });
-                    (Array.isArray(sectionsFromDirect) ? sectionsFromDirect : []).forEach(s => {
-                        const sid = s.section_id || s.id;
-                        if (sid) byId[sid] = s;
-                    });
-                    const sections = Object.keys(byId).map(k => byId[k]);
                     
                     // Map database format to expected format
                     sectionOrder = (sections || []).map(section => ({
@@ -3898,7 +3871,7 @@ Permissions:
                     }));
                     
                     console.log('Mapped sections for UI:', sectionOrder);
-                        renderSectionsList();
+                    renderSectionsList();
                 } else {
                     console.log('Database not ready; trying direct Supabase fetch');
                     try {
@@ -3924,36 +3897,37 @@ Permissions:
                             return;
                         }
                     } catch (e) { console.warn('Direct Supabase fetch (db not ready) failed', e); }
-                    sectionOrder = [];
-                    renderSectionsList();
+                    // Supabase still not ready: retry shortly instead of rendering empty
+                    setTimeout(() => { try { loadSectionsList(); } catch(_) {} }, 400);
+                    return;
                 }
             } catch (error) {
                 console.error('Error loading sections from Supabase:', error);
-                sectionOrder = [];
-                renderSectionsList();
+                // Soft retry to recover from transient errors
+                setTimeout(() => { try { loadSectionsList(); } catch(_) {} }, 600);
             }
-
-            // One-time auto-retry if nothing rendered due to timing; avoids requiring manual console call
-            try {
-                if ((!Array.isArray(sectionOrder) || sectionOrder.length === 0) && !window.__sectionsListRetried) {
-                    window.__sectionsListRetried = true;
-                    setTimeout(() => { try { loadSectionsList(); } catch(_) {} }, 600);
-                } else if (Array.isArray(sectionOrder) && sectionOrder.length > 0) {
-                    window.__sectionsListRetried = false;
-                }
-            } catch(_) {}
         };
+
+        // Auto-reload the sections list when the database or Supabase becomes ready and the tab is active
+        try {
+            document.addEventListener('hubdb-ready', function() {
+                try {
+                    const tab = document.getElementById('sections-tab');
+                    if (tab && tab.classList.contains('active')) { loadSectionsList(); }
+                } catch(_) {}
+            });
+        } catch(_) {}
+        try {
+            window.addEventListener('supabase-ready', function() {
+                try {
+                    const tab = document.getElementById('sections-tab');
+                    if (tab && tab.classList.contains('active')) { loadSectionsList(); }
+                } catch(_) {}
+            });
+        } catch(_) {}
         
         function renderSectionsList() {
             console.log('renderSectionsList called');
-            // Only render when Sections tab is the active view
-            try {
-                const sectionsTab = document.getElementById('sections-tab');
-                if (!sectionsTab || !sectionsTab.classList.contains('active')) {
-                    console.log('Sections tab not active; skipping render');
-                    return;
-                }
-            } catch(_) {}
             const sectionsList = document.getElementById('sectionsList');
             console.log('sectionsList element found:', !!sectionsList);
             if (!sectionsList) {
