@@ -5115,26 +5115,43 @@ Permissions:
 
             for (const section of visibleSections) {
                 try {
-                    // Build types list to mirror the section detail tabs
-            let typesList = [];
+                    // Build types list to mirror the section detail tabs (align with section page fallbacks)
+                    let typesList = [];
                     try {
-                        // Use section.config from Supabase only
                         const cfg = section.config || {};
-                        if (cfg && Array.isArray(cfg.types) && cfg.types.length > 0) {
-                            const visibleTypes = cfg.types.filter(t => !t.hidden);
-                            typesList = visibleTypes.map(t => ({
-                                id: String(t.id || '').trim() || 'type',
-                                name: String(t.name || t.id || 'Type').trim(),
-                                icon: String(t.icon || '').trim()
-                            }));
-                        } else if (cfg && Array.isArray(cfg.tabs) && cfg.tabs.length > 0) {
-                            const names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
-                            typesList = cfg.tabs.map((id, i) => ({
-                                id: String(id || '').trim(),
-                                name: String((names[i] || id || 'Type')).trim(),
-                                icon: ''
-                            })).filter(t => t.id);
+                        const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+                        const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+                        const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
+                        const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+                        let visibleTypes = [];
+                        if (tabsArr.length > 0) {
+                            visibleTypes = tabsArr.map((rawId, i) => {
+                                const id = String(rawId || '').trim();
+                                const base = typesById.get(id) || {};
+                                const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
+                                const icon = String(base.icon || '').trim();
+                                return { id, name, icon };
+                            }).filter(t => t.id);
+                        } else {
+                            // Fallback 1: configured types (not hidden)
+                            visibleTypes = (typesArr || [])
+                                .filter(t => t && !t.hidden)
+                                .map(t => {
+                                    const id = String(t.id || t.name || '').trim();
+                                    return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
+                                })
+                                .filter(Boolean);
+                            // Fallback 2: derive ids from tab_names if still empty
+                            if (visibleTypes.length === 0 && tabNames.length > 0) {
+                                visibleTypes = tabNames.map((nm) => {
+                                    const id = String(nm || '').trim();
+                                    const base = typesById.get(id) || {};
+                                    const icon = String(base.icon || '').trim();
+                                    return id ? { id, name: String(nm || id).trim(), icon } : null;
+                                }).filter(Boolean);
+                            }
                         }
+                        typesList = visibleTypes;
                     } catch (_) {}
                     // If still empty, derive from resources (distinct types for this section)
                     if ((!typesList || typesList.length === 0) && window.supabaseClient) {
@@ -5149,7 +5166,7 @@ Permissions:
                             typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
                         } catch (_) {}
                     }
-                // Do not auto-augment; mirror only the configured tabs (or defaults).
+                    // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
                     const statsHTML = typesList.map(t => {
                         const nid = normalizeTypeId(t.id);

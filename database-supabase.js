@@ -706,7 +706,7 @@ class HubDatabase {
                 else normalized = {};
             }
 
-            const payload = { key, value: normalized, updated_at: new Date() };
+            const payload = { key, value: normalized };
             const { data, error } = await this.supabase
                 .from('site_settings')
                 .upsert(payload, { onConflict: 'key' })
