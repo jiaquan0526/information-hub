@@ -1120,6 +1120,23 @@
             } catch(_) {}
         }
 
+        // Ensure the button label reflects the latest Supabase site_settings
+        window.refreshBackgroundToggleUI = async function() {
+            try {
+                if (!(window.supabaseClient && window.supabaseClient.from)) return;
+                const { data } = await window.supabaseClient
+                    .from('site_settings')
+                    .select('value')
+                    .eq('key', 'backgrounds')
+                    .single();
+                let v = data && data.value;
+                try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
+                const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                try { window.globalBackgroundsEnabled = force; } catch(_) {}
+            } catch(_) {}
+            updateBackgroundToggleButton();
+        };
+
         window.toggleBackgrounds = async function() {
             try {
                 await window.refreshGlobalBackgrounds();
@@ -1204,12 +1221,23 @@
         // On load, read global site setting and apply local override
         (async function(){
             try { await window.refreshGlobalBackgrounds(); } catch(_) {}
+            try { await window.refreshBackgroundToggleUI(); } catch(_) {}
         })();
 
         // When the database becomes ready later, re-check and apply backgrounds flag
         try {
             document.addEventListener('hubdb-ready', () => {
                 try { window.refreshGlobalBackgrounds(); } catch(_) {}
+                try { window.refreshBackgroundToggleUI(); } catch(_) {}
+            });
+        } catch(_) {}
+
+        // Keep the label in sync when tab regains focus
+        try {
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    try { window.refreshBackgroundToggleUI(); } catch(_) {}
+                }
             });
         } catch(_) {}
 
