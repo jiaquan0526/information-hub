@@ -1120,6 +1120,16 @@
             } catch(_) {}
         }
 
+        async function _waitForSupabaseReady(maxMs = 3000) {
+            try {
+                const step = 100; let waited = 0;
+                while (waited < maxMs && !(window.supabaseClient && window.supabaseClient.from)) {
+                    await new Promise(r => setTimeout(r, step));
+                    waited += step;
+                }
+            } catch(_) {}
+        }
+
         // Ensure the button label reflects the latest Supabase site_settings
         window.refreshBackgroundToggleUI = async function() {
             try {
@@ -1220,15 +1230,31 @@
 
         // On load, read global site setting and apply local override
         (async function(){
+            // First pass: try immediately
             try { await window.refreshGlobalBackgrounds(); } catch(_) {}
             try { await window.refreshBackgroundToggleUI(); } catch(_) {}
+            // Second pass: wait for Supabase and images to be ready, then re-apply
+            try {
+                await _waitForSupabaseReady(2500);
+                await loadSectionBackgroundsFromDb();
+                await ensureBackgroundImagesLoaded();
+                await window.refreshGlobalBackgrounds();
+                await updateMainHubSections();
+                await window.refreshBackgroundToggleUI();
+            } catch(_) {}
         })();
 
         // When the database becomes ready later, re-check and apply backgrounds flag
         try {
             document.addEventListener('hubdb-ready', () => {
-                try { window.refreshGlobalBackgrounds(); } catch(_) {}
-                try { window.refreshBackgroundToggleUI(); } catch(_) {}
+                (async () => {
+                    try { await _waitForSupabaseReady(1500); } catch(_) {}
+                    try { await loadSectionBackgroundsFromDb(); } catch(_) {}
+                    try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                    try { await window.refreshGlobalBackgrounds(); } catch(_) {}
+                    try { await updateMainHubSections(); } catch(_) {}
+                    try { await window.refreshBackgroundToggleUI(); } catch(_) {}
+                })();
             });
         } catch(_) {}
 
@@ -1236,7 +1262,14 @@
         try {
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) {
-                    try { window.refreshBackgroundToggleUI(); } catch(_) {}
+                    (async () => {
+                        try { await _waitForSupabaseReady(1000); } catch(_) {}
+                        try { await loadSectionBackgroundsFromDb(); } catch(_) {}
+                        try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                        try { await window.refreshGlobalBackgrounds(); } catch(_) {}
+                        try { await updateMainHubSections(); } catch(_) {}
+                        try { await window.refreshBackgroundToggleUI(); } catch(_) {}
+                    })();
                 }
             });
         } catch(_) {}
@@ -5027,23 +5060,53 @@ Permissions:
                 if (!(role === 'admin' || canManage)) { alert('Only admins can reshuffle backgrounds'); return; }
             } catch (__) { alert('Unable to verify permissions'); return; }
             try {
-                // Regenerate the local manifest and thumbnails and then reshuffle mappings
+                // Regenerate manifest and ensure images
                 await regenerateBackgroundManifestAndThumbnails();
-                localStorage.removeItem('sectionBackgrounds');
                 await ensureBackgroundImagesLoaded();
-                updateMainHubSections();
-                // Also set a global reshuffle marker so all clients re-pick
-                try {
-                    if (window.hubDatabase && window.hubDatabaseReady) {
-                        const now = new Date().toISOString();
-                        // Merge with any existing setting, preserving forceEnabled
-                        const current = await hubDatabase.getSiteSetting('backgrounds');
-                        const next = Object.assign({}, current || {}, { shuffleAt: now });
-                        await hubDatabase.setSiteSetting('backgrounds', next);
+                // Build unique mapping for all visible sections and persist
+                const cards = Array.from(document.querySelectorAll('.hub-card'));
+                const sectionIds = cards.map(c => c.getAttribute('data-section-id')).filter(Boolean);
+                const imgs = BACKGROUND_IMAGES.slice();
+                for (let i = imgs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [imgs[i], imgs[j]] = [imgs[j], imgs[i]]; }
+                const used = new Set();
+                const newMap = {};
+                let cursor = 0;
+                for (const sid of sectionIds) {
+                    let picked = null;
+                    for (let k = 0; k < imgs.length; k++) {
+                        const candidate = imgs[(cursor + k) % imgs.length];
+                        if (!used.has(candidate)) { picked = candidate; cursor = (cursor + k + 1) % imgs.length; break; }
                     }
+                    if (!picked) { picked = imgs[cursor % imgs.length]; cursor = (cursor + 1) % imgs.length; }
+                    newMap[sid] = picked;
+                    used.add(picked);
+                }
+                if (window.supabaseClient && sectionIds.length > 0) {
+                    const rows = Object.keys(newMap).map(section_id => ({ section_id, image_url: newMap[section_id] }));
+                    const chunkSize = 100;
+                    for (let start = 0; start < rows.length; start += chunkSize) {
+                        const chunk = rows.slice(start, start + chunkSize);
+                        const { error: upErr } = await window.supabaseClient
+                            .from('section_backgrounds')
+                            .upsert(chunk, { onConflict: 'section_id' });
+                        if (upErr) throw upErr;
+                    }
+                }
+                SECTION_BG_MAP = newMap;
+                await updateMainHubSections();
+                // Update shuffleAt in site_settings so other clients can react
+                try {
+                    const { data } = await window.supabaseClient
+                        .from('site_settings')
+                        .select('value')
+                        .eq('key', 'backgrounds')
+                        .single();
+                    let current = data && data.value; try { if (typeof current === 'string') current = JSON.parse(current); } catch(_) {}
+                    const next = Object.assign({}, current || {}, { shuffleAt: new Date().toISOString() });
+                    await window.supabaseClient
+                        .from('site_settings')
+                        .upsert({ key: 'backgrounds', value: next }, { onConflict: 'key' });
                 } catch(_) {}
-                // In case the initial lazy init ran before force flag, try again
-                try { initBackgroundLazyLoad(JSON.parse(null||'[]').filter(s=>s.visible!==false)); } catch(_) {}
                 alert('Backgrounds reshuffled');
             } catch (e) {
                 console.warn('Reshuffle failed', e);
