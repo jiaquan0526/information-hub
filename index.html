@@ -151,8 +151,8 @@
     </script>
     
     <script>
-    // Backgrounds flag is managed via Supabase site_settings only
-    try { window.globalBackgroundsEnabled = false; } catch (_) {}
+    // Backgrounds flag default: enabled (site_settings can override)
+    try { window.globalBackgroundsEnabled = true; } catch (_) {}
     
     </script>
 
@@ -1214,7 +1214,9 @@
                     return;
                 }
                 try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
-                const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                const force = (v == null)
+                    ? true
+                    : !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 try { window.globalBackgroundsEnabled = force; } catch(_) {}
                 updateBackgroundToggleButton();
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
@@ -3934,12 +3936,6 @@ Permissions:
                 console.error('sectionsList element not found!');
                 return;
             }
-            try {
-                const tab = document.getElementById('sections-tab');
-                if (tab && tab.classList.contains('active')) {
-                    tab.style.display = 'block';
-                }
-            } catch(_) {}
             
             // Sort sections by order
             const sortedSections = [...sectionOrder].sort((a, b) => a.order - b.order);
@@ -4048,16 +4044,20 @@ Permissions:
             }
         };
 
-        // Reload sections when the sections tab becomes active (handles post-render hides/races)
+        // Reload sections when the sections tab becomes active (handles races) without changing visibility styles
         (function observeSectionsTabActivation(){
             try {
                 const tab = document.getElementById('sections-tab');
                 if (!tab || typeof MutationObserver === 'undefined') return;
-                const obs = new MutationObserver(function(mutations){
+                let lastRun = 0;
+                const obs = new MutationObserver(function(){
                     try {
                         if (tab.classList.contains('active')) {
-                            tab.style.display = 'block';
-                            loadSectionsList();
+                            const now = Date.now();
+                            if (now - lastRun > 300) {
+                                lastRun = now;
+                                loadSectionsList();
+                            }
                         }
                     } catch(_) {}
                 });
