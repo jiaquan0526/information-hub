@@ -1956,10 +1956,7 @@ window.importJsonSectionsTabsResources = async () => {
             informationHub && informationHub.showMessage && informationHub.showMessage('Please open auth.html and sign in, then retry import.', 'error');
             return;
         }
-        if (!window.hubDatabase || !window.hubDatabaseReady) {
-            informationHub && informationHub.showMessage && informationHub.showMessage('Supabase database unavailable', 'error');
-            return;
-        }
+        // Proceed even if wrapper not ready; we'll fallback to direct Supabase writes when needed
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'application/json';
@@ -2100,18 +2097,18 @@ window.importJsonSectionsTabsResources = async () => {
 
             // Upsert sections first to ensure tabs/resources attach
             try { document.getElementById('jsonImportSummary').style.display = 'block'; document.getElementById('jsonImportSummary').textContent = 'Importing...'; } catch(_) {}
-            // 1) Upsert sections explicitly
+            // 1) Upsert sections explicitly (direct Supabase path to avoid wrapper dependency)
             let secOk = 0, secErr = [];
             for (const s of norm.sections) {
                 const cfg = { intro: s.intro || '', visible: s.visible !== false, order: s.order || 0 };
                 try {
-                    if (window.hubDatabase && typeof hubDatabase.createSection === 'function') {
-                        await hubDatabase.createSection({ sectionId: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg, data: {} });
-                    } else if (window.supabaseClient) {
+                    if (window.supabaseClient) {
                         const { error } = await window.supabaseClient
                             .from('sections')
                             .upsert({ section_id: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg }, { onConflict: 'section_id' });
                         if (error) throw error;
+                    } else if (window.hubDatabase && typeof hubDatabase.createSection === 'function') {
+                        await hubDatabase.createSection({ sectionId: s.id, name: s.name || s.id, icon: s.icon || '', color: s.color || '', config: cfg, data: {} });
                     }
                     secOk++;
                 } catch (e) { secErr.push({ id: s.id, error: e && e.message ? e.message : String(e) }); }

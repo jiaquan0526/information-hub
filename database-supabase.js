@@ -658,7 +658,13 @@ class HubDatabase {
                 if (String(error.message || '').toLowerCase().includes('no rows')) return null;
                 throw error;
             }
-            return data ? (data.value || null) : null;
+            if (!data) return null;
+            let v = data.value || null;
+            try {
+                // Coerce stringified JSON to object for robustness
+                if (typeof v === 'string') v = JSON.parse(v);
+            } catch (_) { /* leave as-is if not parseable */ }
+            return v;
         } catch (error) {
             console.error('Error getting site setting:', error);
             return null;
@@ -683,7 +689,24 @@ class HubDatabase {
                 throw new Error('Only admins can update site settings');
             }
 
-            const payload = { key, value: value == null ? {} : value, updated_at: new Date() };
+            // Normalize to JSON object for jsonb compatibility
+            let normalized = value;
+            try {
+                if (typeof normalized === 'string') {
+                    // Parse stringified JSON when possible
+                    normalized = JSON.parse(normalized);
+                }
+            } catch (_) {
+                // If string but not JSON, wrap conservatively
+                normalized = { value: String(value) };
+            }
+            if (typeof normalized !== 'object' || normalized === null) {
+                // Coerce booleans/numbers into an object (keep existing convention)
+                if (typeof value === 'boolean') normalized = { forceEnabled: value };
+                else normalized = {};
+            }
+
+            const payload = { key, value: normalized, updated_at: new Date() };
             const { data, error } = await this.supabase
                 .from('site_settings')
                 .upsert(payload, { onConflict: 'key' })
