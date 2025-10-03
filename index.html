@@ -1161,6 +1161,13 @@
                 const next = !on;
                 const nextValue = Object.assign({}, current || {}, { forceEnabled: next });
 
+                // Optimistic UI update
+                const prevLocal = window.globalBackgroundsEnabled === true;
+                try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
+                updateBackgroundToggleButton();
+                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                try { await updateMainHubSections(); } catch(_) {}
+
                 // Persist to site settings so all clients pick it up (prefer hubDatabase, fallback to Supabase upsert)
                 let persisted = false;
                 try {
@@ -1172,18 +1179,20 @@
                 if (!persisted) {
                     const { error: upErr } = await window.supabaseClient
                         .from('site_settings')
-                        .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' });
+                        .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' })
+                        .select('key')
+                        .single();
                     if (upErr) throw upErr;
                 }
 
-                // Locally reflect immediately
-                try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
-                updateBackgroundToggleButton();
-                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                try { await updateMainHubSections(); } catch(_) {}
                 try { informationHub && informationHub.showMessage && informationHub.showMessage(`Global backgrounds ${next ? 'enabled' : 'disabled'}`, 'success'); } catch(_) {}
             } catch (e) {
                 console.error('Global background toggle failed:', e);
+                // Revert optimistic UI on failure
+                try { if (typeof window.globalBackgroundsEnabled !== 'undefined') { window.globalBackgroundsEnabled = !window.globalBackgroundsEnabled; } } catch(_) {}
+                try { updateBackgroundToggleButton(); } catch(_) {}
+                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                try { await updateMainHubSections(); } catch(_) {}
                 try {
                     // Enhance error message for generic network issues
                     const base = (e && (e.message || e.error_description || e.hint)) ? (e.message || e.error_description || e.hint) : String(e || 'Unknown error');
@@ -3921,6 +3930,14 @@ Permissions:
         
         function renderSectionsList() {
             console.log('renderSectionsList called');
+            // Only render when Sections tab is the active view
+            try {
+                const sectionsTab = document.getElementById('sections-tab');
+                if (!sectionsTab || !sectionsTab.classList.contains('active')) {
+                    console.log('Sections tab not active; skipping render');
+                    return;
+                }
+            } catch(_) {}
             const sectionsList = document.getElementById('sectionsList');
             console.log('sectionsList element found:', !!sectionsList);
             if (!sectionsList) {
