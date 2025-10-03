@@ -4955,6 +4955,7 @@ Permissions:
                     if (typeof backgroundsDisabled === 'function' && backgroundsDisabled()) {
                         try { card.style.removeProperty('background-image'); } catch(_) {}
                         try { card.classList.remove('bg-ready'); } catch(_) {}
+                        try { card.removeAttribute('data-bg-url'); } catch(_) {}
                         return;
                     }
                 } catch(_) {}
@@ -4993,12 +4994,18 @@ Permissions:
                         }).then((ok)=>{ if (ok) img = cand; });
                     }
                 } catch (_) {}
+                // Idempotence guard: skip if already applied
+                try {
+                    const currentUrl = card.getAttribute('data-bg-url') || '';
+                    if (currentUrl === img) return;
+                } catch(_) {}
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';
                 card.style.backgroundPosition = 'center';
                 card.style.backgroundRepeat = 'no-repeat';
                 // Mark card as ready for contrast styles
                 try { card.classList.add('bg-ready'); } catch (_) {}
+                try { card.setAttribute('data-bg-url', img); } catch(_) {}
             } catch (_) {}
         }
 
@@ -5865,22 +5872,34 @@ Permissions:
             });
         }
 
-        // Background lazy loader with small concurrency
+        // Background lazy loader with small concurrency and per-section dedupe
         let _bgActiveLoads = 0;
         const _bgQueue = [];
+        const _bgScheduled = new Set();
+        const _bgActiveSet = new Set();
         function _processBgQueue() {
             while (_bgActiveLoads < 3 && _bgQueue.length > 0) {
                 const next = _bgQueue.shift();
+                if (!next || !next.id) continue;
                 _bgActiveLoads++;
+                _bgActiveSet.add(next.id);
                 applyCardBackground(next.section).finally(() => {
                     _bgActiveLoads = Math.max(0, _bgActiveLoads - 1);
+                    try { _bgActiveSet.delete(next.id); } catch(_) {}
+                    try { _bgScheduled.delete(next.id); } catch(_) {}
                     _processBgQueue();
                 });
             }
         }
         function scheduleCardBackground(section) {
-            _bgQueue.push({ section });
-            _processBgQueue();
+            try {
+                const sid = section && section.id ? String(section.id) : '';
+                if (!sid) return;
+                if (_bgScheduled.has(sid) || _bgActiveSet.has(sid)) return;
+                _bgScheduled.add(sid);
+                _bgQueue.push({ section, id: sid });
+                _processBgQueue();
+            } catch(_) {}
         }
         function isLowDataConnection() { return false; }
         function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
