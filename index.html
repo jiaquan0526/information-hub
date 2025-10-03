@@ -3554,11 +3554,12 @@ Permissions:
                 if (selectedNav) selectedNav.classList.add('active');
             } catch(_) {}
 
-            // Show/hide content sections
+            // Show/hide content sections (force-hide all, then show target to prevent bleed-through)
             document.querySelectorAll('.admin-tab-content').forEach(content => {
                 content.classList.remove('active');
                 try { content.style.display = 'none'; } catch(_) {}
             });
+            try { const secTab = document.getElementById('sections-tab'); if (secTab) secTab.style.display = 'none'; } catch(_) {}
             
             const targetTab = document.getElementById(`${tabName}-tab`);
             if (targetTab) {
@@ -3851,21 +3852,36 @@ Permissions:
                 } catch(_) {}
 
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    let sections = await hubDatabase.getAllSections();
-                    console.log('Loaded sections from Supabase via hubDatabase:', sections);
-                    // Fallback to direct Supabase if wrapper returned no rows
-                    if ((!sections || sections.length === 0) && window.supabaseClient) {
+                    let sectionsFromWrapper = [];
+                    let sectionsFromDirect = [];
+                    try {
+                        sectionsFromWrapper = await hubDatabase.getAllSections();
+                    } catch (e) { console.warn('hubDatabase.getAllSections failed', e); }
+                    console.log('Loaded sections from Supabase via hubDatabase:', sectionsFromWrapper);
+                    // Also load directly and merge to avoid partial results due to wrappers/policies
+                    if (window.supabaseClient) {
                         try {
-                            const { data: direct } = await window.supabaseClient
+                            const { data: directRows } = await window.supabaseClient
                                 .from('sections')
                                 .select('section_id, name, icon, color, config, data')
                                 .order('name', { ascending: true });
-                            sections = Array.isArray(direct) ? direct : [];
-                            console.log('Loaded sections via direct Supabase fallback:', sections);
+                            sectionsFromDirect = Array.isArray(directRows) ? directRows : [];
+                            console.log('Loaded sections via direct Supabase (merge):', sectionsFromDirect);
                         } catch (fallbackErr) {
-                            console.warn('Direct sections fallback failed', fallbackErr);
+                            console.warn('Direct sections load failed', fallbackErr);
                         }
                     }
+                    // Merge unique by section_id (prefer direct row data for freshness)
+                    const byId = {};
+                    (Array.isArray(sectionsFromWrapper) ? sectionsFromWrapper : []).forEach(s => {
+                        const sid = s.section_id || s.id;
+                        if (sid) byId[sid] = s;
+                    });
+                    (Array.isArray(sectionsFromDirect) ? sectionsFromDirect : []).forEach(s => {
+                        const sid = s.section_id || s.id;
+                        if (sid) byId[sid] = s;
+                    });
+                    const sections = Object.keys(byId).map(k => byId[k]);
                     
                     // Map database format to expected format
                     sectionOrder = (sections || []).map(section => ({
