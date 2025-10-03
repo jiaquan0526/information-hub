@@ -3934,6 +3934,12 @@ Permissions:
                 console.error('sectionsList element not found!');
                 return;
             }
+            try {
+                const tab = document.getElementById('sections-tab');
+                if (tab && tab.classList.contains('active')) {
+                    tab.style.display = 'block';
+                }
+            } catch(_) {}
             
             // Sort sections by order
             const sortedSections = [...sectionOrder].sort((a, b) => a.order - b.order);
@@ -4041,6 +4047,23 @@ Permissions:
                 console.error('toggleSectionVisibility error', e);
             }
         };
+
+        // Reload sections when the sections tab becomes active (handles post-render hides/races)
+        (function observeSectionsTabActivation(){
+            try {
+                const tab = document.getElementById('sections-tab');
+                if (!tab || typeof MutationObserver === 'undefined') return;
+                const obs = new MutationObserver(function(mutations){
+                    try {
+                        if (tab.classList.contains('active')) {
+                            tab.style.display = 'block';
+                            loadSectionsList();
+                        }
+                    } catch(_) {}
+                });
+                obs.observe(tab, { attributes: true, attributeFilter: ['class'] });
+            } catch(_) {}
+        })();
         
         function makeSectionsSortable() {
             const sectionsList = document.getElementById('sectionsList');
