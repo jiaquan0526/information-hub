@@ -1184,21 +1184,6 @@
                 try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
                 const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 try { window.globalBackgroundsEnabled = force; } catch(_) {}
-                // Persist a global seed used to compute consistent backgrounds across clients
-                try {
-                    const seed = (v && (v.shuffleAt || v.shuffle_at || v.seed)) ? String(v.shuffleAt || v.shuffle_at || v.seed) : 'seed0';
-                    localStorage.setItem('globalShuffleAt', seed);
-                } catch(_) {}
-                // No local force flags; rely purely on Supabase site_settings
-                // If a global reshuffle marker exists and changed, clear local mappings so everyone re-picks
-                try {
-                    const globalMark = v && (v.shuffleAt || v.shuffle_at || v.seed);
-                    const prev = localStorage.getItem('globalShuffleAt') || '';
-                    if (globalMark && String(globalMark) !== String(prev)) {
-                        try { localStorage.setItem('globalShuffleAt', String(globalMark)); } catch(_) {}
-                        try { localStorage.removeItem('sectionBackgrounds'); } catch(_) {}
-                    }
-                } catch(_) {}
                 updateBackgroundToggleButton();
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                 try { await updateMainHubSections(); } catch(_) {}
@@ -4697,18 +4682,14 @@ Permissions:
             if (t.length <= maxLen) return t;
             return t.slice(0, Math.max(0, maxLen - 1)) + '…';
         }
-        // Background image support for sections (random, persistent per section)
+        // Background image support for sections (random, session-only)
         let BACKGROUND_IMAGES = [];
+        // Session-only seed and map for background assignment (not persisted)
+        let BG_SESSION_SEED = String(Date.now()) + ':' + Math.random();
+        let SECTION_BG_MAP = {};
         async function ensureBackgroundImagesLoaded() {
             try {
                 if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
-                try {
-                    const local = JSON.parse(localStorage.getItem('bgLocalManifest') || '{}');
-                    if (local && Array.isArray(local.files) && local.files.length > 0) {
-                        BACKGROUND_IMAGES = local.files.slice().sort();
-                        return;
-                    }
-                } catch (_) {}
                 try {
                     const bust = Date.now();
                     const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
@@ -4822,9 +4803,8 @@ Permissions:
         function getBackgroundImageForSection(sectionId) {
             try {
                 if (!Array.isArray(BACKGROUND_IMAGES) || BACKGROUND_IMAGES.length === 0) return null;
-                // Use global seed + section to derive a stable index across all clients
-                const seed = String(localStorage.getItem('globalShuffleAt') || 'seed0');
-                const h = hashCode(`${seed}|${sectionId}`);
+                // Use a session-only seed to derive a stable index within a single load
+                const h = hashCode(`${BG_SESSION_SEED}|${sectionId}`);
                 const idx = Math.abs(h) % BACKGROUND_IMAGES.length;
                 return BACKGROUND_IMAGES[idx];
             } catch (_) {
@@ -4873,7 +4853,7 @@ Permissions:
             } catch (_) {}
         }
 
-        // Regenerate local manifest and precompute thumbnails, then reshuffle backgrounds
+        // Regenerate manifest and precompute thumbnails (session-only; no localStorage)
         async function regenerateBackgroundManifestAndThumbnails() {
             // Attempt to read fresh manifest.json, fall back to current BACKGROUND_IMAGES
             let files = [];
@@ -4899,11 +4879,6 @@ Permissions:
                     files = ghFiles;
                 }
             } catch(_) {}
-            // Save as local manifest override
-            try {
-                const manifest = { files: files.slice(), ts: Date.now() };
-                localStorage.setItem('bgLocalManifest', JSON.stringify(manifest));
-            } catch (_) {}
             // Warm optimized thumbnails with small concurrency
             try {
                 const queue = files.slice();
@@ -4915,8 +4890,6 @@ Permissions:
                     }
                 });
                 await Promise.all(workers);
-                // Update optimized version marker so cache persists correctly
-                try { localStorage.setItem('bgOptimizedVersion', computeManifestVersion()); } catch(_) {}
             } catch (_) {}
         }
 
@@ -5131,9 +5104,6 @@ Permissions:
             
             // Pre-assign a pool of images large enough for all sections, allowing duplicates when needed
             try {
-                if (backgroundsDisabled()) {
-                    try { localStorage.removeItem('sectionBackgrounds'); } catch(_) {}
-                }
                 if (!backgroundsDisabled() && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
                     const needed = visibleSections.length;
                     const pool = [];
@@ -5144,9 +5114,6 @@ Permissions:
                         [imgs[i], imgs[j]] = [imgs[j], imgs[i]];
                     }
                     let idx = 0;
-                    const key = 'sectionBackgrounds';
-                    let currentMap = {};
-                    try { currentMap = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) { currentMap = {}; }
                     for (let n = 0; n < needed; n++) {
                         const img = imgs[idx % imgs.length];
                         pool.push(img);
@@ -5154,11 +5121,10 @@ Permissions:
                     }
                     // Assign sequentially to each visible section if not already mapped
                     visibleSections.forEach((s, i) => {
-                        if (!currentMap[s.id]) {
-                            currentMap[s.id] = pool[i];
+                        if (!SECTION_BG_MAP[s.id]) {
+                            SECTION_BG_MAP[s.id] = pool[i];
                         }
                     });
-                    try { localStorage.setItem(key, JSON.stringify(currentMap)); } catch (_) {}
                 }
             } catch (_) {}
 

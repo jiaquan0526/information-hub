@@ -382,13 +382,6 @@ class SectionManager {
             // Deterministic list built from manifest, filtered and sorted
             const loadImages = async () => {
                 try {
-                    // Try local cached manifest from hub page first
-                    try {
-                        const local = JSON.parse(localStorage.getItem('bgLocalManifest') || '{}');
-                        if (local && Array.isArray(local.files) && local.files.length > 0) {
-                            return local.files.slice().sort();
-                        }
-                    } catch (_) {}
                     // Fallback to fetching manifest.json
                     try {
                         const bust = Date.now();
@@ -420,8 +413,10 @@ class SectionManager {
                             if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
                         } catch (_) {}
                         if (disable) return;
-                        // Use global seed + sectionId to pick the same image across all clients
-                        const seed = String(localStorage.getItem('globalShuffleAt') || 'seed0');
+                        // Use a session-only seed to pick within this load (no persistence)
+                        const seed = (typeof window.BG_SESSION_SEED === 'string' && window.BG_SESSION_SEED.length > 0)
+                            ? window.BG_SESSION_SEED
+                            : (window.BG_SESSION_SEED = String(Date.now()) + ':' + Math.random());
                         const idx = Math.abs(this._hash(`${seed}|${this.currentSection}`)) % images.length;
                         const chosen = images[idx];
                         // Prefer WebP if available using the hub page helper when present
