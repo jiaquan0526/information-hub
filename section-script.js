@@ -423,7 +423,8 @@ class SectionManager {
                         let finalUrl = chosen;
                         try {
                             if (typeof window.getOptimizedImageUrl === 'function') {
-                                const opt = await window.getOptimizedImageUrl(chosen);
+                                // Resize/convert via online proxy before applying
+                                const opt = await window.getOptimizedImageUrl(chosen, 1600, 0, 0.8);
                                 if (opt) finalUrl = opt;
                             }
                         } catch (_) {}

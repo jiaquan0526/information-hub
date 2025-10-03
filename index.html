@@ -4844,6 +4844,11 @@ Permissions:
                     if (chosen) img = chosen;
                 }
                 if (!img) return;
+                // Resize/convert via online proxy before applying
+                try {
+                    const optimized = await getOptimizedImageUrl(img, 1200, 0, 0.8);
+                    if (optimized) img = optimized;
+                } catch (_) {}
                 card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
                 card.style.backgroundSize = 'cover';
                 card.style.backgroundPosition = 'center';
