@@ -720,6 +720,103 @@ class HubDatabase {
         }
     }
 
+	// Import raw state produced by backup JSON (admin-only)
+	async importRawState(raw) {
+		try {
+			const client = window.supabaseClient || this.supabase;
+			if (!client) throw new Error('Supabase client not ready');
+			// Admin-only guard
+			const currentUserId = await this.getCurrentUserId();
+			if (!currentUserId) throw new Error('Not authenticated');
+			const { data: prof, error: pErr } = await client
+				.from('profiles')
+				.select('role, permissions')
+				.eq('id', currentUserId)
+				.single();
+			if (pErr) throw pErr;
+			const role = String(prof?.role || '').toLowerCase();
+			const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+			if (!(role === 'admin' || canManage)) {
+				throw new Error('Only admin can restore data');
+			}
+
+			const data = raw && typeof raw === 'object' ? raw : {};
+
+			// Users
+			if (Array.isArray(data.users)) {
+				for (const user of data.users) {
+					try { await this.saveUser(user); }
+					catch (e) { try { console.warn('restore: saveUser failed', e?.message || e); } catch(_) {} }
+				}
+			}
+			// Sections
+			if (Array.isArray(data.sections)) {
+				for (const section of data.sections) {
+					const sectionId = section.section_id || section.sectionId || section.id;
+					const payload = {
+						sectionId,
+						name: section.name,
+						icon: section.icon,
+						color: section.color,
+						config: section.config || {},
+						data: section.data || {}
+					};
+					try { await this.saveSection(payload); }
+					catch (e) { try { console.warn('restore: saveSection failed', e?.message || e); } catch(_) {} }
+				}
+			}
+			// Resources (array or { [sectionId]: Resource[] })
+			if (data.resources && typeof data.resources === 'object') {
+				if (Array.isArray(data.resources)) {
+					for (const r of data.resources) {
+						const sectionId = r.section_id || r.sectionId || r.section || null;
+						const payload = Object.assign({}, r, { sectionId });
+						try { await this.saveResource(payload); }
+						catch (e) { try { console.warn('restore: saveResource failed', e?.message || e); } catch(_) {} }
+					}
+				} else {
+					for (const sid of Object.keys(data.resources)) {
+						const arr = Array.isArray(data.resources[sid]) ? data.resources[sid] : [];
+						for (const r of arr) {
+							const payload = Object.assign({}, r, { sectionId: sid });
+							try { await this.saveResource(payload); }
+							catch (e) { try { console.warn('restore: saveResource failed', e?.message || e); } catch(_) {} }
+						}
+					}
+				}
+			}
+			// Activities
+			if (Array.isArray(data.activities)) {
+				for (const activity of data.activities) {
+					try { await this.saveActivity(activity); }
+					catch (e) { try { console.warn('restore: saveActivity failed', e?.message || e); } catch(_) {} }
+				}
+			}
+			// Views (best-effort)
+			if (Array.isArray(data.views)) {
+				for (const v of data.views) {
+					try {
+						const payload = {
+							id: v.id,
+							user_id: v.user_id || v.userId || null,
+							resource_id: v.resource_id || v.resourceId || null,
+							count: v.count || v.view_count || v.views,
+							last_viewed_at: v.last_viewed_at || v.lastViewedAt || v.last_viewed
+						};
+						Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+						if (payload.user_id && payload.resource_id) {
+							await client.from('views').upsert(payload, { onConflict: 'user_id,resource_id' });
+						}
+					} catch (e) { try { console.warn('restore: upsert view failed', e?.message || e); } catch(_) {} }
+				}
+			}
+			return true;
+		} catch (error) {
+			console.error('Error importing raw state:', error);
+			throw error;
+		}
+	}
+
     // Export all data (tolerant of RLS: missing datasets return as empty arrays)
     async exportAllData() {
         // Prefer a privileged RPC if available (reduces multi-round trips and bypasses per-table RLS complexity)
