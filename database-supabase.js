@@ -370,7 +370,9 @@ class HubDatabase {
                     description: resource.description,
                     tags: resource.tags || [],
                     extra: resource.extra || {},
-                    created_by: resource.userId || currentUserId || null
+                    created_by: (
+                        resource.created_by || resource.createdBy || resource.user_id || resource.userId || currentUserId || null
+                    )
                 });
             
             if (error) throw error;
@@ -483,18 +485,29 @@ class HubDatabase {
             let resolvedUsername = activity.username || activity.user || null;
             if (!resolvedUsername) {
                 try {
-                    // Prefer auth user email when available
                     const { data: authData } = await window.supabaseClient.auth.getUser();
                     const authUser = authData && authData.user ? authData.user : null;
-                    resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
-                    // Fallback to profiles table if still empty
+                    const profileId = (authUser && authUser.id) ? authUser.id : userId;
+                    if (profileId) {
+                        try {
+                            const { data: prof } = await client
+                                .from('profiles')
+                                .select('username, name, email')
+                                .eq('id', profileId)
+                                .single();
+                            if (prof) resolvedUsername = prof.username || prof.name || prof.email || null;
+                        } catch (_) {}
+                    }
+                    if (!resolvedUsername) {
+                        resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
+                    }
                     if (!resolvedUsername && userId) {
                         const { data: prof } = await client
                             .from('profiles')
-                            .select('username, email')
+                            .select('username, name, email')
                             .eq('id', userId)
                             .single();
-                        if (prof) resolvedUsername = prof.username || prof.email || null;
+                        if (prof) resolvedUsername = prof.username || prof.name || prof.email || null;
                     }
                 } catch (_) { /* ignore */ }
             }
@@ -510,10 +523,36 @@ class HubDatabase {
             // Normalize identifiers and attempt inference from provided fields
             const normalizedSection = activity.section || activity.sectionId || (activity.metadata && (activity.metadata.section || activity.metadata.sectionId)) || null;
             const normalizedResource = activity.resourceId || (activity.metadata && (activity.metadata.resource_id || activity.metadata.resourceId)) || null;
+            // Enrich from resources table using title/id where possible (best-effort)
+            try {
+                // If we have resource_id but not a title, fetch title
+                if (normalizedResource && !meta.title) {
+                    const { data: r1 } = await client
+                        .from('resources')
+                        .select('title, section_id')
+                        .eq('id', normalizedResource)
+                        .maybeSingle();
+                    if (r1 && r1.title) meta.title = r1.title;
+                    if (!rawSection && !normalizedSection && r1 && r1.section_id && !meta.section) meta.section = r1.section_id;
+                }
+                // If we have a title but no resource_id, try to resolve id by (section + title) or title alone
+                const candidateTitle = meta.title || activity.resource || activity.title || meta.description || null;
+                if (!normalizedResource && candidateTitle) {
+                    let query = client.from('resources').select('id, section_id, title').eq('title', candidateTitle).limit(1);
+                    if (normalizedSection || rawSection) {
+                        query = query.eq('section_id', normalizedSection || rawSection);
+                    }
+                    const { data: r2 } = await query.maybeSingle();
+                    if (r2 && r2.id) {
+                        activity.resourceId = r2.id; // reflect for payload below
+                        if (!meta.section && r2.section_id) meta.section = r2.section_id;
+                    }
+                }
+            } catch (_) { /* ignore enrichment failures */ }
             const payload = {
                 user_id: userId,
                 action: activity.action || 'EVENT',
-                resource_id: normalizedResource || null,
+                resource_id: (activity.resourceId || normalizedResource) || null,
                 section_id: (rawSection && String(rawSection).trim().toLowerCase() !== 'general') ? rawSection : (normalizedSection || null),
                 metadata: meta
             };
@@ -551,19 +590,56 @@ class HubDatabase {
                 try {
                     const { data: authData } = await window.supabaseClient.auth.getUser();
                     const authUser = authData && authData.user ? authData.user : null;
-                    resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
+                    const profileId = (authUser && authUser.id) ? authUser.id : userId;
+                    if (profileId) {
+                        try {
+                            const { data: prof } = await client
+                                .from('profiles')
+                                .select('username, name, email')
+                                .eq('id', profileId)
+                                .single();
+                            if (prof) resolvedUsername = prof.username || prof.name || prof.email || null;
+                        } catch (_) {}
+                    }
+                    if (!resolvedUsername) {
+                        resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
+                    }
                     if (!resolvedUsername && userId) {
                         const { data: prof } = await client
                             .from('profiles')
-                            .select('username, email')
+                            .select('username, name, email')
                             .eq('id', userId)
                             .single();
-                        if (prof) resolvedUsername = prof.username || prof.email || null;
+                        if (prof) resolvedUsername = prof.username || prof.name || prof.email || null;
                     }
                 } catch (_) { /* ignore */ }
             }
             const normalizedSection = entry.section || entry.sectionId || (entry.metadata && (entry.metadata.section || entry.metadata.sectionId)) || null;
-            const normalizedResource = entry.resourceId || (entry.metadata && (entry.metadata.resource_id || entry.metadata.resourceId)) || null;
+            let normalizedResource = entry.resourceId || (entry.metadata && (entry.metadata.resource_id || entry.metadata.resourceId)) || null;
+            // Enrich from resources table using title/id where possible (best-effort)
+            try {
+                // If we have resource_id but no title, fetch title
+                if (normalizedResource && !(entry.title || (entry.metadata && entry.metadata.title))) {
+                    const { data: r1 } = await client
+                        .from('resources')
+                        .select('title, section_id')
+                        .eq('id', normalizedResource)
+                        .maybeSingle();
+                    if (r1 && r1.title) entry.title = entry.title || r1.title;
+                    if (!normalizedSection && r1 && r1.section_id) entry.section = entry.section || r1.section_id;
+                }
+                // If we have a title but no resource_id, try to resolve id
+                const candidateTitle = entry.title || (entry.metadata && entry.metadata.title) || entry.resource || (entry.metadata && entry.metadata.description) || null;
+                if (!normalizedResource && candidateTitle) {
+                    let query = client.from('resources').select('id, section_id, title').eq('title', candidateTitle).limit(1);
+                    if (normalizedSection) query = query.eq('section_id', normalizedSection);
+                    const { data: r2 } = await query.maybeSingle();
+                    if (r2 && r2.id) {
+                        normalizedResource = r2.id;
+                        if (!entry.section && r2.section_id) entry.section = r2.section_id;
+                    }
+                }
+            } catch (_) { /* ignore enrichment failures */ }
             const payload = {
                 user_id: userId,
                 action: entry.action || 'updated',
@@ -744,24 +820,8 @@ class HubDatabase {
                 throw new Error('Only admins can update site settings');
             }
 
-            // Normalize to JSON object for jsonb compatibility
-            let normalized = value;
-            try {
-                if (typeof normalized === 'string') {
-                    // Parse stringified JSON when possible
-                    normalized = JSON.parse(normalized);
-                }
-            } catch (_) {
-                // If string but not JSON, wrap conservatively
-                normalized = { value: String(value) };
-            }
-            if (typeof normalized !== 'object' || normalized === null) {
-                // Coerce booleans/numbers into an object (keep existing convention)
-                if (typeof value === 'boolean') normalized = { forceEnabled: value };
-                else normalized = {};
-            }
-
-            const payload = { key, value: normalized };
+            // Store value as-is; backend column is jsonb and accepts any JSON
+            const payload = { key, value };
             const { data, error } = await this.supabase
                 .from('site_settings')
                 .upsert(payload, { onConflict: 'key' })
@@ -820,8 +880,7 @@ class HubDatabase {
 				.single();
 			if (pErr) throw pErr;
 			const role = String(prof?.role || '').toLowerCase();
-			const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
-			if (!(role === 'admin' || canManage)) {
+			if (role !== 'admin') {
 				throw new Error('Only admin can restore data');
 			}
 
@@ -837,13 +896,11 @@ class HubDatabase {
 			// Sections
 			if (Array.isArray(data.sections)) {
 				for (const section of data.sections) {
-					const sectionId = section.section_id || section.sectionId || section.id;
+					const sectionIdRaw = section.section_id || section.sectionId || section.id;
+					const sectionId = sectionIdRaw != null ? String(sectionIdRaw) : '';
+					if (!sectionId) { try { console.warn('restore: skipped section with missing id'); } catch(_) {} continue; }
 					const incomingCfg = (section && typeof section.config === 'object') ? section.config : {};
-					// Ensure restored sections are visible by default unless explicitly false
-					const nextConfig = Object.assign({}, incomingCfg);
-					if (typeof nextConfig.visible === 'undefined') nextConfig.visible = true;
-					if (typeof nextConfig.order === 'undefined') nextConfig.order = 0;
-					if (typeof nextConfig.intro === 'undefined') nextConfig.intro = section.intro || '';
+					const nextConfig = incomingCfg; // preserve exactly as provided
 					const payload = {
 						sectionId,
 						name: section.name,
@@ -876,13 +933,7 @@ class HubDatabase {
 					}
 				}
 			}
-			// Activities
-			if (Array.isArray(data.activities)) {
-				for (const activity of data.activities) {
-					try { await this.saveActivity(activity); }
-					catch (e) { try { console.warn('restore: saveActivity failed', e?.message || e); } catch(_) {} }
-				}
-			}
+			// Activities: present in backup for audit history, but intentionally NOT restored
 			// Views (best-effort)
 			if (Array.isArray(data.views)) {
 				for (const v of data.views) {

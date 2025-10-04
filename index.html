@@ -1538,6 +1538,51 @@
                 };
                 // Escape helper for safe HTML
                 const safe = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
+                // Augment section names from DB and build per-section tab name maps
+                let tabNameBySection = {};
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+                        const secs = await hubDatabase.getAllSections();
+                        (secs || []).forEach(s => {
+                            try {
+                                const sid = s.section_id || s.sectionId || s.id;
+                                const nm = s.name || sid;
+                                if (sid && nm && (!sectionNames[sid] || sectionNames[sid] === prettyName(sid))) {
+                                    sectionNames[sid] = nm;
+                                }
+                                const cfg = s && typeof s.config === 'object' ? s.config : {};
+                                const map = tabNameBySection[sid] || (tabNameBySection[sid] = {});
+                                if (Array.isArray(cfg.types)) {
+                                    cfg.types.forEach(t => {
+                                        const tid = String((t && t.id !== undefined) ? t.id : t);
+                                        const tname = String((t && t.name) || tid);
+                                        if (tid) map[tid] = tname;
+                                    });
+                                } else if (Array.isArray(cfg.tabs)) {
+                                    const names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+                                    cfg.tabs.forEach((tid, i) => {
+                                        const k = String(tid || '');
+                                        if (k) map[k] = String(names[i] || k);
+                                    });
+                                }
+                            } catch(_) {}
+                        });
+                    }
+                } catch(_) {}
+                // Prefetch resource titles for latest items
+                const resourceNameById = {};
+                try {
+                    const ids = Array.from(new Set(latest.map(a => a.resource_id || a.resourceId).filter(Boolean)));
+                    for (const rid of ids) {
+                        try {
+                            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getResource === 'function') {
+                                const r = await hubDatabase.getResource(rid);
+                                if (r && r.title) resourceNameById[rid] = r.title;
+                            }
+                        } catch(_) {}
+                    }
+                } catch(_) {}
+                const isUuidLike = (s) => { try { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||'')); } catch(_) { return false; } };
                 // Load global broadcast announcement (visible to all)
                 let broadcastValue = null;
                 try {
@@ -1568,9 +1613,10 @@
                     const meta = (a && a.metadata) ? a.metadata : {};
                     const who = a.username || meta.username || a.user || 'Someone';
                     const section = a.section || a.sectionId || a.category || 'general';
-                    const sectionLabel = prettyName(section);
+                    const sectionLabel = (sectionNames && sectionNames[section]) ? sectionNames[section] : prettyName(section);
                     const action = a.action || a.type || 'updated';
                     const actionLower = String(action).toLowerCase();
+                    const resourceId = a.resource_id || a.resourceId || '';
                     let resource = a.title || a.resource || a.description || meta.title || '';
                     // Prefer explicit tab names for tab-related actions
                     if (!resource && (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab'))) {
@@ -1579,7 +1625,8 @@
                             const newName = meta.newName || '';
                             resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resource = meta.name || meta.tabId || '';
+                            const tabId = meta.tabId || meta.name || '';
+                            resource = tabNameBySection[section] && tabId ? (tabNameBySection[section][tabId] || tabId) : (meta.name || tabId || '');
                         }
                     }
                     // Prefer section names for section-related actions
@@ -1589,8 +1636,13 @@
                             const newName = meta.newName || '';
                             resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resource = meta.name || section || '';
+                            resource = meta.name || sectionLabel || '';
                         }
+                    }
+                    // Resolve resource title by ID when needed
+                    if ((isUuidLike(resource) || (resourceId && resourceId === resource) || !resource) && resourceId) {
+                        const resolved = resourceNameById[resourceId];
+                        if (resolved) resource = resolved;
                     }
                     return `<span class="info-item"><strong>${safe(who)}</strong> ${safe(action)} ${resource ? `"${safe(resource)}" ` : ''}in <em>${safe(sectionLabel)}</em><span class="info-sep">•</span><span class="muted">${safe(when)}</span></span>`;
                 });
@@ -4453,6 +4505,8 @@ Permissions:
                 } catch (_) { /* if profile check fails, fall through and let RLS enforce */ }
 
                 const iconClass = iconVal || 'fas fa-th-large';
+                // Capture previous values for activity logging
+                const prevNameForLog = isEdit && section ? (section.name || section.id || '') : '';
                 if (isEdit) {
                     const idx = sectionOrder.findIndex(s => s.id === section.id);
                     if (idx !== -1) {
@@ -4496,6 +4550,15 @@ Permissions:
                     try {
                         await hubDatabase.updateSection(target);
                         console.log('Section updated in Supabase:', target);
+                        // Log UPDATE_SECTION (include name change details when applicable)
+                        try {
+                            const oldName = prevNameForLog || target.id;
+                            const newName = nameInput || target.name || target.id;
+                            const meta = (oldName && newName && String(oldName) !== String(newName))
+                                ? { oldName, newName }
+                                : { name: newName };
+                            hubDatabase.saveActivity({ action: 'UPDATE_SECTION', sectionId: target.id, metadata: meta });
+                        } catch(_) {}
                         // Diff tabs/types and log changes
                         try {
                             const prev = (__prevCfg && typeof __prevCfg === 'object') ? __prevCfg : {};
@@ -4671,6 +4734,12 @@ Permissions:
             
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
+                    // Capture name for logging before deletion
+                    let sectionNameForDelete = '';
+                    try {
+                        const existingLocal = (Array.isArray(sectionOrder) ? sectionOrder : []).find(s => s && s.id === sectionId);
+                        sectionNameForDelete = (existingLocal && existingLocal.name) ? existingLocal.name : '';
+                    } catch(_) {}
                     try {
                         await hubDatabase.deleteSection(sectionId);
                         console.log('Section deleted from Supabase (wrapper):', sectionId);
@@ -4695,7 +4764,12 @@ Permissions:
                         if (!deleted) throw new Error('No section row deleted');
                         console.log('Section deleted via direct Supabase:', sectionId);
                     }
-                    try { if (window.hubDatabase && window.hubDatabaseReady) hubDatabase.saveActivity({ action: 'DELETE_SECTION', sectionId }); } catch(_) {}
+                    try {
+                        if (window.hubDatabase && window.hubDatabaseReady) {
+                            const meta = sectionNameForDelete ? { name: sectionNameForDelete } : {};
+                            hubDatabase.saveActivity({ action: 'DELETE_SECTION', sectionId, metadata: meta });
+                        }
+                    } catch(_) {}
                     
                     // Remove from local sectionOrder array
                     const idx = sectionOrder.findIndex(s => s.id === sectionId);
