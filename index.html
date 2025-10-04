@@ -1482,7 +1482,9 @@
                 const disallowed = [
                     'login','logout','session','auth','permission','role','user login','user logout',
                     'open','opened','close','closed','view','viewed','visit','visited',
-                    'nav','navigate','navigation','review','for review','like','liked','favorite','favourite','star','starred'
+                    'nav','navigate','navigation','review','for review','like','liked','favorite','favourite','star','starred',
+                    // Explicitly exclude admin tab switches/actions from the marquee
+                    'switch_admin_tab','switch admin tab','switch','open_admin_panel','close_admin_panel','admin panel'
                 ];
                 if (disallowed.some(k => t.includes(k) || action.includes(k) || title.includes(k))) return false;
                 // Include any content-oriented entities and CRUD-ish actions
