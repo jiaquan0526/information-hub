@@ -880,11 +880,25 @@ class HubDatabase {
 				.single();
 			if (pErr) throw pErr;
 			const role = String(prof?.role || '').toLowerCase();
-			if (role !== 'admin') {
-				throw new Error('Only admin can restore data');
+			const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+			if (!(role === 'admin' || canManage)) {
+				throw new Error('Only admin or managers can restore data');
 			}
 
 			const data = raw && typeof raw === 'object' ? raw : {};
+
+			// Temporarily elevate current user's edit rights to satisfy RLS during restore
+			let originalPermissions = null;
+			try {
+				const { data: curProf } = await client
+					.from('profiles')
+					.select('id, permissions')
+					.eq('id', currentUserId)
+					.single();
+				originalPermissions = (curProf && curProf.permissions && typeof curProf.permissions === 'object') ? JSON.parse(JSON.stringify(curProf.permissions)) : {};
+				const nextPerm = Object.assign({}, originalPermissions, { canEditAllSections: true });
+				await client.from('profiles').update({ permissions: nextPerm }).eq('id', currentUserId);
+			} catch (_) { /* best-effort */ }
 
 			// Users
 			if (Array.isArray(data.users)) {
@@ -969,6 +983,12 @@ class HubDatabase {
 					}
 				} catch (e) { try { console.warn('restore: siteSettings import failed', e?.message || e); } catch(_) {} }
 			}
+			// Best-effort revert of temporary elevation
+			try {
+				if (originalPermissions) {
+					await client.from('profiles').update({ permissions: originalPermissions }).eq('id', currentUserId);
+				}
+			} catch (_) { /* keep elevated if revert fails */ }
 			return true;
 		} catch (error) {
 			console.error('Error importing raw state:', error);

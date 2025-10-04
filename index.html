@@ -1764,6 +1764,51 @@
                     const s = String(key).replace(/-/g, ' ');
                     return s.charAt(0).toUpperCase() + s.slice(1);
                 };
+                // Augment section names from DB and build per-section tab name maps
+                let tabNameBySection = {};
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
+                        const secs = await hubDatabase.getAllSections();
+                        (secs || []).forEach(s => {
+                            try {
+                                const sid = s.section_id || s.sectionId || s.id;
+                                const nm = s.name || sid;
+                                if (sid && nm && (!sectionNames[sid] || sectionNames[sid] === prettyName(sid))) {
+                                    sectionNames[sid] = nm;
+                                }
+                                const cfg = s && typeof s.config === 'object' ? s.config : {};
+                                const map = tabNameBySection[sid] || (tabNameBySection[sid] = {});
+                                if (Array.isArray(cfg.types)) {
+                                    cfg.types.forEach(t => {
+                                        const tid = String((t && t.id !== undefined) ? t.id : t);
+                                        const tname = String((t && t.name) || tid);
+                                        if (tid) map[tid] = tname;
+                                    });
+                                } else if (Array.isArray(cfg.tabs)) {
+                                    const names = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+                                    cfg.tabs.forEach((tid, i) => {
+                                        const k = String(tid || '');
+                                        if (k) map[k] = String(names[i] || k);
+                                    });
+                                }
+                            } catch(_) {}
+                        });
+                    }
+                } catch(_) {}
+                // Prefetch resource titles for recent items
+                const resourceNameById = {};
+                try {
+                    const ids = Array.from(new Set(recent.map(a => a.resource_id || a.resourceId).filter(Boolean)));
+                    for (const rid of ids) {
+                        try {
+                            if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getResource === 'function') {
+                                const r = await hubDatabase.getResource(rid);
+                                if (r && r.title) resourceNameById[rid] = r.title;
+                            }
+                        } catch(_) {}
+                    }
+                } catch(_) {}
+                const isUuidLike = (s) => { try { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||'')); } catch(_) { return false; } };
                 // Prepend broadcast if available
                 try {
                     let enabled = false; let message = ''; let link = '';
@@ -1791,9 +1836,11 @@
                     const meta = (a && a.metadata) ? a.metadata : {};
                     const who = esc(a.username || meta.username || a.user || 'Someone');
                     const sectionKey = a.section || a.sectionId || a.category || 'general';
-                    const section = esc(prettyName(sectionKey));
+                    const sectionLabelRaw = sectionNames[sectionKey] || prettyName(sectionKey);
+                    const section = esc(sectionLabelRaw);
                     const actionRaw = a.action || a.type || 'updated';
                     const action = esc(actionRaw);
+                    const resourceId = a.resource_id || a.resourceId || '';
                     let resourceRaw = a.title || a.resource || a.description || meta.title || '';
                     const actionLower = String(actionRaw).toLowerCase();
                     if (!resourceRaw && (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab'))) {
@@ -1802,7 +1849,8 @@
                             const newName = meta.newName || '';
                             resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resourceRaw = meta.name || meta.tabId || '';
+                            const tabId = meta.tabId || meta.name || '';
+                            resourceRaw = tabNameBySection[sectionKey] && tabId ? (tabNameBySection[sectionKey][tabId] || tabId) : (meta.name || tabId || '');
                         }
                     }
                     if (!resourceRaw && (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section'))) {
@@ -1811,8 +1859,12 @@
                             const newName = meta.newName || '';
                             resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resourceRaw = meta.name || sectionKey || '';
+                            resourceRaw = meta.name || sectionLabelRaw || '';
                         }
+                    }
+                    if ((isUuidLike(resourceRaw) || (resourceId && resourceId === resourceRaw) || !resourceRaw) && resourceId) {
+                        const resolved = resourceNameById[resourceId];
+                        if (resolved) resourceRaw = resolved;
                     }
                     const resource = esc(resourceRaw);
                     return `<div style=\"padding:8px 0;border-bottom:1px solid #eee;display:flex;gap:10px;flex-wrap:wrap;align-items:center;\">\n                        <span><strong>${who}</strong></span>\n                        <span style=\\\"opacity:.6\\\">•</span>\n                        <span>${action}</span>\n                        <span style=\\\"opacity:.6\\\">•</span>\n                        <span>${section}</span>\n                        ${resource ? `<span style=\\\"opacity:.6\\\">•</span><span>${resource}</span>` : ''}\n                        <span style=\\\"margin-left:auto;color:#999;font-size:0.85rem;\\\">${esc(when)}</span>\n                    </div>`;
