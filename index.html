@@ -1220,11 +1220,17 @@
                     v = data && data.value;
                 } catch (_) { v = null; }
                 try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
-                const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
-                try { window.globalBackgroundsEnabled = force; } catch(_) {}
+                const prev = { enabled: !!window.globalBackgroundsEnabled, shuffleAt: window.__bgShuffleAt || '' };
+                const nextEnabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                const nextShuffle = v && v.shuffleAt ? String(v.shuffleAt) : '';
+                const changed = (prev.enabled !== nextEnabled) || (prev.shuffleAt !== nextShuffle);
+                try { window.globalBackgroundsEnabled = nextEnabled; } catch(_) {}
+                window.__bgShuffleAt = nextShuffle;
                 updateBackgroundToggleButton();
-                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                try { await updateMainHubSections(); } catch(_) {}
+                if (changed) {
+                    try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                    try { await updateMainHubSections(); } catch(_) {}
+                }
             } catch(_) {}
         };
 
@@ -5241,15 +5247,8 @@ Permissions:
                         if (mapped) img = mapped;
                     } catch(_) {}
                 }
-                // Fallback only if DB map is not yet ready; otherwise, leave blank until ready
-                if (!img) {
-                    if (!SECTION_BG_READY) {
-                        const chosen = await resolveValidBackground(sectionCfg.id);
-                        if (chosen) img = chosen;
-                    } else {
-                        return;
-                    }
-                }
+                // Do not fallback to random; wait for DB mapping for consistency
+                if (!img) return;
                 if (!img) return;
                 // Resize/convert via online proxy before applying (with fallback)
                 try {
