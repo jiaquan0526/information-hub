@@ -1473,13 +1473,19 @@
         // Filter: include only content updates (playbooks/boxlinks/dashboards)
         function isContentActivity(a) {
             try {
-                const t = String(a.type || a.resourceType || a.category || '').toLowerCase();
+                const meta = (a && a.metadata) ? a.metadata : {};
+                const typeFromMeta = String(meta.type || meta.category || '').toLowerCase();
+                const t = String(a.type || a.resourceType || a.category || typeFromMeta || '').toLowerCase();
                 const title = String(a.title || a.resource || a.description || '').toLowerCase();
                 const action = String(a.action || '').toLowerCase();
-                const allowed = ['playbooks','playbook','boxlinks','boxlink','dashboards','dashboard'];
+                // Exclude auth/system noise
                 const disallowed = ['login','logout','session','auth','permission','role','user login','user logout'];
                 if (disallowed.some(k => t.includes(k) || action.includes(k) || title.includes(k))) return false;
-                if (allowed.some(k => t.includes(k) || title.includes(k))) return true;
+                // Include any content-oriented entities and CRUD-ish actions
+                const contentTypes = ['playbooks','playbook','boxlinks','boxlink','dashboards','dashboard','section','sections','tab','tabs','resource','resources'];
+                const contentVerbs = ['create','created','update','updated','delete','deleted','add','added','remove','removed','rename','renamed','reorder','reordered'];
+                if (contentTypes.some(k => t.includes(k) || title.includes(k))) return true;
+                if (contentVerbs.some(v => action.includes(v))) return true;
             } catch(_) {}
             return false;
         }
