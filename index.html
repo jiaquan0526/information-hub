@@ -5161,50 +5161,10 @@ Permissions:
                     console.log('Loaded sections from database:', sections);
                     
                     if (sections && sections.length > 0) {
-                        // Get current user permissions
-                        // Fetch user profile directly from Supabase only
-                        let user = null;
-                        try {
-                            const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
-                            if (authUser) {
-                                const { data: profile } = await window.supabaseClient
-                                    .from('profiles')
-                                    .select('role, permissions')
-                                    .eq('id', authUser.id)
-                                    .single();
-                                user = { role: (profile && profile.role) || 'viewer', permissions: (profile && profile.permissions) || {} };
-                            }
-                        } catch (_) {}
-                        
-                        // Filter sections based on user permissions (from Supabase only)
-                        if (user) {
-                            const role = String(user.role || '').toLowerCase();
-                            const canAll = !!(user.permissions && user.permissions.canEditAllSections);
-                            const canViewAll = !!(user.permissions && user.permissions.canViewAllSections);
-                            const allowedSections = (user.permissions && user.permissions.sections) || [];
-                            
-                            // Check if user has wildcard access or can view all sections
-                            const hasWildcardAccess = allowedSections.includes('*') || canViewAll;
-                            
-                            if (role === 'admin' || canAll || hasWildcardAccess) {
-                                // Admin or user with all access - show all sections
-                                visibleSections = sections
-                                    .filter(s => s.config?.visible !== false)
-                                    .sort((a,b) => (a.config?.order||0) - (b.config?.order||0));
-                                console.log('User has admin/all access, showing all sections:', visibleSections.length);
-                            } else {
-                                // Regular user - filter by permissions
-                                const allowed = new Set(allowedSections);
-                                visibleSections = sections.filter(s => 
-                                    s.config?.visible !== false && allowed.has(s.section_id)
-                                ).sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
-                                console.log('User has limited access, showing sections:', visibleSections.length, 'allowed sections:', Array.from(allowed));
-                            }
-                        } else {
-                            // No user profile: still show only visible sections as per Supabase config
-                            visibleSections = sections.filter(s => s.config?.visible !== false)
-                                .sort((a,b) => (a.config?.order||0)-(b.config?.order||0));
-                        }
+                        // Trust Supabase RLS to return only accessible sections; apply only visibility and order
+                        visibleSections = sections
+                            .filter(s => s.config?.visible !== false)
+                            .sort((a,b) => (a.config?.order||0) - (b.config?.order||0));
                     } else {
                         console.warn('No sections found in database');
                     }
