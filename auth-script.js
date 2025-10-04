@@ -237,6 +237,16 @@ class AuthSystem {
                     this.redirectToHub();
                 }, 300);
             }, 100);
+
+            // Safety fallback: if we're still on auth page after a few seconds, hide overlay and inform user
+            setTimeout(() => {
+                try {
+                    if (location.pathname.endsWith('auth.html')) {
+                        this.hideLoginProgress();
+                        this.showMessage('Redirect took too long. Please try again.', 'error');
+                    }
+                } catch (_) {}
+            }, 7000);
         } catch (error) { 
             console.error('Login exception:', error);
             this.showMessage('Login failed: ' + error.message, 'error'); 
@@ -483,7 +493,21 @@ class AuthSystem {
             }
         } catch (_) {}
         console.log('Redirecting to hub...');
-        window.location.href = 'index.html';
+        try {
+            // Prefer assign to keep history clean; fallback to href
+            window.location.assign('index.html');
+        } catch (_) {
+            try { window.location.href = 'index.html'; } catch (_) {}
+        }
+        // If navigation fails (blocked/extension), hide overlay and allow retry
+        setTimeout(() => {
+            try {
+                if (location.pathname.endsWith('auth.html')) {
+                    this.hideLoginProgress();
+                    this.showMessage('Navigation blocked. Click Sign In again.', 'error');
+                }
+            } catch (_) {}
+        }, 5000);
     }
 
     async logout() {
