@@ -1387,20 +1387,34 @@
             const mapUiToDbType = (ui) => String(ui || '').toLowerCase().trim();
 
             function resolveDbTypeForUiType(sectionId, uiTid) {
-                return normUiType(uiTid);
+                // Map UI tab ids to canonical DB types
+                const t = normUiType(uiTid);
+                if (t === 'boxlinks' || t === 'box-links' || t === 'box') return 'box-links';
+                if (t === 'playbook' || t === 'playbooks') return 'playbooks';
+                if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
+                return t;
             }
 
             function getSingleDbType(sectionId, uiTid) {
-                return normUiType(uiTid);
+                return resolveDbTypeForUiType(sectionId, uiTid);
             }
 
             function updateCountDom(sectionId, tid, count) {
                 try {
-                    const el1 = document.getElementById(`${sectionId}-${tid}`);
-                    if (el1) el1.textContent = count;
-                    const alt = tid === 'boxLinks' ? 'boxlinks' : tid;
-                    const el2 = document.getElementById(`${sectionId}-${alt}`);
-                    if (el2) el2.textContent = count;
+                    const candidates = [];
+                    const rawId = String(tid || '').trim();
+                    const uiId = (typeof normalizeTypeId === 'function') ? normalizeTypeId(rawId) : rawId;
+                    const hyphenId = rawId.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+                    candidates.push(`${sectionId}-${rawId}`);
+                    if (uiId && uiId !== rawId) candidates.push(`${sectionId}-${uiId}`);
+                    if (hyphenId && hyphenId !== rawId && hyphenId !== uiId) candidates.push(`${sectionId}-${hyphenId}`);
+                    // Known aliases
+                    if (uiId === 'boxLinks' || rawId === 'boxLinks' || rawId === 'box-links' || hyphenId === 'box-links') {
+                        candidates.push(`${sectionId}-boxlinks`, `${sectionId}-box-links`, `${sectionId}-boxLinks`);
+                    }
+                    let el = null;
+                    for (const id of candidates) { el = document.getElementById(id); if (el) break; }
+                    if (el) el.textContent = count;
                 } catch(_) {}
             }
 
@@ -1426,6 +1440,10 @@
                         const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
                         typesList = Array.from(new Set(mapped));
                     } catch (_) {}
+                }
+                // No legacy defaults: if nothing is configured and no resources exist, show nothing
+                if (!typesList || typesList.length === 0) {
+                    typesList = [];
                 }
                 const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
 
@@ -4666,48 +4684,9 @@ Permissions:
                 alert('Sections reset to minimal default!');
             }
         };
-        function ensureHubCard(section) {
-            const hubGrid = document.querySelector('.hub-grid');
-            if (!hubGrid) return;
-            const existing = document.querySelector(`[onclick="navigateToSection('${section.id}')"]`);
-            if (existing) return;
-            const iconClass = normalizeIconClass((section.icon && section.icon.trim()) ? section.icon : 'fa-solid fa-table-cells-large');
-            const iconHtml = section.image ? `<img src="${section.image}" class="section-img-icon" loading="lazy" decoding="async">` : `<i class="${iconClass}"></i>`;
-            const cardHTML = `
-            <div class="hub-card" onclick="navigateToSection('${section.id}')">
-                <div class="card-icon">
-                    ${iconHtml}
-                </div>
-                <h3>${section.name}</h3>
-                <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
-                <div class="card-stats" id="${section.id}-stats"></div>
-            </div>`;
-            hubGrid.insertAdjacentHTML('beforeend', cardHTML);
-        }
+        // Legacy ensureHubCard removed — cards are built only from Supabase via updateMainHubSections
 
-        function updateHubCardContent(section) {
-            const card = document.querySelector(`.hub-card[onclick="navigateToSection('${section.id}')"]`);
-            if (!card) return;
-            // Update title
-            const titleEl = card.querySelector('h3');
-            if (titleEl) titleEl.textContent = section.name || section.id;
-            // Update icon
-            const iconContainer = card.querySelector('.card-icon');
-            if (iconContainer) {
-                const iconClass = normalizeIconClass((section.icon && section.icon.trim()) ? section.icon : 'fa-solid fa-table-cells-large');
-                if (section.image) {
-                    iconContainer.innerHTML = `<img src="${section.image}" class="section-img-icon" loading="lazy" decoding="async">`;
-            } else {
-                    iconContainer.innerHTML = `<i class="${iconClass}"></i>`;
-                }
-            }
-            // Update intro
-            const introEl = card.querySelector('.card-intro') || card.querySelector('p');
-            if (introEl) {
-                const text = section.intro || '';
-                introEl.textContent = truncate(text, 120);
-            }
-        }
+        // Legacy updateHubCardContent removed — cards are rebuilt from Supabase in updateMainHubSections
 
         // Normalize icon classes for Font Awesome 6
         function normalizeIconClass(cls) {
@@ -5355,6 +5334,10 @@ Permissions:
                             const uniq = Array.from(new Set(mapped));
                             typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
                         } catch (_) {}
+                    }
+                    // No legacy defaults: if nothing is configured and no resources exist, show nothing
+                    if (!typesList || typesList.length === 0) {
+                        typesList = [];
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
