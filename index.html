@@ -1205,7 +1205,6 @@
                 }
             }
         };
-
         // Fetch and apply global backgrounds flags strictly from Supabase
         window.refreshGlobalBackgrounds = async function() {
             try {
@@ -1730,7 +1729,6 @@
                 observer.observe(headerTitle, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
             } catch(_) {}
         };
-
         // Open audit log from info bar link - list recent content updates (7 days)
         window.openAuditFromInfoBar = async function(event) {
             try { if (event) event.preventDefault(); } catch(_) {}
@@ -2354,7 +2352,6 @@
                 alert('Export failed: ' + (e && e.message ? e.message : String(e)));
             }
         };
-
         // Robust Backup JSON fallback (works even if DB is not ready)
         if (typeof window.backupJson !== 'function') {
             window.backupJson = async function() {
@@ -2420,58 +2417,87 @@
                             alert('Invalid JSON: ' + parseErr.message);
                             return;
                         }
-                        if (!confirm('This will overwrite local data. Continue?')) return;
-                        
+                        if (!confirm('This will overwrite data. Continue?')) return;
+
+                        // Progress overlay UI
+                        const overlay = document.createElement('div');
+                        overlay.id = 'restoreProgressOverlay';
+                        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;color:#fff;';
+                        overlay.innerHTML = `
+<div style="width:680px;max-width:92%;background:#111;border:1px solid #333;border-radius:10px;padding:16px 16px 10px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5);">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+    <h3 style="margin:0;font-size:16px;">Restoring backup...</h3>
+    <button id="restoreCancelBtn" class="btn btn-secondary" style="display:none;">Cancel</button>
+  </div>
+  <div style="background:#222;border-radius:8px;padding:10px;">
+    <div id="restoreProgressBar" style="height:8px;background:#333;border-radius:6px;overflow:hidden;margin-bottom:10px;">
+      <div id="restoreProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00c6ff,#0072ff);"></div>
+    </div>
+    <div id="restoreSummary" style="font-size:12px;color:#bbb;margin-bottom:8px;">Preparing...</div>
+    <div id="restoreLog" style="max-height:200px;overflow:auto;background:#0c0c0c;border:1px solid #222;border-radius:6px;padding:8px;font-family:ui-monospace, Menlo, Consolas, monospace;font-size:12px;"></div>
+  </div>
+</div>`;
+                        document.body.appendChild(overlay);
+                        const logEl = overlay.querySelector('#restoreLog');
+                        const sumEl = overlay.querySelector('#restoreSummary');
+                        const fillEl = overlay.querySelector('#restoreProgressFill');
+                        const log = (msg) => { if (logEl) { const div = document.createElement('div'); div.textContent = msg; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight; } };
+                        const setPct = (p) => { if (fillEl) fillEl.style.width = Math.max(0, Math.min(100, p)) + '%'; };
+
+                        let totals = { sections:0, resources:0, views:0, siteSettings:0, users:0 };
+                        let done = { sections:0, resources:0, views:0, siteSettings:0, users:0 };
+                        const updateSummary = () => {
+                            if (!sumEl) return;
+                            const parts = [];
+                            const add = (k,lbl) => { const d = done[k]||0, t = totals[k]||0; if (t>0) parts.push(`${lbl}: ${d}/${t}`); };
+                            add('sections','Sections'); add('resources','Resources'); add('views','Views'); add('siteSettings','Settings'); add('users','Users');
+                            sumEl.textContent = parts.length ? parts.join(' • ') : 'Preparing...';
+                            const tTotal = Object.values(totals).reduce((a,b)=>a+(b||0),0);
+                            const dTotal = Object.values(done).reduce((a,b)=>a+(b||0),0);
+                            setPct(tTotal>0 ? (dTotal*100/tTotal) : 10);
+                        };
+
+                        const onProgress = (evt) => {
+                            try {
+                                if (!evt) return;
+                                if (evt.step === 'start') {
+                                    totals = Object.assign(totals, evt.counts || {});
+                                    log(`Start: ${JSON.stringify(evt.counts||{})}`);
+                                    updateSummary();
+                                    return;
+                                }
+                                if (evt.step === 'elevated') { log('Permissions elevated for restore'); return; }
+                                if (evt.step === 'section') { if (evt.status==='ok') { done.sections++; log(`Section ✓ ${evt.id}`); } else { log(`Section ✗ ${evt.id}: ${evt.error}`); } updateSummary(); return; }
+                                if (evt.step === 'resource') { if (evt.status==='ok') { done.resources++; log(`Resource ✓ ${evt.id||'?'} (section ${evt.sectionId})`); } else { log(`Resource ✗ ${evt.id||'?'}: ${evt.error}`); } updateSummary(); return; }
+                                if (evt.step === 'view') { if (evt.status==='ok') { done.views++; } updateSummary(); return; }
+                                if (evt.step === 'siteSetting') { if (evt.status==='ok') { done.siteSettings++; log(`Setting ✓ ${evt.key}`); } else { log(`Setting ✗ ${evt.key}: ${evt.error}`); } updateSummary(); return; }
+                                if (evt.step === 'user') { if (evt.status==='ok') { done.users++; log(`User ✓ ${evt.id}`); } else { log(`User ✗ ${evt.id}: ${evt.error}`); } updateSummary(); return; }
+                                if (evt.step === 'reverted') { log('Permissions reverted'); return; }
+                                if (evt.step === 'done') { log('Restore complete'); setPct(100); return; }
+                                if (evt.step === 'error') { log(`Error: ${evt.error}`); return; }
+                            } catch(_) {}
+                        };
+
                         let importedToDb = false;
                         try {
                             if (window.hubDatabase && typeof hubDatabase.importRawState === 'function') {
-                                await hubDatabase.importRawState(data);
+                                await hubDatabase.importRawState(data, { onProgress });
                                 importedToDb = true;
                             }
                         } catch (dbErr) {
-                            console.warn('DB import failed, falling back to localStorage restore:', dbErr);
+                            console.warn('DB import failed:', dbErr);
+                            log('DB import failed: ' + (dbErr && dbErr.message ? dbErr.message : String(dbErr)));
                         }
-                        
+
+                        try { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); } catch(_) {}
+
                         if (!importedToDb) {
-                            try {
-                                // Prefer payload.localStorage format produced by backupJson fallback
-                                if (data && typeof data === 'object' && data.localStorage && typeof data.localStorage === 'object') {
-                                    const ls = data.localStorage;
-                                    const setIf = (key, value) => {
-                                        if (value !== undefined && value !== null) {
-                                            localStorage.setItem(key, JSON.stringify(value));
-                                        } else {
-                                            localStorage.removeItem(key);
-                                        }
-                                    };
-                                    setIf('sectionOrder', ls.sectionOrder);
-                                    setIf('hubUsers', ls.hubUsers);
-                                    setIf('informationHub', ls.informationHub);
-                                    setIf('hubActivities', ls.hubActivities);
-                                } else {
-                                    // Handle a more direct export shape
-                                    if (Array.isArray(data.users)) {
-                                        localStorage.setItem('hubUsers', JSON.stringify(data.users));
-                                    }
-                                    if (data.sectionOrder !== undefined) {
-                                        localStorage.setItem('sectionOrder', JSON.stringify(data.sectionOrder));
-                                    }
-                                    if (data.informationHub !== undefined) {
-                                        // Information hub data is managed in Supabase database
-                                    }
-                                    if (Array.isArray(data.activities) && null === null) {
-                                        // Activities are managed in Supabase database
-                                    }
-                                }
-                            } catch (lsErr) {
-                                alert('Local restore failed: ' + (lsErr && lsErr.message ? lsErr.message : lsErr));
-                                return;
-                            }
+                            alert('Restore failed. See console for details.');
+                            return;
                         }
-                        
+
                         try { if (typeof updateUserInterface === 'function') updateUserInterface(); } catch(_) {}
                         try { if (typeof updateSectionStats === 'function') await updateSectionStats(); } catch(_) {}
-                        
                         alert('Restore complete. The page will reload to apply changes.');
                         window.location.reload();
                     };
@@ -4077,320 +4103,6 @@ Permissions:
 				}
 			}
 		} catch(_) {}
-            
-            // Clear existing checkboxes
-            sectionCheckboxes.innerHTML = '';
-            console.log('Cleared existing checkboxes');
-            
-            // Add checkboxes for all available sections
-            filteredSections.forEach(section => {
-                console.log('Adding checkbox for section:', section);
-                const sectionDiv = document.createElement('div');
-                sectionDiv.className = 'permission-item';
-                sectionDiv.innerHTML = `
-                    <div class="permission-checkbox">
-                        <input type="checkbox" id="section-${section}" onchange="updateSectionPermission('${section}')">
-                        <label for="section-${section}">${sectionNames[section] || section}</label>
-                    </div>
-                    <div class="permission-checkbox">
-                        <input type="checkbox" id="edit-${section}" onchange="updateSectionPermission('${section}')">
-                        <label for="edit-${section}">Can Edit</label>
-                    </div>
-                `;
-                sectionCheckboxes.appendChild(sectionDiv);
-            });
-            
-            console.log('Finished adding checkboxes. Total sections added:', filteredSections.length);
-        }
-        
-        window.loadSectionsList = async function() {
-            console.log('loadSectionsList called');
-            try {
-                // Wait for database or Supabase client readiness to avoid rendering empty state on first load
-                let attempts = 0;
-                const maxAttempts = 30; // ~6s total with 200ms interval
-                while (attempts < maxAttempts && !((window.hubDatabase && window.hubDatabaseReady) || window.supabaseClient)) {
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    attempts++;
-                }
-
-                if (window.hubDatabase && window.hubDatabaseReady) {
-                    let sections = await hubDatabase.getAllSections();
-                    console.log('Loaded sections from Supabase via hubDatabase:', sections);
-                    // Fallback to direct Supabase if wrapper returned no rows
-                    if ((!sections || sections.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data: direct } = await window.supabaseClient
-                                .from('sections')
-                                .select('section_id, name, icon, color, config, data')
-                                .order('name', { ascending: true });
-                            sections = Array.isArray(direct) ? direct : [];
-                            console.log('Loaded sections via direct Supabase fallback:', sections);
-                        } catch (fallbackErr) {
-                            console.warn('Direct sections fallback failed', fallbackErr);
-                        }
-                    }
-                    
-                    // Map database format to expected format
-                    sectionOrder = (sections || []).map(section => ({
-                        id: section.section_id || section.id,
-                        name: section.name,
-                        icon: section.icon,
-                        image: section.config?.image,
-                        visible: section.config?.visible !== false,
-                        intro: section.config?.intro || '',
-                        order: section.config?.order || 0,
-                        color: section.color,
-                        config: section.config || {},
-                        data: section.data || {}
-                    }));
-                    
-                    console.log('Mapped sections for UI:', sectionOrder);
-                    renderSectionsList();
-                } else {
-                    console.log('Database not ready; trying direct Supabase fetch');
-                    try {
-                        if (window.supabaseClient) {
-                            const { data: direct } = await window.supabaseClient
-                                .from('sections')
-                                .select('section_id, name, icon, color, config, data')
-                                .order('name', { ascending: true });
-                            const sections = Array.isArray(direct) ? direct : [];
-                            sectionOrder = (sections || []).map(section => ({
-                                id: section.section_id || section.id,
-                                name: section.name,
-                                icon: section.icon,
-                                image: section.config?.image,
-                                visible: section.config?.visible !== false,
-                                intro: section.config?.intro || '',
-                                order: section.config?.order || 0,
-                                color: section.color,
-                                config: section.config || {},
-                                data: section.data || {}
-                            }));
-                            renderSectionsList();
-                            return;
-                        }
-                    } catch (e) { console.warn('Direct Supabase fetch (db not ready) failed', e); }
-                    // Supabase still not ready: retry shortly instead of rendering empty
-                    setTimeout(() => { try { loadSectionsList(); } catch(_) {} }, 400);
-                    return;
-                }
-            } catch (error) {
-                console.error('Error loading sections from Supabase:', error);
-                // Soft retry to recover from transient errors
-                setTimeout(() => { try { loadSectionsList(); } catch(_) {} }, 600);
-            }
-        };
-
-        // Auto-reload the sections list when the database or Supabase becomes ready and the tab is active
-        try {
-            document.addEventListener('hubdb-ready', function() {
-                try {
-                    const tab = document.getElementById('sections-tab');
-                    if (tab && tab.classList.contains('active')) { loadSectionsList(); }
-                } catch(_) {}
-            });
-        } catch(_) {}
-        try {
-            window.addEventListener('supabase-ready', function() {
-                try {
-                    const tab = document.getElementById('sections-tab');
-                    if (tab && tab.classList.contains('active')) { loadSectionsList(); }
-                } catch(_) {}
-            });
-        } catch(_) {}
-        
-        function renderSectionsList() {
-            console.log('renderSectionsList called');
-            const sectionsList = document.getElementById('sectionsList');
-            console.log('sectionsList element found:', !!sectionsList);
-            if (!sectionsList) {
-                console.error('sectionsList element not found!');
-                return;
-            }
-            
-            // Sort sections by order
-            const sortedSections = [...sectionOrder].sort((a, b) => a.order - b.order);
-            
-            sectionsList.innerHTML = sortedSections.map(section => `
-                <div class="section-item-admin" data-section-id="${section.id}">
-                    <div class="section-drag-handle">
-                        <i class="fas fa-grip-vertical"></i>
-                    </div>
-                    <div class="section-info">
-                        <div class="section-icon">
-                            ${section.image ? `<img src="${section.image}" class="section-img-icon" loading="lazy" decoding="async">` : `<i class="${section.icon || 'fas fa-th-large'}"></i>`}
-                        </div>
-                        <div class="section-details">
-                            <h4>${section.name}</h4>
-                            <p>ID: ${section.id}</p>
-                        </div>
-                    </div>
-                    <div class="section-controls">
-                        <label class="visibility-toggle">
-                            <input type="checkbox" ${section.visible ? 'checked' : ''} 
-                                   onchange="toggleSectionVisibility('${section.id}')">
-                            <span class="toggle-label">Visible</span>
-                        </label>
-                        <div class="section-actions">
-                            <button class="btn btn-sm btn-secondary" onclick="editSection('${section.id}')" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteSection('${section.id}')" title="Delete">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            
-            // Make sections sortable
-            makeSectionsSortable();
-        }
-
-        // Toggle section visibility from the admin Manage Sections list
-        window.toggleSectionVisibility = async function(sectionId) {
-            try {
-                const checkbox = document.querySelector(`.section-item-admin[data-section-id="${sectionId}"] input[type="checkbox"]`);
-                const isVisible = checkbox ? checkbox.checked : true;
-                const section = sectionOrder.find(s => s.id === sectionId);
-                if (!section) return;
-                
-                // Update section visibility in Supabase
-                section.visible = isVisible;
-                
-                try {
-                    if (window.hubDatabase && window.hubDatabaseReady) {
-                        try {
-                            await hubDatabase.updateSection(section);
-                            console.log('Section visibility updated in Supabase (wrapper):', section);
-                        } catch (wrapperErr) {
-                            console.warn('Wrapper update failed, trying direct Supabase update', wrapperErr);
-                            if (!window.supabaseClient) throw wrapperErr;
-                            let existingCfg = {};
-                            try {
-                                const cur = await window.supabaseClient
-                                    .from('sections')
-                                    .select('config')
-                                    .eq('section_id', sectionId)
-                                    .single();
-                                if (!cur.error && cur.data && typeof cur.data.config === 'object') existingCfg = cur.data.config;
-                            } catch (_) {}
-                            const nextConfig = Object.assign({}, existingCfg, section.config || {}, { visible: isVisible, intro: section.intro || '', order: section.order || 0 });
-                            const { data: updated, error } = await window.supabaseClient
-                                .from('sections')
-                                .update({ config: nextConfig })
-                                .eq('section_id', sectionId)
-                                .select('section_id')
-                                .maybeSingle();
-                            if (error) throw error;
-                            if (!updated) throw new Error('No section row updated');
-                            console.log('Section visibility updated via direct Supabase:', { sectionId, visible: isVisible });
-                        }
-                        
-                        // Update local storage
-                        // Section order is managed in Supabase database
-                        
-                        // Update hub page
-                        updateMainHubSections();
-                        
-                        // Update user access
-                        const sessionRaw = localStorage.getItem('hubSession');
-                        if (sessionRaw) {
-                            try { await updateHubCardsAccess(JSON.parse(sessionRaw)); } catch (_) {}
-                        }
-                        
-                        console.log('Section visibility toggled successfully');
-                } else {
-                        alert('Database not ready. Please try again.');
-                        if (checkbox) checkbox.checked = !isVisible; // Revert checkbox
-                    }
-                } catch (error) {
-                    console.error('Error updating section visibility:', error);
-                    const detail = (error && (error.message || error.details || error.code)) ? (error.message || error.details || error.code) : 'Unknown error';
-                    alert('Failed to update visibility: ' + detail);
-                    if (checkbox) checkbox.checked = !isVisible; // Revert checkbox
-                }
-            } catch (e) {
-                console.error('toggleSectionVisibility error', e);
-            }
-        };
-
-        // Reload sections when the sections tab becomes active (handles races) without changing visibility styles
-        (function observeSectionsTabActivation(){
-            try {
-                const tab = document.getElementById('sections-tab');
-                if (!tab || typeof MutationObserver === 'undefined') return;
-                let lastRun = 0;
-                const obs = new MutationObserver(function(){
-                    try {
-                        if (tab.classList.contains('active')) {
-                            const now = Date.now();
-                            if (now - lastRun > 300) {
-                                lastRun = now;
-                                loadSectionsList();
-                            }
-                        }
-                    } catch(_) {}
-                });
-                obs.observe(tab, { attributes: true, attributeFilter: ['class'] });
-            } catch(_) {}
-        })();
-        
-        function makeSectionsSortable() {
-            const sectionsList = document.getElementById('sectionsList');
-            if (!sectionsList) return;
-            
-            // Simple drag and drop implementation
-            let draggedElement = null;
-            
-            const sectionItems = sectionsList.querySelectorAll('.section-item-admin');
-            sectionItems.forEach(item => {
-                item.draggable = true;
-                
-                item.addEventListener('dragstart', (e) => {
-                    draggedElement = item;
-                    item.style.opacity = '0.5';
-                });
-                
-                item.addEventListener('dragend', (e) => {
-                    item.style.opacity = '1';
-                    draggedElement = null;
-                });
-                
-                item.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                });
-                
-                item.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    if (draggedElement && draggedElement !== item) {
-                        const nextSibling = item.nextSibling;
-                        sectionsList.insertBefore(draggedElement, nextSibling);
-                        updateSectionOrder();
-                        try {
-                            // Section order is managed in Supabase database
-                        } catch (_) {}
-                        // Reflect changes immediately on the hub
-                        try { updateMainHubSections(); } catch (_) {}
-                    }
-                });
-            });
-        }
-        
-        function updateSectionOrder() {
-            const sectionsList = document.getElementById('sectionsList');
-            const sectionItems = sectionsList.querySelectorAll('.section-item-admin');
-            
-            sectionItems.forEach((item, index) => {
-                const sectionId = item.dataset.sectionId;
-                const section = sectionOrder.find(s => s.id === sectionId);
-                if (section) {
-                    section.order = index + 1;
-                }
-            });
-        }
         function openSectionModal(mode, section) {
             const isEdit = mode === 'edit';
             const modal = document.createElement('div');
@@ -5026,7 +4738,6 @@ Permissions:
             };
             return map[sectionId] || '';
         }
-
         function seedSectionIntrosIfMissing() {
             try {
                 const saved = null;
@@ -5407,7 +5118,6 @@ Permissions:
             if (t === 'dashboards') return 'fas fa-chart-bar';
             return 'fas fa-folder';
         }
-
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
@@ -5694,344 +5404,6 @@ Permissions:
             // Reset the flag
             isUpdatingSections = false;
         }
-        // Load section assignments for admin panel – Supabase only
-        let __assignmentsLoading = false;
-        let __assignmentsLoaded = false;
-        let __assignmentsCache = { users: [], sectionIds: [], sectionNames: {} };
-        window.renderAssignmentsList = function() {
-            const assignmentsList = document.getElementById('assignmentsList');
-            if (!assignmentsList) return;
-            const stats = document.getElementById('assignmentsStats');
-            const q = (document.getElementById('assignmentUserSearchInput')?.value || '').trim().toLowerCase();
-            const users = Array.isArray(__assignmentsCache.users) ? __assignmentsCache.users : [];
-            const sectionIds = Array.isArray(__assignmentsCache.sectionIds) ? __assignmentsCache.sectionIds : [];
-            const sectionNames = __assignmentsCache.sectionNames || {};
-            // Auto-load if cache not ready yet
-            if ((!users || users.length === 0) || (!sectionIds || sectionIds.length === 0)) {
-                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">Loading section assignments…</div>`;
-                try { if (!__assignmentsLoading) { loadSectionAssignments(); } } catch(_) {}
-                return;
-            }
-            if (stats) {
-                stats.textContent = `Users: ${users.length} • Sections: ${sectionIds.length}${q ? ` • Filter: \"${q}\"` : ''}`;
-            }
-            const safeName = (id) => (sectionNames && sectionNames[id]) ? sectionNames[id] : id;
-            const filteredUsers = q ? users.filter(u => {
-                const hay = [u.username, u.name, u.email, u.role].filter(Boolean).join(' ').toLowerCase();
-                return hay.includes(q);
-            }) : users;
-            if (!filteredUsers || filteredUsers.length === 0) {
-                assignmentsList.innerHTML = `<div style=\"padding:10px;color:#777;\">${q ? 'No users match your search.' : 'No users to display.'}</div>`;
-                return;
-            }
-            assignmentsList.innerHTML = filteredUsers.map(user => {
-                const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
-                return `
-                    <div class=\"assignment-card\" data-user-id=\"${user.id}\">\n                        <div class=\"user-info\">\n                            <h4>${user.username || user.email}</h4>\n                            <span class=\"user-role\">${user.role}</span>\n                        </div>\n                        <div class=\"section-assignments\">\n                            <h5>Assigned Sections:</h5>\n                            <div class=\"section-checkboxes\">\n                                ${sectionIds.map(id => `\n                                    <label class=\"section-checkbox\">\n                                        <input type=\"checkbox\"\n                                               value=\"${id}\"\n                                               ${userSections.includes(id) ? 'checked' : ''}\n                                               onchange=\"updateUserSectionAccess('${user.id}', '${id}', this.checked)\">\n                                        <span>${safeName(id)}</span>\n                                    </label>\n                                `).join('')}\n                            </div>\n                            <div class=\"assignment-actions\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"selectAllSections('${user.id}')\">Select All</button>\n                                <button class=\"btn btn-sm btn-secondary\" onclick=\"clearAllSections('${user.id}')\">Clear All</button>\n                            </div>\n                        </div>\n                    </div>
-                `;
-            }).join('');
-        };
-        window.filterAssignmentsList = function() {
-            try { renderAssignmentsList(); } catch(_) {}
-        };
-        // DOM-based fallback renderer in case HTML concat fails to paint
-        window.renderAssignmentsListDom = function() {
-            const assignmentsList = document.getElementById('assignmentsList');
-            if (!assignmentsList) return;
-            const q = (document.getElementById('assignmentUserSearchInput')?.value || '').trim().toLowerCase();
-            const users = Array.isArray(__assignmentsCache.users) ? __assignmentsCache.users : [];
-            const sectionIds = Array.isArray(__assignmentsCache.sectionIds) ? __assignmentsCache.sectionIds : [];
-            const sectionNames = __assignmentsCache.sectionNames || {};
-            const filteredUsers = q ? users.filter(u => {
-                const hay = [u.username, u.name, u.email, u.role].filter(Boolean).join(' ').toLowerCase();
-                return hay.includes(q);
-            }) : users;
-            assignmentsList.innerHTML = '';
-            filteredUsers.forEach(user => {
-                const card = document.createElement('div');
-                card.className = 'assignment-card';
-                card.setAttribute('data-user-id', user.id);
-                const userInfo = document.createElement('div');
-                userInfo.className = 'user-info';
-                const h4 = document.createElement('h4');
-                h4.textContent = `${user.username || user.email}`;
-                const roleSpan = document.createElement('span');
-                roleSpan.className = 'user-role';
-                roleSpan.textContent = user.role || '';
-                userInfo.appendChild(h4);
-                userInfo.appendChild(roleSpan);
-                const secWrap = document.createElement('div');
-                secWrap.className = 'section-assignments';
-                const h5 = document.createElement('h5');
-                h5.textContent = 'Assigned Sections:';
-                const boxes = document.createElement('div');
-                boxes.className = 'section-checkboxes';
-                const userSections = Array.isArray(user?.permissions?.sections) ? user.permissions.sections : [];
-                sectionIds.forEach(id => {
-                    const label = document.createElement('label');
-                    label.className = 'section-checkbox';
-                    const input = document.createElement('input');
-                    input.type = 'checkbox';
-                    input.value = id;
-                    input.checked = userSections.includes(id);
-                    input.onchange = () => { try { updateUserSectionAccess(String(user.id), String(id), input.checked); } catch(_) {} };
-                    const span = document.createElement('span');
-                    span.textContent = sectionNames[id] || id;
-                    label.appendChild(input);
-                    label.appendChild(span);
-                    boxes.appendChild(label);
-                });
-                const actions = document.createElement('div');
-                actions.className = 'assignment-actions';
-                const btnAll = document.createElement('button');
-                btnAll.className = 'btn btn-sm btn-primary';
-                btnAll.textContent = 'Select All';
-                btnAll.onclick = () => { try { selectAllSections(String(user.id)); } catch(_) {} };
-                const btnClear = document.createElement('button');
-                btnClear.className = 'btn btn-sm btn-secondary';
-                btnClear.textContent = 'Clear All';
-                btnClear.onclick = () => { try { clearAllSections(String(user.id)); } catch(_) {} };
-                actions.appendChild(btnAll);
-                actions.appendChild(btnClear);
-                secWrap.appendChild(h5);
-                secWrap.appendChild(boxes);
-                secWrap.appendChild(actions);
-                card.appendChild(userInfo);
-                card.appendChild(secWrap);
-                assignmentsList.appendChild(card);
-            });
-        };
-        
-        // Lightweight non-blocking toast notifications
-        window.showToast = function(message, type = 'info') {
-            try {
-                let container = document.getElementById('toastContainer');
-                if (!container) {
-                    container = document.createElement('div');
-                    container.id = 'toastContainer';
-                    container.style.position = 'fixed';
-                    container.style.top = '20px';
-                    container.style.right = '20px';
-                    container.style.zIndex = '10000';
-                    container.style.display = 'flex';
-                    container.style.flexDirection = 'column';
-                    container.style.gap = '8px';
-                    document.body.appendChild(container);
-                }
-                const toast = document.createElement('div');
-                toast.textContent = message;
-                toast.style.padding = '10px 14px';
-                toast.style.borderRadius = '8px';
-                toast.style.color = '#fff';
-                toast.style.fontSize = '14px';
-                toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                toast.style.opacity = '0.95';
-                toast.style.transition = 'opacity 0.3s ease';
-                if (type === 'success') toast.style.background = '#28a745';
-                else if (type === 'error') toast.style.background = '#dc3545';
-                else if (type === 'warning') toast.style.background = '#ffc107';
-                else toast.style.background = '#343a40';
-                container.appendChild(toast);
-                setTimeout(() => { try { toast.style.opacity = '0'; } catch(_) {} }, 1800);
-                setTimeout(() => { try { toast.remove(); } catch(_) {} }, 2200);
-            } catch(_) {}
-        };
-        
-        // Ensure assignments render triggers when the tab becomes visible
-        (function setupAssignmentsRenderTrigger() {
-            try {
-                if (window.__assignmentsRenderHooked) return;
-                window.__assignmentsRenderHooked = true;
-                const triggerLoadOrRender = () => {
-                    try {
-                        const hasUsers = Array.isArray((window.__assignmentsCache||{}).users) && window.__assignmentsCache.users.length > 0;
-                        const hasSections = Array.isArray((window.__assignmentsCache||{}).sectionIds) && window.__assignmentsCache.sectionIds.length > 0;
-                        if (hasUsers && hasSections && typeof window.renderAssignmentsList === 'function') {
-                            window.renderAssignmentsList();
-                            setTimeout(() => { try { window.renderAssignmentsList(); } catch(_) {} }, 0);
-                        } else if (typeof window.loadSectionAssignments === 'function' && !window.__assignmentsLoading) {
-                            window.loadSectionAssignments();
-                        }
-                    } catch(_) {}
-                };
-                // Click safety hook on the nav tab
-                const nav = document.querySelector(".admin-tab[onclick=\"switchAdminTab('assignments')\"]");
-                if (nav && !nav.__assignHooked) {
-                    nav.addEventListener('click', () => { setTimeout(triggerLoadOrRender, 0); });
-                    nav.__assignHooked = true;
-                }
-                // Observe when the assignments content becomes active
-                const content = document.getElementById('assignments-tab');
-                if (content) {
-                    if (content.classList.contains('active')) { setTimeout(triggerLoadOrRender, 0); }
-                    const mo = new MutationObserver(muts => {
-                        muts.forEach(m => {
-                            if (m.type === 'attributes' && m.attributeName === 'class') {
-                                if (content.classList.contains('active')) { triggerLoadOrRender(); }
-                            }
-                        });
-                    });
-                    mo.observe(content, { attributes: true });
-                }
-            } catch(_) {}
-        })();
-        
-        window.loadSectionAssignments = async function() {
-            if (__assignmentsLoading) { return; }
-             __assignmentsLoading = true;
-             try { console.log('[Assignments] load start'); } catch(_) {}
-            const assignmentsList = document.getElementById('assignmentsList');
-            if (!assignmentsList) { __assignmentsLoading = false; try { setTimeout(() => { try { loadSectionAssignments(); } catch(_) {} }, 100); } catch(_) {} return; }
-              assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">Loading section assignments…</div>`;
-            
-              // Ensure Supabase client is ready
-                let retries = 0;
-                while (!window.supabaseClient && retries < 100) { await new Promise(r => setTimeout(r, 100)); retries++; }
-              if (!window.supabaseClient) {
-                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Supabase not initialized. Please sign in again.</div>`;
-                  __assignmentsLoading = false; return;
-              }
-            
-              // Ensure we are authenticated (RLS may return 0 rows if anonymous)
-              try {
-                  let authTries = 0;
-                  let userObj = null;
-                  while (authTries < 100 && !userObj) {
-                      const { data: { user } } = await window.supabaseClient.auth.getUser();
-                      userObj = user || null;
-                      if (!userObj) { await new Promise(r => setTimeout(r, 100)); }
-                      authTries++;
-                  }
-                  if (!userObj) {
-                      assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">You are not signed in. Please log in to manage section assignments.</div>`;
-                      __assignmentsLoading = false; return;
-                  }
-              } catch (_) {
-                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Authentication check failed. Please refresh and sign in.</div>`;
-                  __assignmentsLoading = false; return;
-              }
-            
-              let users = [];
-              let rows = [];
-              try {
-                  const { data: usersData, error: usersErr } = await window.supabaseClient
-                .from('profiles')
-                .select('id, username, name, email, role, permissions')
-                .order('username', { ascending: true });
-                  if (usersErr) throw usersErr;
-                  users = Array.isArray(usersData) ? usersData : [];
-              } catch (e) {
-                  console.error('Failed to load profiles:', e);
-                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load users from Supabase. Check RLS policies for table 'profiles'.</div>`;
-                  __assignmentsLoading = false; return;
-              }
-            
-              try {
-                  const { data: sectionsData, error: sectErr } = await window.supabaseClient
-                .from('sections')
-                      .select('section_id, name')
-                .order('name', { ascending: true });
-                  if (sectErr) throw sectErr;
-                  rows = Array.isArray(sectionsData) ? sectionsData : [];
-              } catch (e) {
-                  console.error('Failed to load sections:', e);
-                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#b00020;\">Failed to load sections from Supabase. Ensure table 'sections' is readable and has columns 'section_id' and 'name'.</div>`;
-                  __assignmentsLoading = false; return;
-              }
-            
-              const sectionIds = (Array.isArray(rows) ? rows : []).map(r => r.section_id).filter(Boolean);
-            const sectionNames = {};
-              (Array.isArray(rows) ? rows : []).forEach(r => { const k = r.section_id; if (k) sectionNames[k] = r.name || k; });
-            
-              console.log('[Assignments] users:', users.length, 'sections:', sectionIds.length);
-            
-              if (users.length === 0) {
-                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No users found. Ensure 'profiles' has rows and RLS allows admin to select all users.</div>`;
-                  __assignmentsLoading = false; return;
-              }
-              if (sectionIds.length === 0) {
-                  assignmentsList.innerHTML = `<div style=\"padding:10px;color:#555;\">No sections found. Ensure 'sections' has rows and RLS allows reading sections.</div>`;
-                  __assignmentsLoading = false; return;
-              }
-            
-             // Update cache and render
-             __assignmentsCache = { users, sectionIds, sectionNames };
-             try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-             renderAssignmentsList();
-            setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0);
-            setTimeout(() => { try { if (document.querySelectorAll('#assignmentsList .assignment-card').length === 0) renderAssignmentsListDom(); } catch(_) {} }, 30);
-              __assignmentsLoaded = true;
-              try { console.log('[Assignments] load complete'); } catch(_) {}
-              __assignmentsLoading = false;
-        };
-        // Update user section access
-        window.updateUserSectionAccess = async function(userId, sectionId, hasAccess) {
-            console.log('Updating section access for user', userId, 'section', sectionId, 'access:', hasAccess);
-            if (!window.supabaseClient) { try { showToast('Supabase not initialized', 'error'); } catch(_) {} return; }
-            // Enforce that only admins or users with canManageUsers can change others
-            try {
-                const { data: { user: me } } = await window.supabaseClient.auth.getUser();
-                if (!me) { try { showToast('Not authenticated', 'error'); } catch(_) {} return; }
-                const { data: myProfile } = await window.supabaseClient
-                    .from('profiles')
-                    .select('role, permissions')
-                    .eq('id', me.id)
-                    .single();
-                const myRole = String(myProfile?.role || '').toLowerCase();
-                const canManageUsers = myRole === 'admin' || !!myProfile?.permissions?.canManageUsers;
-                if (!canManageUsers) { try { showToast('You do not have permission to modify section assignments', 'error'); } catch(_) {} return; }
-            } catch (_) { /* fail closed handled above */ }
-            // Get user from database (profiles)
-            const { data: user, error: userError } = await window.supabaseClient
-                .from('profiles')
-                .select('id, username, permissions')
-                .eq('id', userId)
-                .single();
-            
-            if (userError || !user) {
-                console.error('User not found in database:', userId, userError);
-                return;
-            }
-            
-            // Initialize permissions if not exists
-            if (!user.permissions) {
-                user.permissions = { sections: [], editableSections: [] };
-            }
-            if (!Array.isArray(user.permissions.sections)) {
-                user.permissions.sections = [];
-            }
-            
-            // Update section access
-            if (hasAccess) {
-                if (!user.permissions.sections.includes(sectionId)) {
-                    user.permissions.sections.push(sectionId);
-                }
-            } else {
-                user.permissions.sections = user.permissions.sections.filter(s => s !== sectionId);
-            }
-            
-            // Save updated user to Supabase database
-            try {
-                const { error: updateError } = await window.supabaseClient
-                    .from('profiles')
-                    .update({ permissions: user.permissions })
-                    .eq('id', userId);
-                
-                if (updateError) {
-                    throw updateError;
-                }
-                
-                console.log('User section access updated in Supabase:', user);
-                try { await InformationHub.loadExportOptions?.(); } catch(_) {}
-                try { if (!window.__assignmentsBatchActive) showToast(`Section access updated for ${user.username}`, 'success'); } catch(_) {}
-            } catch (error) {
-                console.error('Error updating user section access in Supabase:', error);
-                try { if (!window.__assignmentsBatchActive) showToast('Failed to save section access: ' + error.message, 'error'); } catch(_) {}
-            }
-            
-            console.log('Section access updated for user', user.username, ':', user.permissions.sections);
-        };
-        
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
