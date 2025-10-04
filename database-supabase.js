@@ -866,8 +866,9 @@ class HubDatabase {
 	}
 
 	// Import raw state produced by backup JSON (admin-only)
-	async importRawState(raw) {
+	async importRawState(raw, opts = {}) {
 		try {
+			const onProgress = (evt) => { try { if (opts && typeof opts.onProgress === 'function') opts.onProgress(evt); } catch(_) {} };
 			const client = window.supabaseClient || this.supabase;
 			if (!client) throw new Error('Supabase client not ready');
 			// Admin-only guard
@@ -886,6 +887,16 @@ class HubDatabase {
 			}
 
 			const data = raw && typeof raw === 'object' ? raw : {};
+			const counts = {
+				sections: Array.isArray(data.sections) ? data.sections.length : 0,
+				resources: (data.resources && typeof data.resources === 'object')
+					? (Array.isArray(data.resources) ? data.resources.length : Object.values(data.resources).reduce((n,a)=>n+(Array.isArray(a)?a.length:0),0))
+					: 0,
+				views: Array.isArray(data.views) ? data.views.length : 0,
+				siteSettings: Array.isArray(data.siteSettings) ? data.siteSettings.length : (data.siteSettings && typeof data.siteSettings === 'object' ? Object.keys(data.siteSettings).length : 0),
+				users: Array.isArray(data.users) ? data.users.length : 0
+			};
+			onProgress({ step: 'start', counts });
 
 			// Temporarily elevate current user's edit rights to satisfy RLS during restore
 			let originalPermissions = null;
@@ -898,22 +909,16 @@ class HubDatabase {
 				originalPermissions = (curProf && curProf.permissions && typeof curProf.permissions === 'object') ? JSON.parse(JSON.stringify(curProf.permissions)) : {};
 				const nextPerm = Object.assign({}, originalPermissions, { canEditAllSections: true });
 				await client.from('profiles').update({ permissions: nextPerm }).eq('id', currentUserId);
+				onProgress({ step: 'elevated', details: { canEditAllSections: true } });
 			} catch (_) { /* best-effort */ }
 
-			// Users
-			if (Array.isArray(data.users)) {
-				for (const user of data.users) {
-					try { await this.saveUser(user); }
-					catch (e) { try { console.warn('restore: saveUser failed', e?.message || e); } catch(_) {} }
-				}
-			}
 			// Sections
 			if (Array.isArray(data.sections)) {
 				for (const section of data.sections) {
 					const sectionIdRaw = section.section_id || section.sectionId || section.id;
 					const sectionId = sectionIdRaw != null ? String(sectionIdRaw) : '';
 					if (!sectionId) { try { console.warn('restore: skipped section with missing id'); } catch(_) {} continue; }
-					const incomingCfg = (section && typeof section.config === 'object') ? section.config : {};
+					const incomingCfg = (section && typeof section.config === 'object' && section.config !== null) ? section.config : {};
 					const nextConfig = incomingCfg; // preserve exactly as provided
 					const payload = {
 						sectionId,
@@ -923,8 +928,8 @@ class HubDatabase {
 						config: nextConfig,
 						data: section.data || {}
 					};
-					try { await this.saveSection(payload); }
-					catch (e) { try { console.warn('restore: saveSection failed', e?.message || e); } catch(_) {} }
+					try { await this.saveSection(payload); onProgress({ step: 'section', id: sectionId, status: 'ok' }); }
+					catch (e) { try { console.warn('restore: saveSection failed', e?.message || e); onProgress({ step: 'section', id: sectionId, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
 				}
 			}
 			// Resources (array or { [sectionId]: Resource[] })
@@ -933,16 +938,16 @@ class HubDatabase {
 					for (const r of data.resources) {
 						const sectionId = r.section_id || r.sectionId || r.section || null;
 						const payload = Object.assign({}, r, { sectionId });
-						try { await this.saveResource(payload); }
-						catch (e) { try { console.warn('restore: saveResource failed', e?.message || e); } catch(_) {} }
+						try { await this.saveResource(payload); onProgress({ step: 'resource', sectionId, id: r.id || null, status: 'ok' }); }
+						catch (e) { try { console.warn('restore: saveResource failed', e?.message || e); onProgress({ step: 'resource', sectionId, id: r.id || null, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
 					}
 				} else {
 					for (const sid of Object.keys(data.resources)) {
 						const arr = Array.isArray(data.resources[sid]) ? data.resources[sid] : [];
 						for (const r of arr) {
 							const payload = Object.assign({}, r, { sectionId: sid });
-							try { await this.saveResource(payload); }
-							catch (e) { try { console.warn('restore: saveResource failed', e?.message || e); } catch(_) {} }
+							try { await this.saveResource(payload); onProgress({ step: 'resource', sectionId: sid, id: r.id || null, status: 'ok' }); }
+							catch (e) { try { console.warn('restore: saveResource failed', e?.message || e); onProgress({ step: 'resource', sectionId: sid, id: r.id || null, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
 						}
 					}
 				}
@@ -963,7 +968,8 @@ class HubDatabase {
 						if (payload.user_id && payload.resource_id) {
 							await client.from('views').upsert(payload, { onConflict: 'user_id,resource_id' });
 						}
-					} catch (e) { try { console.warn('restore: upsert view failed', e?.message || e); } catch(_) {} }
+						onProgress({ step: 'view', id: v.id || null, status: 'ok' });
+					} catch (e) { try { console.warn('restore: upsert view failed', e?.message || e); onProgress({ step: 'view', id: v.id || null, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
 				}
 			}
 			// Site settings
@@ -972,26 +978,36 @@ class HubDatabase {
 					if (Array.isArray(data.siteSettings)) {
 						for (const row of data.siteSettings) {
 							if (!row || typeof row.key !== 'string') continue;
-							try { await this.setSiteSetting(row.key, row.value); }
-							catch (e) { try { console.warn('restore: setSiteSetting failed', row.key, e?.message || e); } catch(_) {} }
+							try { await this.setSiteSetting(row.key, row.value); onProgress({ step: 'siteSetting', key: row.key, status: 'ok' }); }
+							catch (e) { try { console.warn('restore: setSiteSetting failed', row.key, e?.message || e); onProgress({ step: 'siteSetting', key: row.key, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
 						}
 					} else if (typeof data.siteSettings === 'object') {
 						for (const k of Object.keys(data.siteSettings)) {
-							try { await this.setSiteSetting(k, data.siteSettings[k]); }
-							catch (e) { try { console.warn('restore: setSiteSetting failed', k, e?.message || e); } catch(_) {} }
+							try { await this.setSiteSetting(k, data.siteSettings[k]); onProgress({ step: 'siteSetting', key: k, status: 'ok' }); }
+							catch (e) { try { console.warn('restore: setSiteSetting failed', k, e?.message || e); onProgress({ step: 'siteSetting', key: k, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
 						}
 					}
-				} catch (e) { try { console.warn('restore: siteSettings import failed', e?.message || e); } catch(_) {} }
+				} catch (e) { try { console.warn('restore: siteSettings import failed', e?.message || e); onProgress({ step: 'siteSetting', status: 'error', error: e?.message || String(e) }); } catch(_) {} }
+			}
+			// Users (import last so temporary permission elevation persists during section/resource writes)
+			if (Array.isArray(data.users)) {
+				for (const user of data.users) {
+					try { await this.saveUser(user); onProgress({ step: 'user', id: user.id || user.email || null, status: 'ok' }); }
+					catch (e) { try { console.warn('restore: saveUser failed', e?.message || e); onProgress({ step: 'user', id: user.id || user.email || null, status: 'error', error: e?.message || String(e) }); } catch(_) {} }
+				}
 			}
 			// Best-effort revert of temporary elevation
 			try {
 				if (originalPermissions) {
 					await client.from('profiles').update({ permissions: originalPermissions }).eq('id', currentUserId);
+					onProgress({ step: 'reverted' });
 				}
 			} catch (_) { /* keep elevated if revert fails */ }
+			onProgress({ step: 'done' });
 			return true;
 		} catch (error) {
 			console.error('Error importing raw state:', error);
+			try { if (opts && typeof opts.onProgress === 'function') opts.onProgress({ step: 'error', error: error?.message || String(error) }); } catch(_) {}
 			throw error;
 		}
 	}
