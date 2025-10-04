@@ -1478,8 +1478,12 @@
                 const t = String(a.type || a.resourceType || a.category || typeFromMeta || '').toLowerCase();
                 const title = String(a.title || a.resource || a.description || '').toLowerCase();
                 const action = String(a.action || '').toLowerCase();
-                // Exclude auth/system noise
-                const disallowed = ['login','logout','session','auth','permission','role','user login','user logout'];
+                // Exclude auth/system and non-CRUD noise (open/close/view/review/like, nav)
+                const disallowed = [
+                    'login','logout','session','auth','permission','role','user login','user logout',
+                    'open','opened','close','closed','view','viewed','visit','visited',
+                    'nav','navigate','navigation','review','for review','like','liked','favorite','favourite','star','starred'
+                ];
                 if (disallowed.some(k => t.includes(k) || action.includes(k) || title.includes(k))) return false;
                 // Include any content-oriented entities and CRUD-ish actions
                 const contentTypes = ['playbooks','playbook','boxlinks','boxlink','dashboards','dashboard','section','sections','tab','tabs','resource','resources'];
