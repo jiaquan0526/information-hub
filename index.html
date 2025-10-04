@@ -1522,10 +1522,6 @@
                 });
                 // Keep only content activities
                 activities = activities.filter(isContentActivity);
-                if (!activities || activities.length === 0) {
-                    infoBar.style.display = 'none';
-                    return;
-                }
                 // Sort by timestamp desc
                 activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 const latest = activities.slice(0, 8);
@@ -1538,21 +1534,55 @@
                     const s = String(key).replace(/-/g, ' ');
                     return s.charAt(0).toUpperCase() + s.slice(1);
                 };
+                // Escape helper for safe HTML
+                const safe = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
+                // Load global broadcast announcement (visible to all)
+                let broadcastValue = null;
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSiteSetting === 'function') {
+                        broadcastValue = await hubDatabase.getSiteSetting('broadcast');
+                    }
+                } catch (_) { broadcastValue = null; }
+                // Normalize broadcast structure
+                let broadcastItem = '';
+                try {
+                    let enabled = false; let message = ''; let link = '';
+                    if (typeof broadcastValue === 'string') {
+                        message = String(broadcastValue || '').trim();
+                        enabled = !!message;
+                    } else if (broadcastValue && typeof broadcastValue === 'object') {
+                        message = String(broadcastValue.message || broadcastValue.text || '').trim();
+                        link = String(broadcastValue.link || broadcastValue.url || '').trim();
+                        enabled = (broadcastValue.enabled !== false) && !!message;
+                    }
+                    if (enabled && message) {
+                        const linkHtml = link ? ` <a href="${safe(link)}" target="_blank" rel="noopener">Learn more</a>` : '';
+                        broadcastItem = `<span class="info-item"><strong>Announcement:</strong> ${safe(message)}${linkHtml}</span>`;
+                    }
+                } catch (_) { /* ignore */ }
                 // Build message HTML items
-                const items = latest.map(a => {
+                const itemsFromActivities = latest.map(a => {
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
                     const who = a.username || a.user || 'Someone';
                     const section = a.section || a.sectionId || a.category || 'general';
                     const sectionLabel = prettyName(section);
-                    const resource = a.title || a.resource || a.description || '';
+                    const meta = (a && a.metadata) ? a.metadata : {};
                     const action = a.action || a.type || 'updated';
-                    const safe = (t) => {
-                        const d = document.createElement('div');
-                        d.textContent = t || '';
-                        return d.innerHTML;
-                    };
+                    const actionLower = String(action).toLowerCase();
+                    let resource = a.title || a.resource || a.description || meta.title || '';
+                    // Prefer explicit tab names for tab-related actions
+                    if (!resource && (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab'))) {
+                        if (meta && (meta.oldName || meta.newName)) {
+                            const oldName = meta.oldName || '';
+                            const newName = meta.newName || '';
+                            resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                        } else {
+                            resource = meta.name || meta.tabId || '';
+                        }
+                    }
                     return `<span class="info-item"><strong>${safe(who)}</strong> ${safe(action)} ${resource ? `"${safe(resource)}" ` : ''}in <em>${safe(sectionLabel)}</em><span class="info-sep">•</span><span class="muted">${safe(when)}</span></span>`;
                 });
+                const items = (broadcastItem ? [broadcastItem] : []).concat(itemsFromActivities);
                 if (items.length === 0) { infoBar.style.display = 'none'; return; }
                 infoBar.style.display = 'flex';
                 // Duplicate items to enable seamless loop
@@ -1641,6 +1671,13 @@
                         activities = await hubDatabase.getActivities(1000, 0);
                     }
                 } catch (_) { activities = []; }
+                // Also include broadcast announcement at top if present
+                let broadcastValue = null;
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSiteSetting === 'function') {
+                        broadcastValue = await hubDatabase.getSiteSetting('broadcast');
+                    }
+                } catch (_) { broadcastValue = null; }
                 // Filter last 7 days like the marquee
                 const now = Date.now();
                 const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -1652,7 +1689,7 @@
                 activities = activities.filter(isContentActivity);
                 // Sort newest first and take up to 100
                 activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                const recent = activities.slice(0, 100);
+                let recent = activities.slice(0, 100);
                 const esc = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
                 // Display pretty section names and include action
                 let sectionNames = {};
@@ -1663,13 +1700,48 @@
                     const s = String(key).replace(/-/g, ' ');
                     return s.charAt(0).toUpperCase() + s.slice(1);
                 };
+                // Prepend broadcast if available
+                try {
+                    let enabled = false; let message = ''; let link = '';
+                    if (typeof broadcastValue === 'string') {
+                        message = String(broadcastValue || '').trim();
+                        enabled = !!message;
+                    } else if (broadcastValue && typeof broadcastValue === 'object') {
+                        message = String(broadcastValue.message || broadcastValue.text || '').trim();
+                        link = String(broadcastValue.link || broadcastValue.url || '').trim();
+                        enabled = (broadcastValue.enabled !== false) && !!message;
+                    }
+                    if (enabled && message) {
+                        const linkHtml = link ? ` <a href="${esc(link)}" target="_blank" rel="noopener">Learn more</a>` : '';
+                        const header = `<div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                            <span><strong>Announcement</strong></span>
+                            <span style=\"opacity:.6\">•</span>
+                            <span>${esc(message)}${linkHtml}</span>
+                        </div>`;
+                        recent = [{ __broadcast: header }].concat(recent);
+                    }
+                } catch(_) {}
                 const content = recent.map(a => {
+                    if (a && a.__broadcast) return a.__broadcast;
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
                     const who = esc(a.username || a.user || 'Someone');
                     const sectionKey = a.section || a.sectionId || a.category || 'general';
                     const section = esc(prettyName(sectionKey));
-                    const resource = esc(a.title || a.resource || a.description || '');
-                    const action = esc(a.action || a.type || 'updated');
+                    const meta = (a && a.metadata) ? a.metadata : {};
+                    const actionRaw = a.action || a.type || 'updated';
+                    const action = esc(actionRaw);
+                    let resourceRaw = a.title || a.resource || a.description || meta.title || '';
+                    const actionLower = String(actionRaw).toLowerCase();
+                    if (!resourceRaw && (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab'))) {
+                        if (meta && (meta.oldName || meta.newName)) {
+                            const oldName = meta.oldName || '';
+                            const newName = meta.newName || '';
+                            resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                        } else {
+                            resourceRaw = meta.name || meta.tabId || '';
+                        }
+                    }
+                    const resource = esc(resourceRaw);
                     return `<div style=\"padding:8px 0;border-bottom:1px solid #eee;display:flex;gap:10px;flex-wrap:wrap;align-items:center;\">\n                        <span><strong>${who}</strong></span>\n                        <span style=\\\"opacity:.6\\\">•</span>\n                        <span>${action}</span>\n                        <span style=\\\"opacity:.6\\\">•</span>\n                        <span>${section}</span>\n                        ${resource ? `<span style=\\\"opacity:.6\\\">•</span><span>${resource}</span>` : ''}\n                        <span style=\\\"margin-left:auto;color:#999;font-size:0.85rem;\\\">${esc(when)}</span>\n                    </div>`;
                 }).join('');
                 const wrapper = document.createElement('div');
@@ -1975,12 +2047,10 @@
 
                     // Default active tab
                     if (isAdmin) {
-                        try { if (typeof switchAdminTab === 'function') switchAdminTab('users'); } catch(_) {}
                         if (permissionsContent) permissionsContent.classList.remove('active');
                         if (usersContent) usersContent.classList.add('active');
                         try { if (typeof loadUsersList === 'function') loadUsersList(); } catch(_) {}
                     } else if (isEditor) {
-                        try { if (typeof switchAdminTab === 'function') switchAdminTab('permissions'); } catch(_) {}
                         if (usersContent) usersContent.classList.remove('active');
                         if (permissionsContent) permissionsContent.classList.add('active');
                         try { if (typeof loadPermissionUserList === 'function') loadPermissionUserList(); } catch(_) {}
