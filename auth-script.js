@@ -79,16 +79,40 @@ class AuthSystem {
             return false;
         }
         
-        // Dynamically load CDN if missing
+        // Dynamically load Supabase library with robust fallbacks if missing
         if (!window.supabase) {
-            console.log('Loading Supabase from CDN...');
+            console.log('Loading Supabase library with fallbacks...');
+            const cdnUrls = [
+                'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
+                'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js'
+            ];
+            let injected = false;
             const existing = document.querySelector('script[data-supabase-cdn]');
             if (!existing) {
                 const s = document.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+                s.src = cdnUrls[0];
                 s.async = true;
                 s.setAttribute('data-supabase-cdn', '1');
+                s.onerror = () => {
+                    try {
+                        if (injected) return;
+                        injected = true;
+                        const s2 = document.createElement('script');
+                        s2.src = cdnUrls[1];
+                        s2.async = true;
+                        s2.onload = () => {};
+                        s2.onerror = () => {
+                            // ESM fallback
+                            const m = document.createElement('script');
+                            m.type = 'module';
+                            m.textContent = "import{createClient}from 'https://esm.sh/@supabase/supabase-js@2'; window.supabase={createClient}; window.dispatchEvent(new Event('supabase-ready'));";
+                            document.head.appendChild(m);
+                        };
+                        document.head.appendChild(s2);
+                    } catch (_) {}
+                };
                 document.head.appendChild(s);
+                window.addEventListener('supabase-ready', () => {}, { once: true });
             }
         }
         
