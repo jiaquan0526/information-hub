@@ -366,6 +366,7 @@ class InformationHub {
                     username: user.username,
                     action: 'CLICK_HUB_CARD',
                     description: `Opened section ${sectionId} from hub`,
+                    section: sectionId,
                     timestamp: new Date().toISOString()
                 });
             }

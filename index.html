@@ -1565,10 +1565,10 @@
                 // Build message HTML items
                 const itemsFromActivities = latest.map(a => {
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
-                    const who = a.username || a.user || 'Someone';
+                    const meta = (a && a.metadata) ? a.metadata : {};
+                    const who = a.username || meta.username || a.user || 'Someone';
                     const section = a.section || a.sectionId || a.category || 'general';
                     const sectionLabel = prettyName(section);
-                    const meta = (a && a.metadata) ? a.metadata : {};
                     const action = a.action || a.type || 'updated';
                     const actionLower = String(action).toLowerCase();
                     let resource = a.title || a.resource || a.description || meta.title || '';
@@ -1580,6 +1580,16 @@
                             resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
                             resource = meta.name || meta.tabId || '';
+                        }
+                    }
+                    // Prefer section names for section-related actions
+                    if (!resource && (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section'))) {
+                        if (meta && (meta.oldName || meta.newName)) {
+                            const oldName = meta.oldName || '';
+                            const newName = meta.newName || '';
+                            resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                        } else {
+                            resource = meta.name || section || '';
                         }
                     }
                     return `<span class="info-item"><strong>${safe(who)}</strong> ${safe(action)} ${resource ? `"${safe(resource)}" ` : ''}in <em>${safe(sectionLabel)}</em><span class="info-sep">•</span><span class="muted">${safe(when)}</span></span>`;
@@ -1726,10 +1736,10 @@
                 const content = recent.map(a => {
                     if (a && a.__broadcast) return a.__broadcast;
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
-                    const who = esc(a.username || a.user || 'Someone');
+                    const meta = (a && a.metadata) ? a.metadata : {};
+                    const who = esc(a.username || meta.username || a.user || 'Someone');
                     const sectionKey = a.section || a.sectionId || a.category || 'general';
                     const section = esc(prettyName(sectionKey));
-                    const meta = (a && a.metadata) ? a.metadata : {};
                     const actionRaw = a.action || a.type || 'updated';
                     const action = esc(actionRaw);
                     let resourceRaw = a.title || a.resource || a.description || meta.title || '';
@@ -1741,6 +1751,15 @@
                             resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
                             resourceRaw = meta.name || meta.tabId || '';
+                        }
+                    }
+                    if (!resourceRaw && (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section'))) {
+                        if (meta && (meta.oldName || meta.newName)) {
+                            const oldName = meta.oldName || '';
+                            const newName = meta.newName || '';
+                            resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                        } else {
+                            resourceRaw = meta.name || sectionKey || '';
                         }
                     }
                     const resource = esc(resourceRaw);

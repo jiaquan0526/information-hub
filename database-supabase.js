@@ -507,13 +507,23 @@ class HubDatabase {
                 ip: activity.ip || null
             });
             const rawSection = activity.sectionId || activity.section || null;
+            // Normalize identifiers and attempt inference from provided fields
+            const normalizedSection = activity.section || activity.sectionId || (activity.metadata && (activity.metadata.section || activity.metadata.sectionId)) || null;
+            const normalizedResource = activity.resourceId || (activity.metadata && (activity.metadata.resource_id || activity.metadata.resourceId)) || null;
             const payload = {
                 user_id: userId,
                 action: activity.action || 'EVENT',
-                resource_id: activity.resourceId || null,
-                section_id: (rawSection && String(rawSection).trim().toLowerCase() !== 'general') ? rawSection : null,
+                resource_id: normalizedResource || null,
+                section_id: (rawSection && String(rawSection).trim().toLowerCase() !== 'general') ? rawSection : (normalizedSection || null),
                 metadata: meta
             };
+            // Attempt to parse section/resource IDs from description as a last resort
+            try {
+                if (!payload.section_id && activity.description && typeof activity.description === 'string') {
+                    const m = activity.description.match(/section\s+([A-Za-z0-9_-]+)/i);
+                    if (m && m[1]) payload.section_id = m[1];
+                }
+            } catch (_) {}
             if (activity.timestamp) {
                 payload.timestamp = new Date(activity.timestamp);
             }
@@ -552,11 +562,13 @@ class HubDatabase {
                     }
                 } catch (_) { /* ignore */ }
             }
+            const normalizedSection = entry.section || entry.sectionId || (entry.metadata && (entry.metadata.section || entry.metadata.sectionId)) || null;
+            const normalizedResource = entry.resourceId || (entry.metadata && (entry.metadata.resource_id || entry.metadata.resourceId)) || null;
             const payload = {
                 user_id: userId,
                 action: entry.action || 'updated',
-                section_id: (entry.section && String(entry.section).trim().toLowerCase() !== 'general') ? entry.section : null,
-                resource_id: entry.resourceId || null,
+                section_id: (entry.section && String(entry.section).trim().toLowerCase() !== 'general') ? entry.section : (normalizedSection || null),
+                resource_id: normalizedResource || null,
                 metadata: {
                     username: resolvedUsername || null,
                     title: entry.title || null,
@@ -565,6 +577,13 @@ class HubDatabase {
                     section: entry.section || null
                 }
             };
+            // Parse from description as fallback
+            try {
+                if (!payload.section_id && entry.description && typeof entry.description === 'string') {
+                    const m = entry.description.match(/section\s+([A-Za-z0-9_-]+)/i);
+                    if (m && m[1]) payload.section_id = m[1];
+                }
+            } catch (_) {}
             if (entry.timestamp) {
                 payload.timestamp = new Date(entry.timestamp);
             }
@@ -756,6 +775,36 @@ class HubDatabase {
         }
     }
 
+	// Fetch all site settings as an array of { key, value }
+	async getAllSiteSettings() {
+		try {
+			const client = window.supabaseClient || this.supabase;
+			if (!client) throw new Error('Supabase client not ready');
+			const { data, error } = await client
+				.from('site_settings')
+				.select('key, value')
+				.order('key', { ascending: true });
+			if (error) throw error;
+			return Array.isArray(data) ? data : [];
+		} catch (error) {
+			console.error('Error getting all site settings:', error);
+			return [];
+		}
+	}
+
+	// Export full system state for JSON backup (superset of exportAllData)
+	async exportRawState() {
+		try {
+			const base = await this.exportAllData();
+			let siteSettings = [];
+			try { siteSettings = await this.getAllSiteSettings(); } catch(_) { siteSettings = []; }
+			return Object.assign({}, base, { siteSettings });
+		} catch (error) {
+			console.error('Error exporting raw state:', error);
+			throw error;
+		}
+	}
+
 	// Import raw state produced by backup JSON (admin-only)
 	async importRawState(raw) {
 		try {
@@ -851,6 +900,23 @@ class HubDatabase {
 						}
 					} catch (e) { try { console.warn('restore: upsert view failed', e?.message || e); } catch(_) {} }
 				}
+			}
+			// Site settings
+			if (data.siteSettings) {
+				try {
+					if (Array.isArray(data.siteSettings)) {
+						for (const row of data.siteSettings) {
+							if (!row || typeof row.key !== 'string') continue;
+							try { await this.setSiteSetting(row.key, row.value); }
+							catch (e) { try { console.warn('restore: setSiteSetting failed', row.key, e?.message || e); } catch(_) {} }
+						}
+					} else if (typeof data.siteSettings === 'object') {
+						for (const k of Object.keys(data.siteSettings)) {
+							try { await this.setSiteSetting(k, data.siteSettings[k]); }
+							catch (e) { try { console.warn('restore: setSiteSetting failed', k, e?.message || e); } catch(_) {} }
+						}
+					}
+				} catch (e) { try { console.warn('restore: siteSettings import failed', e?.message || e); } catch(_) {} }
 			}
 			return true;
 		} catch (error) {
