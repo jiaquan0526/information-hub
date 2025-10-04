@@ -673,6 +673,8 @@ class SectionManager {
         // Supabase-only: fetch and render
         try {
             const resources = await this.getResources(type);
+            // Rebuild category options based on the current tab's resources
+            try { this._populateCategoryFilterFromResources(resources); } catch (_) {}
             const filteredResources = this.getFilteredResources(resources);
             if (filteredResources.length === 0) {
                 grid.style.display = 'none';
@@ -825,7 +827,8 @@ class SectionManager {
 
     getFilteredResources(resources) {
         const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
-        const categoryFilter = document.getElementById('categoryFilter')?.value || '';
+        const selectedRaw = document.getElementById('categoryFilter')?.value || '';
+        const normalizedFilter = String(selectedRaw).trim().toLowerCase();
 
         return resources.filter(resource => {
             const title = (resource.title || '').toLowerCase();
@@ -837,10 +840,32 @@ class SectionManager {
                 (resource.tags && resource.tags.some(tag => String(tag).toLowerCase().includes(searchTerm))) ||
                 url.includes(searchTerm);
 
-            const matchesCategory = !categoryFilter || resource.category === categoryFilter;
+            const resourceCategory = String(resource.category || '').trim().toLowerCase();
+            const matchesCategory = !normalizedFilter || resourceCategory === normalizedFilter;
 
             return matchesSearch && matchesCategory;
         });
+    }
+
+    _populateCategoryFilterFromResources(resources) {
+        try {
+            const sel = document.getElementById('categoryFilter');
+            if (!sel) return;
+            const current = String(sel.value || '').trim().toLowerCase();
+            const cats = Array.from(new Set(
+                (Array.isArray(resources) ? resources : [])
+                    .map(r => String(r.category || '').trim())
+                    .filter(Boolean)
+            ));
+            const normCats = Array.from(new Set(cats.map(c => c.toLowerCase()))).sort();
+            const toLabel = (c) => c.charAt(0).toUpperCase() + c.slice(1);
+            const options = ['<option value="">All Categories</option>']
+                .concat(normCats.map(c => `<option value="${this.escapeHtml(c)}"${current === c ? ' selected' : ''}>${this.escapeHtml(toLabel(c))}</option>`));
+            sel.innerHTML = options.join('');
+            if (current && !normCats.includes(current)) {
+                sel.value = '';
+            }
+        } catch (_) {}
     }
 
     filterResources() {
