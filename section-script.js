@@ -866,6 +866,13 @@ class SectionManager {
         return !!perms.canEditAllSections || editableSections.includes(this.currentSection);
     }
 
+    // Section customization (tabs/config) permission: admin or editor with edit rights on this section
+    canCustomizeSection() {
+        if (!this.currentUser) return false;
+        if (this.isAdmin()) return true;
+        return this.canEditResource();
+    }
+
     canDeleteResource() {
         if (!this.currentUser) return false;
         const role = String(this.currentUser.role || '').toLowerCase();
@@ -1573,7 +1580,7 @@ class SectionManager {
         // Customize button visibility
         const customizeBtn = document.getElementById('customizeBtn');
         if (customizeBtn) {
-            customizeBtn.style.display = this.isAdmin() ? 'inline-flex' : 'none';
+            customizeBtn.style.display = this.canCustomizeSection() ? 'inline-flex' : 'none';
         }
 				// Build visible types from tabs + tab_names; robust fallbacks when config is partial
 			const cfg = this.sectionConfig || {};
@@ -1657,7 +1664,7 @@ class SectionManager {
     }
 
     openCustomizeModal() {
-        if (!this.isAdmin()) {
+        if (!this.canCustomizeSection()) {
             this.showMessage('You do not have permission to customize', 'error');
             return;
         }
