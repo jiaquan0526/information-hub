@@ -479,8 +479,27 @@ class HubDatabase {
             if (!client) throw new Error('Supabase client not ready');
             const currentUserId = await this.getCurrentUserId();
             const userId = activity.userId || currentUserId || null;
+            // Resolve username/email for display if not explicitly provided
+            let resolvedUsername = activity.username || activity.user || null;
+            if (!resolvedUsername) {
+                try {
+                    // Prefer auth user email when available
+                    const { data: authData } = await window.supabaseClient.auth.getUser();
+                    const authUser = authData && authData.user ? authData.user : null;
+                    resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
+                    // Fallback to profiles table if still empty
+                    if (!resolvedUsername && userId) {
+                        const { data: prof } = await client
+                            .from('profiles')
+                            .select('username, email')
+                            .eq('id', userId)
+                            .single();
+                        if (prof) resolvedUsername = prof.username || prof.email || null;
+                    }
+                } catch (_) { /* ignore */ }
+            }
             const meta = Object.assign({}, activity.metadata || {}, {
-                username: activity.username || activity.user || null,
+                username: resolvedUsername || null,
                 title: activity.title || null,
                 description: activity.description || null,
                 type: activity.type || activity.resourceType || null,
@@ -516,13 +535,30 @@ class HubDatabase {
             if (!client) throw new Error('Supabase client not ready');
             const currentUserId = await this.getCurrentUserId();
             const userId = currentUserId || null;
+            // Resolve username/email for display if not explicitly provided
+            let resolvedUsername = entry.username || null;
+            if (!resolvedUsername) {
+                try {
+                    const { data: authData } = await window.supabaseClient.auth.getUser();
+                    const authUser = authData && authData.user ? authData.user : null;
+                    resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
+                    if (!resolvedUsername && userId) {
+                        const { data: prof } = await client
+                            .from('profiles')
+                            .select('username, email')
+                            .eq('id', userId)
+                            .single();
+                        if (prof) resolvedUsername = prof.username || prof.email || null;
+                    }
+                } catch (_) { /* ignore */ }
+            }
             const payload = {
                 user_id: userId,
                 action: entry.action || 'updated',
                 section_id: (entry.section && String(entry.section).trim().toLowerCase() !== 'general') ? entry.section : null,
                 resource_id: entry.resourceId || null,
                 metadata: {
-                    username: entry.username || null,
+                    username: resolvedUsername || null,
                     title: entry.title || null,
                     description: entry.title || null,
                     type: entry.type || null,
@@ -753,12 +789,18 @@ class HubDatabase {
 			if (Array.isArray(data.sections)) {
 				for (const section of data.sections) {
 					const sectionId = section.section_id || section.sectionId || section.id;
+					const incomingCfg = (section && typeof section.config === 'object') ? section.config : {};
+					// Ensure restored sections are visible by default unless explicitly false
+					const nextConfig = Object.assign({}, incomingCfg);
+					if (typeof nextConfig.visible === 'undefined') nextConfig.visible = true;
+					if (typeof nextConfig.order === 'undefined') nextConfig.order = 0;
+					if (typeof nextConfig.intro === 'undefined') nextConfig.intro = section.intro || '';
 					const payload = {
 						sectionId,
 						name: section.name,
 						icon: section.icon,
 						color: section.color,
-						config: section.config || {},
+						config: nextConfig,
 						data: section.data || {}
 					};
 					try { await this.saveSection(payload); }

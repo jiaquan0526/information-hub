@@ -3761,6 +3761,28 @@ Permissions:
         // Function to get all available sections dynamically - Supabase ONLY (no fallbacks)
         async function getAllAvailableSections() {
             try {
+                // Determine caller role to decide visibility filtering
+                let role = null;
+                let canManage = false;
+                if (window.supabaseClient) {
+                    try {
+                        const { data: { user: authUser } } = await window.supabaseClient.auth.getUser();
+                        if (authUser) {
+                            const { data: profile } = await window.supabaseClient
+                                .from('profiles')
+                                .select('role, permissions')
+                                .eq('id', authUser.id)
+                                .single();
+                            if (profile) {
+                                role = String(profile.role || '').toLowerCase();
+                                canManage = !!(profile.permissions && profile.permissions.canManageUsers);
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                const isAdminLike = (role === 'admin' || canManage === true);
+
                 if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
                     let sections = await hubDatabase.getAllSections();
                     // Fallback to direct Supabase if wrapper returns empty
@@ -3773,7 +3795,7 @@ Permissions:
                         } catch (_) {}
                     }
                     const ids = (sections || [])
-                        .filter(s => s && (s.config?.visible !== false))
+                        .filter(s => isAdminLike ? true : (s && (s.config?.visible !== false)))
                         .map(s => s.section_id || s.id)
                         .filter(Boolean);
                     return ids || [];
@@ -3783,7 +3805,7 @@ Permissions:
                         .select('section_id, config');
                     const list = Array.isArray(data) ? data : [];
                     const ids = list
-                        .filter(row => (row && row.config && typeof row.config === 'object') ? (row.config.visible !== false) : true)
+                        .filter(row => isAdminLike ? true : ((row && row.config && typeof row.config === 'object') ? (row.config.visible !== false) : true))
                         .map(row => row.section_id)
                         .filter(Boolean);
                     return ids || [];
