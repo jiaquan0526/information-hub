@@ -1631,11 +1631,16 @@
             } catch(_) {}
         };
 
-        // Open audit log from info bar link - simple list only (content updates: playbooks/boxlinks/dashboards)
-        window.openAuditFromInfoBar = function(event) {
+        // Open audit log from info bar link - list recent content updates (7 days)
+        window.openAuditFromInfoBar = async function(event) {
             try { if (event) event.preventDefault(); } catch(_) {}
             try {
-                let activities = JSON.parse(null || '[]');
+                let activities = [];
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getActivities === 'function') {
+                        activities = await hubDatabase.getActivities(1000, 0);
+                    }
+                } catch (_) { activities = []; }
                 // Filter last 7 days like the marquee
                 const now = Date.now();
                 const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -1703,9 +1708,6 @@
             const adminModal = document.getElementById('adminPanelModal');
             if (adminModal) {
                 adminModal.style.display = 'block';
-                
-                // Switch to sections tab
-                switchAdminTab('sections');
                 
                 console.log('Section manager opened');
             } else {
