@@ -508,17 +508,17 @@ class ExcelExporter {
                 throw new Error('Section not found');
             }
 
-            // Users with access to this section (DB + localStorage)
+            // Users with access to this section (Supabase only)
             let usersWithAccess = [];
             try {
                 let usersDb = [];
                 try { if (window.hubDatabase && hubDatabase.getAllUsers) usersDb = await hubDatabase.getAllUsers(); } catch (_) { usersDb = []; }
-                let usersLs = [];
-                try { usersLs = JSON.parse(localStorage.getItem('hubUsers') || '[]'); } catch (_) { usersLs = []; }
-                const byId = new Map((usersDb || []).map(u => [u.id, u]));
-                (usersLs || []).forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
-                const merged = Array.from(byId.values());
-                usersWithAccess = merged.filter(u => (u?.permissions?.canEditAllSections) || (u?.permissions?.sections || []).includes(sectionId))
+                usersWithAccess = (usersDb || [])
+                    .filter(u => {
+                        const role = String(u.role || '').toLowerCase();
+                        const perms = u.permissions || {};
+                        return role === 'admin' || perms.canEditAllSections === true || (Array.isArray(perms.sections) && perms.sections.includes(sectionId));
+                    })
                     .map(u => ({ id: u.id, username: u.username, role: u.role || 'user', name: u.name || '', email: u.email || '' }));
             } catch (_) { usersWithAccess = []; }
 
@@ -603,11 +603,12 @@ class ExcelExporter {
 
             const userActivities = activities.filter(a => a.userId === userId);
 
-            // Build section name mapping from sectionOrder
+            // Build section name mapping from Supabase
             let nameById = {};
             try {
-                const order = JSON.parse(localStorage.getItem('sectionOrder') || '[]');
-                (order || []).forEach(s => { if (s && s.id) nameById[s.id] = s.name || s.id; });
+                let sections = [];
+                try { if (window.hubDatabase && hubDatabase.getAllSections) sections = await hubDatabase.getAllSections(); } catch (_) { sections = []; }
+                (sections || []).forEach(s => { const id = String(s.section_id || s.sectionId || s.id || ''); if (id) nameById[id] = s.name || id; });
             } catch (_) {}
 
             this.workbook = XLSX.utils.book_new();
@@ -638,28 +639,27 @@ class ExcelExporter {
                 XLSX.utils.book_append_sheet(this.workbook, activityWorksheet, 'Activities');
             }
 
-            // Accessible resources for this user
+            // Accessible resources for this user (Supabase only)
             try {
                 const perms = user.permissions || {};
-                const canAll = !!perms.canEditAllSections;
+                const role = String(user.role || '').toLowerCase();
+                const canAll = role === 'admin' || !!perms.canEditAllSections;
                 const allowed = new Set(perms.sections || []);
-                const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-                const accessibleResources = [];
-                Object.entries(hub).forEach(([sid, s]) => {
-                    if (!canAll && !allowed.has(sid)) return;
-                    ['playbooks','boxLinks','dashboards'].forEach(type => {
-                        (s?.[type] || []).forEach(r => accessibleResources.push({ ...r, sectionId: sid, type }));
-                    });
-                });
+                let allResources = [];
+                try { if (window.hubDatabase && hubDatabase.getAllResources) allResources = await hubDatabase.getAllResources(); } catch (_) { allResources = []; }
+                const accessibleResources = (allResources || []).filter(r => {
+                    const sid = String(r.section_id || r.sectionId || '');
+                    return canAll || (sid && allowed.has(sid));
+                }).map(r => ({
+                    Title: r.title,
+                    Type: r.type,
+                    Section: nameById[String(r.section_id || r.sectionId || '')] || String(r.section_id || r.sectionId || ''),
+                    URL: r.url || '',
+                    Category: (r.extra && r.extra.category) || r.category || '',
+                    Tags: Array.isArray(r.tags) ? r.tags.join(', ') : (typeof r.tags === 'string' ? r.tags : '')
+                }));
                 if (accessibleResources.length > 0) {
-                    const wsRes = XLSX.utils.json_to_sheet(accessibleResources.map(r => ({
-                        'Title': r.title,
-                        'Type': r.type,
-                        'Section': r.sectionId,
-                        'URL': r.url || '',
-                        'Category': r.category || '',
-                        'Tags': Array.isArray(r.tags) ? r.tags.join(', ') : ''
-                    })));
+                    const wsRes = XLSX.utils.json_to_sheet(accessibleResources);
                     XLSX.utils.book_append_sheet(this.workbook, wsRes, 'Accessible Resources');
                 }
             } catch (_) {}

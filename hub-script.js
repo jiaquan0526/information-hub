@@ -2141,32 +2141,24 @@ window.importJsonSectionsTabsResources = async () => {
 // JSON Backup/Restore (raw)
 window.backupJson = async () => {
     try {
-        // Admin-only hint (non-blocking for download)
-        try {
-            const me = informationHub.currentUser;
-            if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
-                informationHub.showMessage('Tip: Admin should perform backups for completeness.', 'error');
-            }
-        } catch(_) {}
+        // Require Supabase + admin/manager
+        if (!window.supabaseClient) throw new Error('Supabase not initialized');
+        const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+        if (!me) throw new Error('Not authenticated');
+        const { data: prof, error: pErr } = await window.supabaseClient
+            .from('profiles')
+            .select('role, permissions')
+            .eq('id', me.id)
+            .single();
+        if (pErr) throw pErr;
+        const role = String(prof?.role || '').toLowerCase();
+        const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+        if (!(role === 'admin' || canManage)) throw new Error('Only admins can perform backups');
 
-        // Supabase database backup
-        let users = [], sections = [], sectionConfigs = {}, resources = {}, activities = [], views = [];
-        if (window.hubDatabase && window.hubDatabaseReady) {
-            try { users = await hubDatabase.getAllUsers(); } catch(_) {}
-            try { sections = await hubDatabase.getAllSections(); } catch(_) {}
-            try { activities = await hubDatabase.getActivities(); } catch(_) {}
-            try { views = await hubDatabase.getAllViews(); } catch(_) {}
-            // Per-section resources
-            for (const s of (sections||[])) {
-                const sid = String(s.section_id||s.id||'').trim(); if (!sid) continue;
-                try { resources[sid] = await hubDatabase.getResourcesBySection(sid); } catch(_) { resources[sid] = []; }
-            }
+        if (!window.hubDatabase || !window.hubDatabaseReady || typeof hubDatabase.exportRawState !== 'function') {
+            throw new Error('Database unavailable for backup');
         }
-
-        const payload = {
-            exportDate: new Date().toISOString(),
-            users, sections, sectionConfigs, resources, activities, views
-        };
+        const payload = await hubDatabase.exportRawState();
 
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -2185,12 +2177,19 @@ window.backupJson = async () => {
 
 window.restoreJson = async () => {
     try {
-        // Admin-only guard
-        const me = informationHub.currentUser;
-        if (!(me && (String(me.role||'').toLowerCase()==='admin' || me.permissions?.canManageUsers))) {
-            informationHub.showMessage('Only admin can restore data', 'error');
-            return;
-        }
+        // Admin-only guard via Supabase profile
+        if (!window.supabaseClient) { informationHub.showMessage('Supabase not initialized', 'error'); return; }
+        const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+        if (!me) { informationHub.showMessage('Not authenticated', 'error'); return; }
+        const { data: prof, error: pErr } = await window.supabaseClient
+            .from('profiles')
+            .select('role, permissions')
+            .eq('id', me.id)
+            .single();
+        if (pErr) { informationHub.showMessage(`Profile check failed: ${pErr.message}`, 'error'); return; }
+        const role = String(prof?.role || '').toLowerCase();
+        const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+        if (!(role === 'admin' || canManage)) { informationHub.showMessage('Only admin can restore data', 'error'); return; }
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'application/json';
@@ -2199,23 +2198,8 @@ window.restoreJson = async () => {
             if (!file) return;
             const text = await file.text();
             const json = JSON.parse(text);
-            if (!window.hubDatabase || !window.hubDatabaseReady) throw new Error('Supabase database unavailable');
-            // Users
-            try { if (Array.isArray(json.users)) for (const user of json.users) await hubDatabase.saveUser(user); } catch(_) {}
-            // Sections
-            try { if (Array.isArray(json.sections)) for (const section of json.sections) await hubDatabase.saveSection(section); } catch(_) {}
-            // Resources (as map: { [sectionId]: [...] })
-            try {
-                const res = json.resources && typeof json.resources === 'object' ? json.resources : {};
-                for (const sid of Object.keys(res)) {
-                    const resources = Array.isArray(res[sid]) ? res[sid] : [];
-                    for (const resource of resources) {
-                        await hubDatabase.saveResource({...resource, sectionId: sid});
-                    }
-                }
-            } catch(_) {}
-            // Optional: audit + views
-            try { if (Array.isArray(json.activities)) for (const activity of json.activities) await hubDatabase.saveActivity(activity); } catch(_) {}
+            if (!window.hubDatabase || !window.hubDatabaseReady || typeof hubDatabase.importRawState !== 'function') throw new Error('Supabase database unavailable');
+            await hubDatabase.importRawState(json);
 
             // Refresh UI
             try { updateMainHubSections(); } catch(_) {}

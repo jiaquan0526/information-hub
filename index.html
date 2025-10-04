@@ -2356,26 +2356,27 @@
         if (typeof window.backupJson !== 'function') {
             window.backupJson = async function() {
                 try {
-                    let payload = null;
-                    // Try DB first
-                    try {
-                        if (window.hubDatabase && hubDatabase.exportRawState) {
-                            payload = await hubDatabase.exportRawState();
-                        }
-                    } catch (_) {}
+                    // Require Supabase + admin/manager
+                    if (!window.supabaseClient) throw new Error('Supabase not initialized');
+                    const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                    if (!me) throw new Error('Not authenticated');
+                    const { data: prof, error: pErr } = await window.supabaseClient
+                        .from('profiles')
+                        .select('role, permissions')
+                        .eq('id', me.id)
+                        .single();
+                    if (pErr) throw pErr;
+                    const role = String(prof?.role || '').toLowerCase();
+                    const canManage = !!(prof && prof.permissions && prof.permissions.canManageUsers);
+                    if (!(role === 'admin' || canManage)) throw new Error('Only admins can perform backups');
 
+                    // Export database state only
+                    let payload = null;
+                    if (window.hubDatabase && typeof hubDatabase.exportRawState === 'function') {
+                        payload = await hubDatabase.exportRawState();
+                    }
                     if (!payload) {
-                        // Local-only fallback
-                        let local = {};
-                        try {
-                            local = {
-                                sectionOrder: JSON.parse(null || 'null'),
-                                hubUsers: JSON.parse(localStorage.getItem('hubUsers') || 'null'),
-                                informationHub: JSON.parse(null || 'null'),
-                                hubActivities: JSON.parse(null || 'null')
-                            };
-                        } catch (_) {}
-                        payload = { users: [], sections: [], resources: [], activities: [], views: [], exportDate: new Date().toISOString(), localStorage: local };
+                        throw new Error('Database unavailable for backup');
                     }
 
                     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
