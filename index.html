@@ -36,47 +36,8 @@
         
         // Wait for Supabase library to load
         const initSupabase = async () => {
-            // Fallback loader to ensure Supabase library is available even if the primary CDN fails
-            async function ensureSupabaseLibrary() {
-                if (window.supabase) return true;
-                return await new Promise((resolve) => {
-                    let resolved = false;
-                    const done = (ok) => { if (!resolved) { resolved = true; resolve(!!ok); } };
-                    
-                    // Try alternate UMD CDN first (unpkg)
-                    const existingAlt = document.querySelector('script[data-supabase-alt]');
-                    if (!existingAlt) {
-                        const s1 = document.createElement('script');
-                        s1.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
-                        s1.async = true;
-                        s1.setAttribute('data-supabase-alt', '1');
-                        s1.onload = () => setTimeout(() => done(window.supabase), 0);
-                        s1.onerror = () => {
-                            // If UMD fails, try ESM import fallback
-                            const m = document.createElement('script');
-                            m.type = 'module';
-                            m.textContent = "import{createClient}from 'https://esm.sh/@supabase/supabase-js@2'; window.supabase={createClient}; window.dispatchEvent(new Event('supabase-ready'));";
-                            document.head.appendChild(m);
-                            window.addEventListener('supabase-ready', () => done(true), { once: true });
-                            // Hard timeout guard
-                            setTimeout(() => done(window.supabase), 2500);
-                        };
-                        document.head.appendChild(s1);
-                    }
-                    
-                    // If script tag already present, poll briefly
-                    let tries = 0;
-                    const poll = setInterval(() => {
-                        tries++;
-                        if (window.supabase || tries > 30) {
-                            clearInterval(poll);
-                            if (!resolved) done(window.supabase);
-                        }
-                    }, 100);
-                    // Final safety timeout
-                    setTimeout(() => { if (!resolved) done(window.supabase); }, 4000);
-                });
-            }
+            // No alternate CDN fallbacks; require primary script tag
+            async function ensureSupabaseLibrary() { return !!window.supabase; }
 
             let attempts = 0;
             while (!window.supabase && attempts < 50) {
@@ -85,14 +46,7 @@
                 attempts++;
             }
             
-            if (!window.supabase) {
-                console.warn('Supabase library not available, attempting fallback loaders...');
-                const ok = await ensureSupabaseLibrary();
-                if (!ok) {
-                    console.error('Supabase library failed to load after fallbacks');
-                    return;
-                }
-            }
+            if (!window.supabase) { console.error('Supabase library not available'); return; }
             
             // Build CONFIG from meta/local if config.js is not present
             if (!window.CONFIG) {

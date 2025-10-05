@@ -316,15 +316,7 @@ class SectionManager {
         const iconEl = document.getElementById('sectionIcon');
         if (nameEl) {
             const nm = (sectionConfig && sectionConfig.name) ? String(sectionConfig.name).trim() : '';
-            // Fallback to readable section id if name missing
-            try {
-                const fallbackName = String(this.currentSection || 'Section')
-                    .replace(/[-_]+/g, ' ')
-                    .replace(/\b\w/g, c => c.toUpperCase());
-                nameEl.textContent = nm || fallbackName;
-            } catch (_) {
-                nameEl.textContent = nm || (this.currentSection || 'Section');
-            }
+            nameEl.textContent = nm;
         }
         if (iconEl) {
             const icn = sectionConfig && sectionConfig.icon ? String(sectionConfig.icon).trim() : '';
@@ -382,24 +374,17 @@ class SectionManager {
             // Deterministic list built from manifest, filtered and sorted
             const loadImages = async () => {
                 try {
-                    // Fallback to fetching manifest.json
-                    try {
-                        const bust = Date.now();
-                        const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
-                        if (resp && resp.ok) {
-                            const data = await resp.json();
-                            if (Array.isArray(data) && data.length > 0) {
-                                return data.map(p => `background-pic/${p}`).sort();
-                            }
+                    const bust = Date.now();
+                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                    if (resp && resp.ok) {
+                        const data = await resp.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            return data.map(p => `background-pic/${p}`).sort();
                         }
-                    } catch (_) {}
-                    // Final fallback static list
-                    return [
-                        'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
-                        'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
-                        'background-pic/537082_K.png','background-pic/560846_L.png'
-                    ].sort();
-                } catch (_) { return []; }
+                    }
+                } catch (_) {}
+                // No background images if manifest is missing or empty
+                return [];
             };
             const images = await loadImages();
             if (container && Array.isArray(images) && images.length > 0) {
