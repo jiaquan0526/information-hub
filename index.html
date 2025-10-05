@@ -676,12 +676,9 @@
                         tries++;
                     }
                 }
-                if (!user) {
-                    console.error('[Hub] Authentication error: session missing');
-                    updateHubProgress('❌ Authentication failed', 100);
-                    setTimeout(() => showFallbackSections(), 2000);
-                    return;
-                }
+            if (!user) {
+                console.warn('[Hub] No authenticated user; proceeding as guest');
+            }
                 
                 updateHubProgress(`✅ Authenticated as ${user.email}`, 35);
                 
@@ -711,7 +708,6 @@
                 if (error) {
                     console.error('[Hub] Error fetching sections:', error);
                     updateHubProgress('❌ Error loading sections: ' + error.message, 100);
-                    setTimeout(() => showFallbackSections(), 2000);
                     return;
                 }
                 
@@ -720,18 +716,8 @@
                 
                 if (!sections || sections.length === 0) {
                     console.log('No sections found in database');
-                    updateHubProgress('ℹ️ No sections found - showing empty state', 90);
-                    setTimeout(() => {
-                        showEmptyState();
-                        updateHubProgress('✅ Ready!', 100);
-                        try {
-                            const loadingScreen = document.getElementById('loadingScreen');
-                            const mainContent = document.getElementById('mainContent');
-                            if (loadingScreen) loadingScreen.style.display = 'none';
-                            if (mainContent) mainContent.style.display = 'block';
-                        } catch (_) {}
-                        console.timeEnd('loadSectionsFromSupabase');
-                    }, 1000);
+                    updateHubProgress('ℹ️ No sections found', 100);
+                    // Leave grid blank per requirements
                     return;
                 }
                 
@@ -2735,22 +2721,21 @@ Permissions:
                 // Get current user from Supabase
                 const { data: { user: authUser }, error: authError } = await window.supabaseClient.auth.getUser();
                 if (authError || !authUser) {
-                    console.log('No authenticated user found, redirecting to auth page');
-                    window.location.href = 'auth.html';
-                    return;
+                    console.log('No authenticated user found; continuing in limited mode');
                 }
                 
                 // Get full user profile from database (profiles table)
-                const { data: user, error: profileError } = await window.supabaseClient
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', authUser.id)
-                    .single();
-                
-                if (profileError || !user) {
-                    console.log('User profile not found in database, redirecting to auth page');
-                    window.location.href = 'auth.html';
-                    return;
+                let user = null;
+                if (authUser) {
+                    const { data: prof } = await window.supabaseClient
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', authUser.id)
+                        .maybeSingle();
+                    user = prof || null;
+                }
+                if (!user) {
+                    user = { id: null, username: 'Guest', role: 'user', permissions: { sections: [], editableSections: [], canManageUsers: false } };
                 }
                 
                 console.log('User from database:', user);
