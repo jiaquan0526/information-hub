@@ -5139,10 +5139,16 @@ Permissions:
                         .select('*')
                         .order('name', { ascending: true });
                     if (error) throw error;
-                    const rows = Array.isArray(sections) ? sections : [];
+                    const rows = (Array.isArray(sections) ? sections : []).map(s => {
+                        let cfg = s && s.config ? s.config : {};
+                        if (typeof cfg === 'string') {
+                            try { cfg = JSON.parse(cfg); } catch(_) { cfg = {}; }
+                        }
+                        return Object.assign({}, s, { config: (cfg && typeof cfg === 'object') ? cfg : {} });
+                    });
                     console.log('Loaded sections from Supabase:', rows);
                     visibleSections = rows
-                        .filter(s => s && s.config && s.config.visible !== false)
+                        .filter(s => (s && s.config && s.config.visible === false) ? false : true)
                         .sort((a,b) => ((a && a.config && a.config.order) || 0) - ((b && b.config && b.config.order) || 0));
                 }
             } catch (error) {
