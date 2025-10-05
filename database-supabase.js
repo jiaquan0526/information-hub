@@ -785,12 +785,8 @@ class HubDatabase {
                 .from('site_settings')
                 .select('value')
                 .eq('key', key)
-                .single();
-            if (error) {
-                // If no rows, return null instead of throwing
-                if (String(error.message || '').toLowerCase().includes('no rows')) return null;
-                throw error;
-            }
+                .maybeSingle();
+            if (error) throw error;
             if (!data) return null;
             let v = data.value || null;
             try {

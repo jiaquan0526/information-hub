@@ -722,7 +722,6 @@
                 const { data: sections, error } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, icon, color, config')
-                    .eq('config->>visible', 'true')
                     .order('config->order', { ascending: true, nullsFirst: true })
                     .order('name', { ascending: true });
                 
@@ -1362,8 +1361,12 @@
                 return t;
             }
 
-                    function getSingleDbType(sectionId, uiTid) {
-                return String(uiTid || '').toLowerCase().trim();
+            function getSingleDbType(sectionId, uiTid) {
+                const t = String(uiTid || '').toLowerCase().trim();
+                if (t === 'box' || t === 'boxlinks' || t === 'box-links') return 'box-links';
+                if (t === 'playbook' || t === 'playbooks') return 'playbooks';
+                if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
+                return t;
             }
 
             function updateCountDom(sectionId, tid, count) {
@@ -1396,9 +1399,9 @@
                         typesList = Array.from(new Set(mapped));
                     } catch (_) {}
                 }
-                // No legacy defaults: if nothing is configured and no resources exist, show nothing
+                // Provide sensible defaults if nothing configured and no resources exist
                 if (!typesList || typesList.length === 0) {
-                    typesList = [];
+                    typesList = ['playbooks','box-links','dashboards'];
                 }
                 let normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
                 if (normalizedTypes.length === 0) {
@@ -5184,10 +5187,17 @@ Permissions:
                         const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
                         const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
                         const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+                        const canonicalId = (raw) => {
+                            const t = String(raw || '').trim().toLowerCase();
+                            if (t === 'boxlinks' || t === 'box' || t === 'box-links') return 'box-links';
+                            if (t === 'playbook' || t === 'playbooks') return 'playbooks';
+                            if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
+                            return t.replace(/\s+/g, '-').replace(/_/g, '-');
+                        };
                         let visibleTypes = [];
                         if (tabsArr.length > 0) {
                             visibleTypes = tabsArr.map((rawId, i) => {
-                                const id = String(rawId || '').trim();
+                                const id = canonicalId(rawId);
                                 const base = typesById.get(id) || {};
                                 const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
                                 const icon = String(base.icon || '').trim();
@@ -5198,14 +5208,14 @@ Permissions:
                             visibleTypes = (typesArr || [])
                                 .filter(t => t && !t.hidden)
                                 .map(t => {
-                                    const id = String(t.id || t.name || '').trim();
+                                    const id = canonicalId(t.id || t.name);
                                     return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
                                 })
                                 .filter(Boolean);
                             // Fallback: derive ids from tab_names if still empty
                             if (visibleTypes.length === 0 && tabNames.length > 0) {
                                 visibleTypes = tabNames.map((nm) => {
-                                    const id = String(nm || '').trim();
+                                    const id = canonicalId(nm);
                                     const base = typesById.get(id) || {};
                                     const icon = String(base.icon || '').trim();
                                     return id ? { id, name: String(nm || id).trim(), icon } : null;
@@ -5222,13 +5232,23 @@ Permissions:
                                 .select('type')
                                 .eq('section_id', section.id);
                             const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
-                            const uniq = Array.from(new Set(raw.map(v => v.toLowerCase())));
-                            typesList = uniq.map(id => ({ id, name: id, icon: '' }));
+                            const uniq = Array.from(new Set(raw.map(v => {
+                                const t = String(v || '').trim().toLowerCase();
+                                if (t === 'playbook') return 'playbooks';
+                                if (t === 'link' || t === 'boxlinks' || t === 'box') return 'box-links';
+                                if (t === 'dashboard') return 'dashboards';
+                                return t;
+                            })));
+                            typesList = uniq.map(id => ({ id, name: id === 'box-links' ? 'Box Links' : id === 'playbooks' ? 'Playbooks' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
                         } catch (_) {}
                     }
-                    // No defaults: if nothing configured and no resources exist, show nothing
+                    // Provide sensible defaults if nothing configured and no resources exist
                     if (!typesList || typesList.length === 0) {
-                        typesList = [];
+                        typesList = [
+                            { id: 'playbooks', name: 'Playbooks', icon: '' },
+                            { id: 'box-links', name: 'Box Links', icon: '' },
+                            { id: 'dashboards', name: 'Dashboards', icon: '' }
+                        ];
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
