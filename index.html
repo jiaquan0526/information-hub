@@ -2880,19 +2880,9 @@ Permissions:
                 return;
             }
 
-            // Get allowed sections (admins see all visible; others intersect with visible)
-            let allowedSections = [];
-                if (user.role === 'admin') {
-                allowedSections = visibleSections;
-                console.log('✅ Admin sees all visible sections:', allowedSections);
-            } else if (user.permissions && Array.isArray(user.permissions.sections) && user.permissions.sections.length > 0) {
-                allowedSections = user.permissions.sections.filter(id => visibleSections.includes(id));
-                console.log('✅ Using user-specific section permissions (intersect visible):', allowedSections);
-            } else {
-                // No specific permissions - show all visible sections
-                allowedSections = visibleSections;
-                console.log('No specific permissions - showing all visible sections');
-            }
+            // Show all visible sections regardless of user permissions
+            const allowedSections = visibleSections;
+            console.log('Showing all visible sections:', allowedSections);
             
             console.log('Final allowed sections for', user.username, ':', allowedSections);
             
@@ -2903,11 +2893,8 @@ Permissions:
                 try {
                     const sectionId = card.getAttribute('data-section-id') || '';
                     if (!sectionId) return;
-                    if (!allowedSections.includes(sectionId)) {
-                        card.style.display = 'none';
-                    } else {
-                        card.style.display = '';
-                    }
+                    // All visible sections remain shown
+                    card.style.display = '';
                 } catch (_) {}
             });
             
