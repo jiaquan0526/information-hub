@@ -1349,29 +1349,10 @@
             const sectionConfigById = new Map();
             visibleRows.forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
 
-            const normUiType = (t) => String(t || '').toLowerCase().trim();
-            const mapUiToDbType = (ui) => String(ui || '').toLowerCase().trim();
-
-            function resolveDbTypeForUiType(sectionId, uiTid) {
-                // Map UI tab ids to canonical DB types
-                const t = normUiType(uiTid);
-                if (t === 'boxlinks' || t === 'box-links' || t === 'box') return 'box-links';
-                if (t === 'playbook' || t === 'playbooks') return 'playbooks';
-                if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
-                return t;
-            }
-
-            function getSingleDbType(sectionId, uiTid) {
-                const t = String(uiTid || '').toLowerCase().trim();
-                if (t === 'box' || t === 'boxlinks' || t === 'box-links') return 'box-links';
-                if (t === 'playbook' || t === 'playbooks') return 'playbooks';
-                if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
-                return t;
-            }
-
+            const makeSafeDomId = (raw) => String(raw || '').replace(/[^A-Za-z0-9\-:\._]/g, '_');
             function updateCountDom(sectionId, tid, count) {
                 try {
-                    const el = document.getElementById(`${sectionId}-${String(tid || '').trim()}`);
+                    const el = document.getElementById(`${sectionId}-${makeSafeDomId(tid)}`);
                     if (el) el.textContent = count;
                 } catch(_) {}
             }
@@ -1387,32 +1368,15 @@
                         typesList = cfg.tabs.map(x => String(x || '').trim()).filter(Boolean);
                     }
                 } catch (_) {}
-                // If still empty, derive from resources (distinct types for this section)
-                if ((!typesList || typesList.length === 0) && window.supabaseClient) {
-                    try {
-                        const { data } = await window.supabaseClient
-                            .from('resources')
-                            .select('type')
-                            .eq('section_id', sectionId);
-                        const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
-                        const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
-                        typesList = Array.from(new Set(mapped));
-                    } catch (_) {}
-                }
-                // Provide sensible defaults if nothing configured and no resources exist
+                // If nothing configured, no counts to display
                 if (!typesList || typesList.length === 0) {
-                    typesList = ['playbooks','box-links','dashboards'];
-                }
-                let normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
-                if (normalizedTypes.length === 0) {
-                    normalizedTypes = ['playbooks','box-links','dashboards'];
+                    return;
                 }
 
-                // Query Supabase counts per type and update DOM using robust candidates
-                await Promise.all(normalizedTypes.map(async (tid) => {
+                // Query Supabase counts per type exactly as configured
+                await Promise.all(typesList.map(async (tid) => {
                     if (!window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
-                    const dbType = getSingleDbType(sectionId, tid);
-                    if (!dbType) { updateCountDom(sectionId, tid, 0); return; }
+                    const dbType = String(tid || '').trim();
                     try {
                         const { count, error } = await window.supabaseClient
                             .from('resources')
@@ -2909,11 +2873,11 @@ Permissions:
                 }
             } catch (e) { 
                 console.warn('Error reading visible sections', e);
-                // Fallback to default sections
-                visibleSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                return;
             }
             if (visibleSections.length === 0) {
-                visibleSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                console.log('No visible sections; leaving UI unchanged');
+                return;
             }
 
             // Get allowed sections (admins see all visible; others intersect with visible)
@@ -2925,9 +2889,9 @@ Permissions:
                 allowedSections = user.permissions.sections.filter(id => visibleSections.includes(id));
                 console.log('✅ Using user-specific section permissions (intersect visible):', allowedSections);
             } else {
-                // No specific permissions - show no sections
-                allowedSections = [];
-                console.log('No specific permissions - showing no sections');
+                // No specific permissions - show all visible sections
+                allowedSections = visibleSections;
+                console.log('No specific permissions - showing all visible sections');
             }
             
             console.log('Final allowed sections for', user.username, ':', allowedSections);
@@ -2937,19 +2901,14 @@ Permissions:
             
             hubCards.forEach(card => {
                 try {
-                    const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-                    console.log('Processing card for section:', sectionId);
-                    
+                    const sectionId = card.getAttribute('data-section-id') || '';
+                    if (!sectionId) return;
                     if (!allowedSections.includes(sectionId)) {
-                        card.style.display = 'none'; // Hide sections user can't access
-                        console.log('❌ Hiding section:', sectionId, 'for user:', user.username);
+                        card.style.display = 'none';
                     } else {
-                        card.style.display = 'block'; // Show sections user can access
-                        console.log('✅ Showing section:', sectionId, 'for user:', user.username);
+                        card.style.display = '';
                     }
-                } catch (error) {
-                    console.error('Error processing card:', error);
-                }
+                } catch (_) {}
             });
             
             console.log('=== HUB CARDS UPDATE COMPLETE ===');
@@ -5177,6 +5136,8 @@ Permissions:
                 }
             } catch (_) {}
 
+            const makeSafeDomId = (raw) => String(raw || '').replace(/[^A-Za-z0-9\-:\._]/g, '_');
+
             for (const section of visibleSections) {
                 try {
                     // Build types list to mirror the section detail tabs (align with section page fallbacks)
@@ -5187,17 +5148,10 @@ Permissions:
                         const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
                         const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
                         const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
-                        const canonicalId = (raw) => {
-                            const t = String(raw || '').trim().toLowerCase();
-                            if (t === 'boxlinks' || t === 'box' || t === 'box-links') return 'box-links';
-                            if (t === 'playbook' || t === 'playbooks') return 'playbooks';
-                            if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
-                            return t.replace(/\s+/g, '-').replace(/_/g, '-');
-                        };
                         let visibleTypes = [];
                         if (tabsArr.length > 0) {
                             visibleTypes = tabsArr.map((rawId, i) => {
-                                const id = canonicalId(rawId);
+                                const id = String(rawId || '').trim();
                                 const base = typesById.get(id) || {};
                                 const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
                                 const icon = String(base.icon || '').trim();
@@ -5208,14 +5162,14 @@ Permissions:
                             visibleTypes = (typesArr || [])
                                 .filter(t => t && !t.hidden)
                                 .map(t => {
-                                    const id = canonicalId(t.id || t.name);
+                                    const id = String(t.id || t.name || '').trim();
                                     return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
                                 })
                                 .filter(Boolean);
                             // Fallback: derive ids from tab_names if still empty
                             if (visibleTypes.length === 0 && tabNames.length > 0) {
                                 visibleTypes = tabNames.map((nm) => {
-                                    const id = canonicalId(nm);
+                                    const id = String(nm || '').trim();
                                     const base = typesById.get(id) || {};
                                     const icon = String(base.icon || '').trim();
                                     return id ? { id, name: String(nm || id).trim(), icon } : null;
@@ -5224,38 +5178,18 @@ Permissions:
                         }
                         typesList = visibleTypes;
                     } catch (_) {}
-                    // If still empty, derive from resources (distinct types for this section)
-                    if ((!typesList || typesList.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data } = await window.supabaseClient
-                                .from('resources')
-                                .select('type')
-                                .eq('section_id', section.id);
-                            const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
-                            const uniq = Array.from(new Set(raw.map(v => {
-                                const t = String(v || '').trim().toLowerCase();
-                                if (t === 'playbook') return 'playbooks';
-                                if (t === 'link' || t === 'boxlinks' || t === 'box') return 'box-links';
-                                if (t === 'dashboard') return 'dashboards';
-                                return t;
-                            })));
-                            typesList = uniq.map(id => ({ id, name: id === 'box-links' ? 'Box Links' : id === 'playbooks' ? 'Playbooks' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
-                        } catch (_) {}
-                    }
-                    // Provide sensible defaults if nothing configured and no resources exist
+                    // If nothing configured, show nothing (follow exactly from Supabase config)
                     if (!typesList || typesList.length === 0) {
-                        typesList = [
-                            { id: 'playbooks', name: 'Playbooks', icon: '' },
-                            { id: 'box-links', name: 'Box Links', icon: '' },
-                            { id: 'dashboards', name: 'Dashboards', icon: '' }
-                        ];
+                        typesList = [];
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
                     const statsHTML = typesList.map(t => {
                         const id = String(t.id || '').trim();
                         const label = String(t.name || id).trim();
-                        return `<span><i class="${iconForType(id)}"></i> <span id="${section.id}-${id}">0</span> ${escapeHtml(label)}</span>`;
+                        const iconClass = (t.icon && String(t.icon).trim()) ? String(t.icon).trim() : iconForType(id);
+                        const safeId = `${section.id}-${makeSafeDomId(id)}`;
+                        return `<span><i class="${iconClass}"></i> <span id="${safeId}">0</span> ${escapeHtml(label)}</span>`;
                     }).join(' ');
                     
                     const cardHTML = `
