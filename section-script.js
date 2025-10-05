@@ -1307,8 +1307,7 @@ class SectionManager {
                 try { extra = JSON.parse(extra); } catch (_) { extra = {}; }
             }
             if (!extra || typeof extra !== 'object') extra = {};
-            const fallbackCategory = row.category || (row.meta && row.meta.category) || '';
-            const resolvedCategory = (extra && extra.category != null) ? extra.category : fallbackCategory;
+            const resolvedCategory = (extra && extra.category != null) ? extra.category : '';
 
             return {
                 id: row.id,
