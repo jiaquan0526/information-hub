@@ -1404,8 +1404,8 @@
                 return t;
             }
 
-            function getSingleDbType(sectionId, uiTid) {
-                return resolveDbTypeForUiType(sectionId, uiTid);
+                    function getSingleDbType(sectionId, uiTid) {
+                return String(uiTid || '').toLowerCase().trim();
             }
 
             function updateCountDom(sectionId, tid, count) {
@@ -5098,20 +5098,10 @@ Permissions:
         // Helpers for dynamic card tab rendering (mirror section page)
             function normalizeTypeId(raw) {
             try {
-                const t = String(raw || '').toLowerCase().trim();
-                if (t === 'playbooks' || t === 'playbook') return 'playbooks';
-                if (t === 'box-links' || t === 'boxlinks' || t === 'boxlink' || t === 'box') return 'boxLinks';
-                if (t === 'dashboards' || t === 'dashboard') return 'dashboards';
-                return t;
+                return String(raw || '').toLowerCase().trim();
             } catch (_) { return String(raw || '').toLowerCase(); }
         }
-        function iconForType(tid) {
-            const t = normalizeTypeId(tid);
-            if (t === 'playbooks') return 'fas fa-book';
-            if (t === 'boxLinks') return 'fas fa-link';
-            if (t === 'dashboards') return 'fas fa-chart-bar';
-            return 'fas fa-folder';
-        }
+        function iconForType() { return 'fas fa-folder'; }
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
@@ -5282,9 +5272,8 @@ Permissions:
                                 .select('type')
                                 .eq('section_id', section.id);
                             const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
-                            const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
-                            const uniq = Array.from(new Set(mapped));
-                            typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
+                            const uniq = Array.from(new Set(raw.map(v => v.toLowerCase())));
+                            typesList = uniq.map(id => ({ id, name: id, icon: '' }));
                         } catch (_) {}
                     }
                     // No defaults: if nothing configured and no resources exist, show nothing
@@ -5295,12 +5284,7 @@ Permissions:
 
                     const statsHTML = typesList.map(t => {
                         const nid = normalizeTypeId(t.id);
-                        const iconVal = (t.icon || '').trim();
-                        const isImg = /^(https?:|data:)|\.(svg|png|jpe?g|gif)$/i.test(iconVal);
-                        const iconHtml = iconVal && isImg
-                            ? `<img src="${iconVal}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-2px;" />`
-                            : `<i class="${iconVal ? normalizeIconClass(iconVal) : iconForType(nid)}"></i>`;
-                        return `<span>${iconHtml} <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
+                        return `<span><i class="${iconForType(nid)}"></i> <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
                     }).join(' ');
                     
                     const cardHTML = `
