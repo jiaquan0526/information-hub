@@ -1289,7 +1289,7 @@
                 if (error || !user) return null;
                 
                 // Get full user profile from database
-            const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
+            const { data: profile, error: profileError } = await window.supabaseClient
                     .from('profiles')
                     .select('*')
                     .eq('id', user.id)
@@ -1941,7 +1941,7 @@
             console.log('Logout called');
             try {
                 // Sign out from Supabase
-                const { error } = await supabase.auth.signOut();
+                const { error } = await window.supabaseClient.auth.signOut();
                 if (error) {
                     console.error('Error signing out:', error);
                 } else {
@@ -2531,14 +2531,14 @@
         }
         window.showUserProfile = async function() {
             // Check if user is authenticated
-            const { data: { user }, error } = await supabase.auth.getUser();
+            const { data: { user }, error } = await window.supabaseClient.auth.getUser();
             if (error || !user) {
                 alert('Please log in to view profile.');
                 return;
             }
             
             // Get full user profile from database
-            const { data: profile, error: profileError } = await supabase
+            const { data: profile, error: profileError } = await window.supabaseClient
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
@@ -2821,8 +2821,10 @@ Permissions:
             console.log('=== UPDATE USER INTERFACE CALLED ===');
             
             try {
+                // Ensure Supabase client is ready
+                try { await _waitForSupabaseReady(2000); } catch(_) {}
                 // Get current user from Supabase
-                const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+                const { data: { user: authUser }, error: authError } = await window.supabaseClient.auth.getUser();
                 if (authError || !authUser) {
                     console.log('No authenticated user found, redirecting to auth page');
                     window.location.href = 'auth.html';
@@ -2830,7 +2832,7 @@ Permissions:
                 }
                 
                 // Get full user profile from database (profiles table)
-                const { data: user, error: profileError } = await supabase
+                const { data: user, error: profileError } = await window.supabaseClient
                     .from('profiles')
                     .select('*')
                     .eq('id', authUser.id)
@@ -3004,7 +3006,7 @@ Permissions:
             select.innerHTML = '<option value="">Choose a user...</option>';
             
             // Check if user is authenticated
-            const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+            const { data: { user: currentUser }, error } = await window.supabaseClient.auth.getUser();
             if (error || !currentUser) return;
             
             // Load users from Supabase
