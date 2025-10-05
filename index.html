@@ -22,8 +22,8 @@
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
     <!-- Supabase config fallback for static hosting (e.g., GitHub Pages) -->
-    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
-    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
+    <meta name="supabase-url" content="">
+    <meta name="supabase-anon-key" content="">
 
     <!-- Load Supabase and config -->
     <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
@@ -5106,12 +5106,6 @@ Permissions:
         async function updateMainHubSections() {
             console.log('Loading sections from Supabase...');
             
-            // Check if hubDatabase is available
-            if (!window.hubDatabase || !window.hubDatabaseReady) {
-                console.warn('Database not ready, keeping existing content');
-                return; // Keep the existing content, don't replace it
-            }
-            
             const now = Date.now();
             if (isUpdatingSections) {
                 console.log('Update already in progress, skipping...');
@@ -5134,45 +5128,25 @@ Permissions:
                 return;
             }
             
-            // Load sections from Supabase database
+            // Load sections from Supabase database (Supabase-only)
             let visibleSections = [];
-            
             try {
-                // Wait for database to be ready
-                let retries = 0;
-                const maxRetries = 20;
-                while (retries < maxRetries && (!window.hubDatabase || !window.hubDatabaseReady)) {
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    retries++;
-                }
-                
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                    // Read sections from Supabase wrapper with a robust direct-query fallback
-                    let sections = await hubDatabase.getAllSections();
-                    if ((!sections || sections.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data: directSections } = await window.supabaseClient
-                                .from('sections')
-                                .select('*')
-                                .order('name', { ascending: true });
-                            sections = Array.isArray(directSections) ? directSections : [];
-                        } catch (_) {}
-                    }
-                    console.log('Loaded sections from database:', sections);
-                    
-                    if (sections && sections.length > 0) {
-                        // Trust Supabase RLS to return only accessible sections; apply only visibility and order
-                        visibleSections = sections
-                            .filter(s => s.config?.visible !== false)
-                            .sort((a,b) => (a.config?.order||0) - (b.config?.order||0));
-                    } else {
-                        console.warn('No sections found in database');
-                    }
+                if (!window.supabaseClient) {
+                    console.error('Supabase client not available');
                 } else {
-                    console.error('Database not available');
+                    const { data: sections, error } = await window.supabaseClient
+                        .from('sections')
+                        .select('*')
+                        .order('name', { ascending: true });
+                    if (error) throw error;
+                    const rows = Array.isArray(sections) ? sections : [];
+                    console.log('Loaded sections from Supabase:', rows);
+                    visibleSections = rows
+                        .filter(s => s && s.config && s.config.visible !== false)
+                        .sort((a,b) => ((a && a.config && a.config.order) || 0) - ((b && b.config && b.config.order) || 0));
                 }
             } catch (error) {
-                console.error('Error loading sections from database:', error);
+                console.error('Error loading sections from Supabase:', error);
             }
             
             // If no sections found after filtering, preserve existing content if present
