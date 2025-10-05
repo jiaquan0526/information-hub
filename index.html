@@ -1410,19 +1410,7 @@
 
             function updateCountDom(sectionId, tid, count) {
                 try {
-                    const candidates = [];
-                    const rawId = String(tid || '').trim();
-                    const uiId = (typeof normalizeTypeId === 'function') ? normalizeTypeId(rawId) : rawId;
-                    const hyphenId = rawId.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
-                    candidates.push(`${sectionId}-${rawId}`);
-                    if (uiId && uiId !== rawId) candidates.push(`${sectionId}-${uiId}`);
-                    if (hyphenId && hyphenId !== rawId && hyphenId !== uiId) candidates.push(`${sectionId}-${hyphenId}`);
-                    // Known aliases
-                    if (uiId === 'boxLinks' || rawId === 'boxLinks' || rawId === 'box-links' || hyphenId === 'box-links') {
-                        candidates.push(`${sectionId}-boxlinks`, `${sectionId}-box-links`, `${sectionId}-boxLinks`);
-                    }
-                    let el = null;
-                    for (const id of candidates) { el = document.getElementById(id); if (el) break; }
+                    const el = document.getElementById(`${sectionId}-${String(tid || '').trim()}`);
                     if (el) el.textContent = count;
                 } catch(_) {}
             }
@@ -5283,8 +5271,9 @@ Permissions:
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
                     const statsHTML = typesList.map(t => {
-                        const nid = normalizeTypeId(t.id);
-                        return `<span><i class="${iconForType(nid)}"></i> <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
+                        const id = String(t.id || '').trim();
+                        const label = String(t.name || id).trim();
+                        return `<span><i class="${iconForType(id)}"></i> <span id="${section.id}-${id}">0</span> ${escapeHtml(label)}</span>`;
                     }).join(' ');
                     
                     const cardHTML = `
