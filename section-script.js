@@ -1323,13 +1323,21 @@ class SectionManager {
     }
     _normalizeResourceRow(row, uiType) {
         try {
+            // Robustly extract category from extra (object or JSON string) with legacy fallbacks
+            let extra = row.extra;
+            if (typeof extra === 'string') {
+                try { extra = JSON.parse(extra); } catch (_) { extra = {}; }
+            }
+            if (!extra || typeof extra !== 'object') extra = {};
+            const fallbackCategory = row.category || (row.meta && row.meta.category) || '';
+            const resolvedCategory = (extra && extra.category != null) ? extra.category : fallbackCategory;
             return {
                 id: row.id,
                 title: row.title || '',
                 description: row.description || '',
                 url: row.url || '',
                 tags: Array.isArray(row.tags) ? row.tags : [],
-                category: (row.extra && row.extra.category) ? row.extra.category : '',
+                category: resolvedCategory || '',
                 createdAt: row.created_at || row.createdAt || new Date().toISOString(),
                 updatedAt: row.updated_at || row.updatedAt || undefined,
                 userId: row.created_by || row.user_id || row.userId || null,
