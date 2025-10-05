@@ -780,7 +780,7 @@ class SectionManager {
                 </div>
                 
                 <div class="resource-footer">
-                    <span>Added: ${new Date(resource.createdAt).toLocaleDateString()}</span>
+                    <span>Added: ${(() => { try { const d = new Date(resource.createdAt); return isNaN(d.getTime()) ? '' : d.toLocaleDateString(); } catch(_) { return ''; } })()}</span>
                     <div>
                         ${canEdit ? `
                             <button class="action-btn edit-btn" onclick="editResource('${type}', '${resource.id}')" title="Edit">
@@ -1360,7 +1360,7 @@ class SectionManager {
     }
     _normalizeResourceRow(row, uiType) {
         try {
-            // Robustly extract category from extra (object or JSON string) with legacy fallbacks
+            // Extract category strictly from extra (object or JSON string)
             let extra = row.extra;
             if (typeof extra === 'string') {
                 try { extra = JSON.parse(extra); } catch (_) { extra = {}; }
