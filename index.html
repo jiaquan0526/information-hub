@@ -5275,9 +5275,13 @@ Permissions:
                             typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
                         } catch (_) {}
                     }
-                    // No legacy defaults: if nothing is configured and no resources exist, show nothing
+                    // Strong fallback: show standard tabs if nothing is configured and no resources exist
                     if (!typesList || typesList.length === 0) {
-                        typesList = [];
+                        typesList = [
+                            { id: 'playbooks', name: 'Playbooks', icon: '' },
+                            { id: 'box-links', name: 'Box Links', icon: '' },
+                            { id: 'dashboards', name: 'Dashboards', icon: '' }
+                        ];
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
