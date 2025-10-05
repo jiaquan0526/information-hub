@@ -151,12 +151,8 @@ class SectionManager {
 		// Do not auto-infer tabs from resources; show blank until configured in Supabase
         this.bindEvents();
         this.renderDynamicUI();
-        // Asynchronously refresh section config from Supabase so all users share the same tabs
+        // One-time fetch on init only; further updates are manual via Refresh
         try { this._refreshSectionConfigFromDb(); } catch (_) {}
-        // Periodic auto-refresh from Supabase to keep view fresh
-        try { this._setupAutoRefresh(); } catch (_) {}
-        // Realtime: subscribe to resources/config for this section
-        try { this._setupRealtime(); } catch (_) {}
         // Ensure filters are cleared on entry to avoid stale search/category narrowing results
         try {
             const searchInput = document.getElementById('searchInput');
@@ -645,8 +641,27 @@ class SectionManager {
     }
 
 	renderCurrentTab() {
-		if (!this.currentTab) return;
-		this.renderResources(this.currentTab);
+		let tab = this.currentTab;
+		if (!tab) {
+			const firstSection = document.querySelector('.content-section.active') || document.querySelector('.content-section');
+			if (firstSection && firstSection.id) {
+				tab = firstSection.id.replace(/-section$/, '');
+				this.currentTab = tab;
+			}
+		}
+		if (!tab) return;
+		let grid = document.getElementById(`${tab.replace('-', '-')}-grid`);
+		if (!grid) {
+			const firstSection = document.querySelector('.content-section');
+			if (firstSection && firstSection.id) {
+				const fallback = firstSection.id.replace(/-section$/, '');
+				this.currentTab = fallback;
+				grid = document.getElementById(`${fallback.replace('-', '-')}-grid`);
+				tab = fallback;
+			}
+		}
+		if (!tab) return;
+		this.renderResources(tab);
 	}
 
     async renderResources(type) {
@@ -667,7 +682,16 @@ class SectionManager {
             const resources = await this.getResources(type);
             // Rebuild category options based on the current tab's resources
             try { this._populateCategoryFilterFromResources(resources); } catch (_) {}
-            const filteredResources = this.getFilteredResources(resources);
+            let filteredResources = this.getFilteredResources(resources);
+            // If a non-empty category filter yields no results, clear it once to avoid a blank view
+            try {
+                const catSel = document.getElementById('categoryFilter');
+                const hasCat = !!(catSel && String(catSel.value || '').trim());
+                if (hasCat && filteredResources.length === 0) {
+                    catSel.value = '';
+                    filteredResources = this.getFilteredResources(resources);
+                }
+            } catch (_) {}
             if (filteredResources.length === 0) {
                 grid.style.display = 'none';
                 emptyState.style.display = 'block';
@@ -1996,42 +2020,11 @@ class SectionManager {
     _setupAutoRefresh() {
         // Avoid duplicate timers
         if (this._ghRefreshTimer) try { clearInterval(this._ghRefreshTimer); } catch(_) {}
-        const tick = async () => {
-            try {
-                // Skip heavy work if tab not visible
-                if (document.hidden) return;
-                // Refresh config (types/categories) and re-render tabs if changed
-                await this._refreshSectionConfigFromDb();
-                // Refresh currently visible tab resources
-                await this.renderCurrentTab();
-            } catch (_) {}
-        };
-        // First delayed run to avoid contention at load
-        setTimeout(tick, 2000);
-        this._ghRefreshTimer = setInterval(tick, 60000);
-        // Clean up on unload
-        window.addEventListener('beforeunload', () => { try { clearInterval(this._ghRefreshTimer); } catch(_) {} });
-        document.addEventListener('visibilitychange', () => { /* opportunistic tick on return */ if (!document.hidden) setTimeout(() => tick().catch(()=>{}), 250); });
+        // Disabled auto-refresh per requirement; rely on manual refresh
     }
 
     _setupRealtime() {
-        try {
-            if (!window.supabaseClient) return;
-            if (this._rtCh) { try { window.supabaseClient.removeChannel(this._rtCh); } catch(_) {} }
-            const sid = this.currentSection;
-            const ch = window.supabaseClient
-                .channel('section-' + sid)
-				.on('postgres_changes', { event: '*', schema: 'public', table: 'resources', filter: 'section_id=eq.' + sid }, async () => {
-					// Do not auto-add tabs from resources; only refresh current tab content if one is selected
-					try { await this.renderCurrentTab(); } catch(_) {}
-				})
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter: 'section_id=eq.' + sid }, async () => {
-                    try { await this._refreshSectionConfigFromDb(); } catch(_) {}
-                })
-                .subscribe();
-            this._rtCh = ch;
-            window.addEventListener('beforeunload', () => { try { window.supabaseClient.removeChannel(ch); } catch(_) {} }, { once: true });
-        } catch (_) {}
+        // Disabled realtime per requirement; rely on manual refresh
     }
 }
 
