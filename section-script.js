@@ -74,23 +74,34 @@ class SectionManager {
         } catch (_) {}
     }
 
-    // Content activity logger (records to activities table via wrapper)
+    // Content activity logger (Supabase-only)
     async logContentActivity(action, resourceType, title) {
         try {
-            if (!window.hubDatabase || !window.hubDatabaseReady) return;
-            const upper = String(action || 'updated').toUpperCase();
-            const mapped = upper === 'CREATED' ? 'CREATE_RESOURCE'
-                : upper === 'UPDATED' ? 'UPDATE_RESOURCE'
-                : upper === 'DELETED' ? 'DELETE_RESOURCE'
-                : upper;
-            await hubDatabase.addActivity({
+            if (!window.supabaseClient) return;
+            const mapped = String(action || 'updated').toUpperCase();
+            const payload = {
                 action: mapped,
-                type: resourceType || '',
-                title: title || '',
+                resourceId: null,
                 section: this.currentSection || null,
+                title: title || '',
+                type: resourceType || '',
                 username: (this.currentUser && (this.currentUser.username || this.currentUser.email)) || null,
                 timestamp: new Date().toISOString()
-            });
+            };
+            // Use activities table directly
+            try {
+                await window.supabaseClient.from('activities').insert({
+                    action: payload.action,
+                    section_id: payload.section,
+                    resource_id: payload.resourceId,
+                    metadata: {
+                        username: payload.username,
+                        title: payload.title,
+                        type: payload.type
+                    },
+                    timestamp: new Date(payload.timestamp)
+                });
+            } catch (_) {}
         } catch (_) {}
     }
 
@@ -357,24 +368,17 @@ class SectionManager {
 
         // Apply persistent background image per section (deterministic and global-seed based)
         try {
-            // Determine enablement via Supabase (fallback to hub page flag)
+            // Determine enablement via Supabase only
             let enabled = false;
             try {
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSiteSetting === 'function') {
-                    const v = await hubDatabase.getSiteSetting('backgrounds');
+                if (window.supabaseClient && window.supabaseClient.from) {
+                    const { data } = await window.supabaseClient
+                        .from('site_settings')
+                        .select('value')
+                        .eq('key', 'backgrounds')
+                        .single();
+                    const v = data && data.value;
                     enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
-                } else if (window.supabaseClient && window.supabaseClient.from) {
-                    try {
-                        const { data } = await window.supabaseClient
-                            .from('site_settings')
-                            .select('value')
-                            .eq('key', 'backgrounds')
-                            .single();
-                        const v = data && data.value;
-                        enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
-                    } catch (_) {}
-                } else if (typeof window.globalBackgroundsEnabled !== 'undefined') {
-                    enabled = window.globalBackgroundsEnabled === true;
                 }
             } catch (_) { enabled = false; }
             const disable = !enabled;
@@ -561,8 +565,6 @@ class SectionManager {
         window.switchTab = (tabName) => this.switchTab(tabName);
         // Customize
         window.customizeSection = () => this.openCustomizeModal();
-        // Inline set category
-        window.setResourceCategory = (type, id, category) => this.setResourceCategory(type, id, category);
         // Search and filter
         const searchInput = document.getElementById('searchInput');
         const categoryFilter = document.getElementById('categoryFilter');
@@ -588,15 +590,9 @@ class SectionManager {
             this._sectionSessionLogged = true;
             const durationMs = Date.now() - (this.sectionSessionStartMs || Date.now());
             try {
-                if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+                if (window.supabaseClient && this.currentUser) {
                     const desc = `Closed section ${this.currentSection} after ${Math.round(durationMs/1000)}s`;
-                    this._safeDbCall(hubDatabase.saveActivity({
-                        action: 'CLOSE_SECTION',
-                        section: this.currentSection,
-                        description: desc,
-                        timestamp: new Date().toISOString(),
-                        username: this.currentUser.username || this.currentUser.email || null
-                    }), 1200);
+                    try { window.supabaseClient.from('activities').insert({ action: 'CLOSE_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
                 }
             } catch (_) {}
         };
@@ -606,15 +602,9 @@ class SectionManager {
         });
         // Log open
         try {
-            if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+            if (window.supabaseClient && this.currentUser) {
                 const desc = `Opened section ${this.currentSection}`;
-                this._safeDbCall(hubDatabase.saveActivity({
-                    action: 'OPEN_SECTION',
-                    section: this.currentSection,
-                    description: desc,
-                    timestamp: new Date().toISOString(),
-                    username: this.currentUser.username || this.currentUser.email || null
-                }), 1200);
+                try { window.supabaseClient.from('activities').insert({ action: 'OPEN_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
             }
         } catch (_) {}
     }
@@ -715,10 +705,8 @@ class SectionManager {
 
     async getSectionData() {
         try {
-            const section = window.hubDatabase && hubDatabase.getSection
-                ? await this._safeDbFetch(hubDatabase.getSection(this.currentSection), 1500, null)
-                : null;
-            return section ? section.data : { playbooks: [], boxLinks: [], dashboards: [] };
+            // Supabase-only: no local hubDatabase fallback
+            return { playbooks: [], boxLinks: [], dashboards: [] };
         } catch (error) {
             console.error('Error loading section data:', error);
             return { playbooks: [], boxLinks: [], dashboards: [] };
@@ -742,19 +730,6 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
-        const categories = Array.isArray(cfg.categories) ? cfg.categories : [];
-        const categoryControl = resource.category
-            ? `<span class="tag" title="Category">${this.escapeHtml(String(resource.category).charAt(0).toUpperCase() + String(resource.category).slice(1))}</span>`
-            : (canEdit && categories.length > 0
-                ? `<div class="resource-category-set" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-                        <select id="cat-${this.escapeHtml(String(resource.id))}" class="filter-select" style="min-width:140px;">
-                            <option value="">Set category…</option>
-                            ${categories.map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`).join('')}
-                        </select>
-                        <button class="btn btn-secondary" onclick="setResourceCategory('${type}','${this.escapeHtml(String(resource.id))}', document.getElementById('cat-${this.escapeHtml(String(resource.id))}').value)">Save</button>
-                   </div>`
-                : '');
-
         return `
             <div class="resource-card" data-id="${resource.id}">
                 <div class="resource-header">
@@ -776,7 +751,6 @@ class SectionManager {
                             ${resource.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}
                         </div>
                     ` : ''}
-                    ${categoryControl}
                 </div>
                 
                 <div class="resource-footer">
@@ -798,27 +772,6 @@ class SectionManager {
         `;
     }
 
-    async setResourceCategory(type, id, category) {
-        try {
-            if (!this.canEditResource()) { this.showMessage('You do not have permission', 'error'); return; }
-            const chosen = String(category || '').trim();
-            const cats = (this.sectionConfig && Array.isArray(this.sectionConfig.categories)) ? this.sectionConfig.categories.map(c => String(c)) : [];
-            if (!chosen) { this.showMessage('Choose a category', 'error'); return; }
-            if (!cats.includes(chosen)) { this.showMessage('Invalid category', 'error'); return; }
-            if (!window.supabaseClient) { this.showMessage('Supabase unavailable', 'error'); return; }
-            const { error } = await window.supabaseClient
-                .from('resources')
-                .update({ extra: { category: chosen } })
-                .eq('id', id);
-            if (error) { this.showMessage('Failed to save category', 'error'); return; }
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType: this.mapToStorageType(type) });
-            await this.renderCurrentTab();
-            this.showMessage('Category saved', 'success');
-        } catch (_) {
-            this.showMessage('Failed to save category', 'error');
-        }
-    }
-
     // Hook clicks to record usage
     bindResourceClickLogging() {
         document.body.addEventListener('click', async (e) => {
@@ -833,29 +786,16 @@ class SectionManager {
                     const uid = (u && u.data && u.data.user && u.data.user.id) ? u.data.user.id : null;
                     await window.supabaseClient.rpc('increment_view', { p_user_id: uid, p_resource_id: resourceId });
                 }
-                // Audit: record resource open with details (non-blocking)
+                // Audit: record resource open with details (non-blocking, Supabase-only)
                 try {
-                    if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+                    if (window.supabaseClient && this.currentUser) {
                         const titleEl = card.querySelector('.resource-title');
                         const typeEl = card.querySelector('.resource-type');
                         const title = titleEl ? String(titleEl.textContent || '').trim() : '';
                         const typeLabel = typeEl ? String(typeEl.textContent || '').trim() : '';
                         const href = anchor && anchor.getAttribute('href') ? String(anchor.getAttribute('href')).trim() : '';
-                        const meta = {
-                            title,
-                            description: title || '',
-                            type: typeLabel,
-                            url: href,
-                            section: this.currentSection
-                        };
-                        this._safeDbCall(hubDatabase.saveActivity({
-                            action: 'OPEN_RESOURCE',
-                            resourceId,
-                            section: this.currentSection,
-                            timestamp: new Date().toISOString(),
-                            username: this.currentUser.username || this.currentUser.email || null,
-                            metadata: meta
-                        }), 1200);
+                        const meta = { title, description: title || '', type: typeLabel, url: href, section: this.currentSection };
+                        await window.supabaseClient.from('activities').insert({ action: 'OPEN_RESOURCE', resource_id: resourceId, section_id: this.currentSection, metadata: meta, timestamp: new Date() });
                     }
                 } catch (_) {}
             } catch (_) {}
@@ -895,13 +835,14 @@ class SectionManager {
                     .filter(Boolean)
             ));
             const normCats = Array.from(new Set(cats.map(c => c.toLowerCase()))).sort();
+            // Preserve current selection even if not present in current resource set
+            if (current && !normCats.includes(current)) {
+                normCats.unshift(current);
+            }
             const toLabel = (c) => c.charAt(0).toUpperCase() + c.slice(1);
             const options = ['<option value="">All Categories</option>']
                 .concat(normCats.map(c => `<option value="${this.escapeHtml(c)}"${current === c ? ' selected' : ''}>${this.escapeHtml(toLabel(c))}</option>`));
             sel.innerHTML = options.join('');
-            if (current && !normCats.includes(current)) {
-                sel.value = '';
-            }
         } catch (_) {}
     }
 
@@ -1360,20 +1301,13 @@ class SectionManager {
     }
     _normalizeResourceRow(row, uiType) {
         try {
-            // Robustly extract category from extra (object or JSON string) with legacy fallbacks
-            let extra = row.extra;
-            if (typeof extra === 'string') {
-                try { extra = JSON.parse(extra); } catch (_) { extra = {}; }
-            }
-            if (!extra || typeof extra !== 'object') extra = {};
-            const resolvedCategory = (extra && extra.category != null) ? extra.category : '';
             return {
                 id: row.id,
                 title: row.title || '',
                 description: row.description || '',
                 url: row.url || '',
                 tags: Array.isArray(row.tags) ? row.tags : [],
-                category: resolvedCategory || '',
+                category: (row.extra && row.extra.category) ? row.extra.category : '',
                 createdAt: row.created_at || row.createdAt || new Date().toISOString(),
                 updatedAt: row.updated_at || row.updatedAt || undefined,
                 userId: row.created_by || row.user_id || row.userId || null,
@@ -1521,19 +1455,9 @@ class SectionManager {
                 }
             } catch (_) {}
 
-            // Use wrapper first
-            let writeOk = false;
-            let lastErr = null;
-            try {
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
-                    await hubDatabase.saveSectionConfig(this.currentSection, merged);
-                    writeOk = true;
-                }
-            } catch (we) { lastErr = we; }
-
-            // Fallback: direct upsert with merged config
-            if (!writeOk) {
-                if (!window.supabaseClient) throw (lastErr || new Error('Supabase unavailable'));
+            // Supabase-only upsert with merged config
+            {
+                if (!window.supabaseClient) throw new Error('Supabase unavailable');
                 // Ensure required non-null columns (e.g., name) are present on insert
                 let ensure = {};
                 try {
@@ -1555,7 +1479,6 @@ class SectionManager {
                     .from('sections')
                     .upsert(payload, { onConflict: 'section_id' });
                 if (upErr) throw upErr;
-                writeOk = true;
             }
 
             // Verify persisted value matches (best-effort)
@@ -1705,11 +1628,16 @@ class SectionManager {
 					}
 				}
 			}
-        // Render category filter
+        // Render category filter (normalize values and preserve selection)
         const catSel = document.getElementById('categoryFilter');
         if (catSel) {
+            const current = String(catSel.value || '').trim().toLowerCase();
+            const cats = (this.sectionConfig.categories || []).map(c => String(c || '').trim()).filter(Boolean);
+            const normCats = Array.from(new Set(cats.map(c => c.toLowerCase())));
+            if (current && !normCats.includes(current)) normCats.unshift(current);
+            const toLabel = (c) => c.charAt(0).toUpperCase() + c.slice(1);
             const options = ['<option value="">All Categories</option>'].concat(
-                (this.sectionConfig.categories || []).map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`) 
+                normCats.map(c => `<option value="${this.escapeHtml(c)}"${current === c ? ' selected' : ''}>${this.escapeHtml(toLabel(c))}</option>`) 
             );
             catSel.innerHTML = options.join('');
         }
@@ -1977,11 +1905,11 @@ class SectionManager {
 				const ok = await this.saveSectionConfig(cfgMerged);
             if (!ok) { showAlert('Failed to save configuration', 'error'); return; }
 				// Record tab activities (create/update/delete) to activities table
-				try {
-					if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
-						const prevIds = Array.isArray(existingCfg.tabs) ? existingCfg.tabs.map(s => String(s || '').trim()).filter(Boolean) : [];
-						const prevNamesArr = Array.isArray(existingCfg.tab_names) ? existingCfg.tab_names.map(s => String(s || '').trim()) : [];
-						const prevTypesArr = Array.isArray(existingCfg.types) ? existingCfg.types : [];
+                try {
+                    if (window.supabaseClient && this.currentUser) {
+                        const prevIds = Array.isArray(existingCfg.tabs) ? existingCfg.tabs.map(s => String(s || '').trim()).filter(Boolean) : [];
+                        const prevNamesArr = Array.isArray(existingCfg.tab_names) ? existingCfg.tab_names.map(s => String(s || '').trim()) : [];
+                        const prevTypesArr = Array.isArray(existingCfg.types) ? existingCfg.types : [];
 						const prevNameById = new Map();
 						prevIds.forEach((id, idx) => {
 							let nm = prevNamesArr[idx];
@@ -2006,48 +1934,30 @@ class SectionManager {
 						const uname = this.currentUser.username || this.currentUser.email || null;
 						const sid = this.currentSection;
 
-						// Creates
-						nextIds.forEach(id => {
-							if (!prevSet.has(id)) {
-								this._safeDbCall(hubDatabase.saveActivity({
-									action: 'CREATE_TAB',
-									section: sid,
-									timestamp: ts,
-									username: uname,
-									metadata: { tabId: id, name: nextNameById.get(id) || id }
-								}), 1200);
-							}
-						});
+                        // Creates
+                        nextIds.forEach(async (id) => {
+                            if (!prevSet.has(id)) {
+                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, name: nextNameById.get(id) || id, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                            }
+                        });
 
-						// Deletions
-						prevIds.forEach(id => {
-							if (!nextSet.has(id)) {
-								this._safeDbCall(hubDatabase.saveActivity({
-									action: 'DELETE_TAB',
-									section: sid,
-									timestamp: ts,
-									username: uname,
-									metadata: { tabId: id, name: prevNameById.get(id) || id }
-								}), 1200);
-							}
-						});
+                        // Deletions
+                        prevIds.forEach(async (id) => {
+                            if (!nextSet.has(id)) {
+                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, name: prevNameById.get(id) || id, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                            }
+                        });
 
-						// Renames (ids unchanged, name changed)
-						nextIds.forEach(id => {
-							if (prevSet.has(id)) {
-								const oldName = prevNameById.get(id) || id;
-								const newName = nextNameById.get(id) || id;
-								if (String(oldName).trim() !== String(newName).trim()) {
-									this._safeDbCall(hubDatabase.saveActivity({
-										action: 'UPDATE_TAB',
-										section: sid,
-										timestamp: ts,
-										username: uname,
-										metadata: { tabId: id, oldName, newName }
-									}), 1200);
-								}
-							}
-						});
+                        // Renames (ids unchanged, name changed)
+                        nextIds.forEach(async (id) => {
+                            if (prevSet.has(id)) {
+                                const oldName = prevNameById.get(id) || id;
+                                const newName = nextNameById.get(id) || id;
+                                if (String(oldName).trim() !== String(newName).trim()) {
+                                    try { await window.supabaseClient.from('activities').insert({ action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                }
+                            }
+                        });
 					}
 				} catch (_) { /* best-effort logging; ignore */ }
             // Seed example resources for any types that have none yet in Supabase
