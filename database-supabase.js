@@ -783,10 +783,12 @@ class HubDatabase {
                 .from('site_settings')
                 .select('value')
                 .eq('key', key)
-                .single();
+                .maybeSingle();
             if (error) {
-                // If no rows, return null instead of throwing
-                if (String(error.message || '').toLowerCase().includes('no rows')) return null;
+                const msg = String(error.message || '').toLowerCase();
+                const code = String(error.code || '').toUpperCase();
+                // Treat missing row as null (no setting stored)
+                if (code === 'PGRST116' || msg.includes('0 rows') || msg.includes('no rows')) return null;
                 throw error;
             }
             if (!data) return null;
