@@ -621,24 +621,7 @@
             
             // The hub-script.js will handle all authentication and data loading
             // No need to duplicate the logic here
-            // Watchdog: if hub initialization stalls, load sections directly
-            setTimeout(async () => {
-                try {
-                    const grid = document.querySelector('.hub-grid');
-                    const stillLoading = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
-                    if (stillLoading) {
-                        console.warn('Hub init watchdog triggered, loading sections directly');
-                        try {
-                            const loadingScreen = document.getElementById('loadingScreen');
-                            const mainContent = document.getElementById('mainContent');
-                            if (loadingScreen) loadingScreen.style.display = 'none';
-                            try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-                            if (mainContent) mainContent.style.display = 'block';
-                        } catch (_) {}
-                        await loadSectionsFromSupabase();
-                    }
-                } catch (e) { console.error('Watchdog error:', e); }
-            }, 3000);
+            // Removed watchdog: rely solely on primary initialization/loading
             
             // Add basic navigation function if not available
             if (typeof window.navigateToSection !== 'function') {
