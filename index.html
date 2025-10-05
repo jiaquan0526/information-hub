@@ -5242,7 +5242,7 @@ Permissions:
                                 return { id, name, icon };
                             }).filter(t => t.id);
                         } else {
-                            // Fallback 1: configured types (not hidden)
+                            // Use configured types (not hidden) only
                             visibleTypes = (typesArr || [])
                                 .filter(t => t && !t.hidden)
                                 .map(t => {
@@ -5250,15 +5250,6 @@ Permissions:
                                     return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
                                 })
                                 .filter(Boolean);
-                            // Fallback 2: derive ids from tab_names if still empty
-                            if (visibleTypes.length === 0 && tabNames.length > 0) {
-                                visibleTypes = tabNames.map((nm) => {
-                                    const id = String(nm || '').trim();
-                                    const base = typesById.get(id) || {};
-                                    const icon = String(base.icon || '').trim();
-                                    return id ? { id, name: String(nm || id).trim(), icon } : null;
-                                }).filter(Boolean);
-                            }
                         }
                         typesList = visibleTypes;
                     } catch (_) {}
@@ -5275,13 +5266,9 @@ Permissions:
                             typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
                         } catch (_) {}
                     }
-                    // Strong fallback: show standard tabs if nothing is configured and no resources exist
+                    // No defaults: if nothing configured and no resources exist, show nothing
                     if (!typesList || typesList.length === 0) {
-                        typesList = [
-                            { id: 'playbooks', name: 'Playbooks', icon: '' },
-                            { id: 'box-links', name: 'Box Links', icon: '' },
-                            { id: 'dashboards', name: 'Dashboards', icon: '' }
-                        ];
+                        typesList = [];
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
