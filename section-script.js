@@ -561,6 +561,8 @@ class SectionManager {
         window.switchTab = (tabName) => this.switchTab(tabName);
         // Customize
         window.customizeSection = () => this.openCustomizeModal();
+        // Inline set category
+        window.setResourceCategory = (type, id, category) => this.setResourceCategory(type, id, category);
         // Search and filter
         const searchInput = document.getElementById('searchInput');
         const categoryFilter = document.getElementById('categoryFilter');
@@ -740,6 +742,19 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
+        const categories = Array.isArray(cfg.categories) ? cfg.categories : [];
+        const categoryControl = resource.category
+            ? `<span class="tag" title="Category">${this.escapeHtml(String(resource.category).charAt(0).toUpperCase() + String(resource.category).slice(1))}</span>`
+            : (canEdit && categories.length > 0
+                ? `<div class="resource-category-set" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                        <select id="cat-${this.escapeHtml(String(resource.id))}" class="filter-select" style="min-width:140px;">
+                            <option value="">Set category…</option>
+                            ${categories.map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`).join('')}
+                        </select>
+                        <button class="btn btn-secondary" onclick="setResourceCategory('${type}','${this.escapeHtml(String(resource.id))}', document.getElementById('cat-${this.escapeHtml(String(resource.id))}').value)">Save</button>
+                   </div>`
+                : '');
+
         return `
             <div class="resource-card" data-id="${resource.id}">
                 <div class="resource-header">
@@ -761,6 +776,7 @@ class SectionManager {
                             ${resource.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}
                         </div>
                     ` : ''}
+                    ${categoryControl}
                 </div>
                 
                 <div class="resource-footer">
@@ -780,6 +796,27 @@ class SectionManager {
                 </div>
             </div>
         `;
+    }
+
+    async setResourceCategory(type, id, category) {
+        try {
+            if (!this.canEditResource()) { this.showMessage('You do not have permission', 'error'); return; }
+            const chosen = String(category || '').trim();
+            const cats = (this.sectionConfig && Array.isArray(this.sectionConfig.categories)) ? this.sectionConfig.categories.map(c => String(c)) : [];
+            if (!chosen) { this.showMessage('Choose a category', 'error'); return; }
+            if (!cats.includes(chosen)) { this.showMessage('Invalid category', 'error'); return; }
+            if (!window.supabaseClient) { this.showMessage('Supabase unavailable', 'error'); return; }
+            const { error } = await window.supabaseClient
+                .from('resources')
+                .update({ extra: { category: chosen } })
+                .eq('id', id);
+            if (error) { this.showMessage('Failed to save category', 'error'); return; }
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType: this.mapToStorageType(type) });
+            await this.renderCurrentTab();
+            this.showMessage('Category saved', 'success');
+        } catch (_) {
+            this.showMessage('Failed to save category', 'error');
+        }
     }
 
     // Hook clicks to record usage
@@ -1329,8 +1366,7 @@ class SectionManager {
                 try { extra = JSON.parse(extra); } catch (_) { extra = {}; }
             }
             if (!extra || typeof extra !== 'object') extra = {};
-            const fallbackCategory = row.category || (row.meta && row.meta.category) || '';
-            const resolvedCategory = (extra && extra.category != null) ? extra.category : fallbackCategory;
+            const resolvedCategory = (extra && extra.category != null) ? extra.category : '';
             return {
                 id: row.id,
                 title: row.title || '',
