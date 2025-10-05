@@ -900,37 +900,32 @@
                 const bn = (b && b.name) ? String(b.name) : '';
                 return an.localeCompare(bn);
             });
-            const sectionsHtml = sortedSections.map(section => `
+            const sectionsHtml = sortedSections.map(section => {
+                let cfg = section && section.config ? section.config : null;
+                if (typeof cfg === 'string') {
+                    try { cfg = JSON.parse(cfg); } catch (_) { cfg = null; }
+                }
+                const introRaw = (cfg && typeof cfg.intro === 'string') ? cfg.intro : (section && section.description ? section.description : '');
+                const intro = String(introRaw || '').trim();
+                return `
                 <div class="hub-card" data-section-id="${section.section_id}" onclick="navigateToSection('${section.section_id}')">
                     <div class="card-icon" style="color: ${section.color || '#3498db'};">
                         <i class="${section.icon || 'fas fa-folder'}"></i>
                     </div>
                     <h3>${section.name || section.section_id}</h3>
-                    <p>Access ${section.name || section.section_id} resources and tools</p>
+                    <p>${intro}</p>
                 </div>
-            `).join('');
+            `; }).join('');
             
             hubGrid.innerHTML = sectionsHtml;
         }
         
         // Function to show empty state when no sections exist
         function showEmptyState() {
-            console.log('Showing empty state - no sections in database');
+            console.log('Showing empty state - leaving grid blank');
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) return;
-            
-            hubGrid.innerHTML = `
-                <div style="text-align: center; padding: 60px 20px; color: #666; grid-column: 1 / -1;">
-                    <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">
-                        <i class="fas fa-folder-open"></i>
-                    </div>
-                    <h3>No Sections Available</h3>
-                    <p>There are no sections configured in the database yet.</p>
-                    <p style="font-size: 14px; margin-top: 10px; opacity: 0.7;">
-                        Contact an administrator to add sections to the Information Hub.
-                    </p>
-                </div>
-            `;
+            hubGrid.innerHTML = '';
         }
         
         // Function to show fallback sections if database fails
@@ -4485,7 +4480,7 @@ Permissions:
                     const message = ek.message || '';
                     const name = ek.name || '';
                     const origin = (typeof location !== 'undefined' ? location.origin : '');
-                    const supaUrl = (window.CONFIG && window.CONFIG.SUPABASE_URL) || window.SUPABASE_URL || '';
+                    const supaUrl = (window.CONFIG && window.CONFIG.SUPABASE_URL) || '';
                     let hint = '';
                     if (String(status) === '409' || String(code) === 'PGRST116') {
                         hint = ' The section ID already exists. It may have been updated.';
@@ -6274,8 +6269,8 @@ Permissions:
             }
             function initClient(){
                 ensureKeys();
-                var SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR-PROJECT-ref.supabase.co';
-                var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
+                var SUPABASE_URL = (window.SUPABASE_URL || '');
+                var SUPABASE_ANON_KEY = (window.SUPABASE_ANON_KEY || '');
                 try {
                     if (window.supabase && !window.supabaseClient) {
                         window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
