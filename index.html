@@ -808,6 +808,7 @@
                         updateHubProgress('Finalizing layout...', 95);
                         setTimeout(() => {
                             renderSections(sections);
+                            try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                             updateHubProgress('✅ Hub loaded successfully!', 100);
                             try {
                                 const loadingScreen = document.getElementById('loadingScreen');
@@ -1376,10 +1377,18 @@
                     console.warn('Error direct-loading sections for stats:', e);
                 }
             }
-            const visibleRows = (rows || []).filter(s => !(s && s.config && s.config.visible === false));
+            // Normalize config for each row (parse JSON string -> object)
+            const normRows = (rows || []).map(s => {
+                let cfg = s && s.config ? s.config : {};
+                if (typeof cfg === 'string') {
+                    try { cfg = JSON.parse(cfg); } catch (_) { cfg = {}; }
+                }
+                return Object.assign({}, s, { config: (cfg && typeof cfg === 'object') ? cfg : {} });
+            });
+            const visibleRows = normRows.filter(s => !(s && s.config && s.config.visible === false));
             const sections = visibleRows.map(s => s.section_id);
 
-            // Build config map from the same Supabase-sourced rows
+            // Build config map from normalized rows
             const sectionConfigById = new Map();
             visibleRows.forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
 
@@ -1445,7 +1454,10 @@
                 if (!typesList || typesList.length === 0) {
                     typesList = [];
                 }
-                const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
+                let normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
+                if (normalizedTypes.length === 0) {
+                    normalizedTypes = ['playbooks','box-links','dashboards'];
+                }
 
                 // Query Supabase counts per type and update DOM using robust candidates
                 await Promise.all(normalizedTypes.map(async (tid) => {
@@ -5250,6 +5262,15 @@ Permissions:
                                     return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
                                 })
                                 .filter(Boolean);
+                            // Fallback: derive ids from tab_names if still empty
+                            if (visibleTypes.length === 0 && tabNames.length > 0) {
+                                visibleTypes = tabNames.map((nm) => {
+                                    const id = String(nm || '').trim();
+                                    const base = typesById.get(id) || {};
+                                    const icon = String(base.icon || '').trim();
+                                    return id ? { id, name: String(nm || id).trim(), icon } : null;
+                                }).filter(Boolean);
+                            }
                         }
                         typesList = visibleTypes;
                     } catch (_) {}
