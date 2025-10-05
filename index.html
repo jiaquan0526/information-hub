@@ -22,8 +22,8 @@
     <!-- <link rel="preload" href="hub-script.js" as="script"> -->
     
     <!-- Supabase config fallback for static hosting (e.g., GitHub Pages) -->
-    <meta name="supabase-url" content="">
-    <meta name="supabase-anon-key" content="">
+    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
+    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
 
     <!-- Load Supabase and config -->
     <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
@@ -769,6 +769,7 @@
                     .from('sections')
                     .select('section_id, name, icon, color, config')
                     .eq('config->>visible', 'true')
+                    .order('config->order', { ascending: true, nullsFirst: true })
                     .order('name', { ascending: true });
                 
                 if (error) {
@@ -891,7 +892,15 @@
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) return;
             
-            const sectionsHtml = sections.map(section => `
+            const sortedSections = (sections || []).slice().sort((a, b) => {
+                const ao = (a && a.config && typeof a.config.order === 'number') ? a.config.order : 0;
+                const bo = (b && b.config && typeof b.config.order === 'number') ? b.config.order : 0;
+                if (ao !== bo) return ao - bo;
+                const an = (a && a.name) ? String(a.name) : '';
+                const bn = (b && b.name) ? String(b.name) : '';
+                return an.localeCompare(bn);
+            });
+            const sectionsHtml = sortedSections.map(section => `
                 <div class="hub-card" data-section-id="${section.section_id}" onclick="navigateToSection('${section.section_id}')">
                     <div class="card-icon" style="color: ${section.color || '#3498db'};">
                         <i class="${section.icon || 'fas fa-folder'}"></i>
@@ -2301,6 +2310,7 @@
                 const { data: secs, error: sErr } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, config')
+                    .order('config->order', { ascending: true, nullsFirst: true })
                     .order('name', { ascending: true });
                 if (sErr) { log('❌ ' + sErr.message); } else { log('✅ ' + (secs?.length || 0) + ' rows'); }
 
@@ -5129,6 +5139,7 @@ Permissions:
                     const { data: sections, error } = await window.supabaseClient
                         .from('sections')
                         .select('*')
+                        .order('config->order', { ascending: true, nullsFirst: true })
                         .order('name', { ascending: true });
                     if (error) throw error;
                     const rows = (Array.isArray(sections) ? sections : []).map(s => {
@@ -6348,6 +6359,7 @@ Permissions:
                     var q = window.supabaseClient
                         .from('sections')
                         .select('section_id,name,icon,color,config')
+                        .order('config->order', { ascending: true, nullsFirst: true })
                         .order('name', { ascending: true });
                     var res = await q;
                     if (res.error) throw res.error;
