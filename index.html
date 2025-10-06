@@ -862,7 +862,7 @@
             showEmptyState();
         }
 
-        // Hard failsafe: if still loading after 6s, show empty state and reveal UI
+        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI
         setTimeout(() => {
             try {
                 const grid = document.querySelector('.hub-grid');
@@ -870,8 +870,8 @@
                 const main = document.getElementById('mainContent');
                 const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
                 if (stuck) {
-                    console.warn('Failsafe: showing empty state');
-                    showEmptyState();
+                    console.warn('Failsafe: rebuilding hub cards');
+                    try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
                 }
