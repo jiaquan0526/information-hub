@@ -51,8 +51,8 @@
             // Build CONFIG from meta/local if config.js is not present
             if (!window.CONFIG) {
                 try {
-                    const metaUrl = document.querySelector('meta[name="supabase-url"]').content;
-                    const metaKey = document.querySelector('meta[name="supabase-anon-key"]').content;
+                    const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
                     const url = window.SUPABASE_URL || metaUrl;
                     const key = window.SUPABASE_ANON_KEY || metaKey;
                     if (url && key) {
@@ -77,6 +77,24 @@
                     console.error('Failed to derive CONFIG from meta/local', e);
                     return;
                 }
+            } else {
+                // Patch CONFIG if it contains placeholders; prefer meta/localStorage values
+                try {
+                    const isPlaceholder = (v) => { try { return !v || /YOUR[-_]/i.test(String(v)); } catch(_) { return true; } };
+                    const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                    let lsUrl = ''; let lsKey = '';
+                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
+                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
+                    if (isPlaceholder(window.CONFIG.SUPABASE_URL)) {
+                        const pickedUrl = metaUrl || lsUrl || window.SUPABASE_URL || '';
+                        if (pickedUrl) { window.CONFIG.SUPABASE_URL = pickedUrl; }
+                    }
+                    if (isPlaceholder(window.CONFIG.SUPABASE_ANON_KEY)) {
+                        const pickedKey = metaKey || lsKey || window.SUPABASE_ANON_KEY || '';
+                        if (pickedKey) { window.CONFIG.SUPABASE_ANON_KEY = pickedKey; }
+                    }
+                } catch(_) {}
             }
             
             // Initialize Supabase client
@@ -5201,6 +5219,19 @@ Permissions:
                 // Background will be scheduled lazily
             }
             
+            // If advanced build produced nothing, fall back to a minimal card renderer
+            if (!newContent || String(newContent).trim().length === 0) {
+                try {
+                    newContent = visibleSections.map(s => (
+                        `<div class="hub-card" data-section-id="${s.id}" onclick="navigateToSection('${s.id}')">
+                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                            <h3>${(s.name||s.id)}</h3>
+                            <p class="card-intro"></p>
+                        </div>`
+                    )).join('');
+                } catch(_) {}
+            }
+
             // Replace grid content all at once to prevent flashing
             try {
                 hubGrid.innerHTML = newContent;
