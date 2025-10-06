@@ -5044,6 +5044,13 @@ Permissions:
                         hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                     }
                 } catch(_) {}
+                // Ensure overlay is hidden even when nothing to render
+                try {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (mainContent) mainContent.style.display = 'block';
+                } catch (_) {}
                 isUpdatingSections = false;
                 return;
             }
@@ -6138,7 +6145,19 @@ Permissions:
             if (window.supabaseClient) return;
             function ensureKeys(){
                 try {
-                    // No localStorage fallbacks; keys must be provided by CONFIG/meta/constants
+                    // Populate CONFIG from meta tags or localStorage if missing
+                    if (!window.CONFIG) { window.CONFIG = {}; }
+                    var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                    var lsUrl = '';
+                    var lsKey = '';
+                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
+                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
+                    function pick(v1,v2,v3){ return (v1 && v1.trim()) || (v2 && v2.trim()) || (v3 && v3.trim()) || ''; }
+                    var url = pick(window.SUPABASE_URL || (window.CONFIG && window.CONFIG.SUPABASE_URL) || '', metaUrl, lsUrl);
+                    var key = pick(window.SUPABASE_ANON_KEY || (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY) || '', metaKey, lsKey);
+                    if (url) { window.SUPABASE_URL = url; if (!window.CONFIG.SUPABASE_URL) window.CONFIG.SUPABASE_URL = url; }
+                    if (key) { window.SUPABASE_ANON_KEY = key; if (!window.CONFIG.SUPABASE_ANON_KEY) window.CONFIG.SUPABASE_ANON_KEY = key; }
                 } catch(_) {}
             }
             function initClient(){
