@@ -529,7 +529,8 @@ class InformationHub {
                 (resource.tags && resource.tags.some(tag => tag.toLowerCase().includes(searchTerm))) ||
                 resource.url.toLowerCase().includes(searchTerm);
 
-            const matchesCategory = !categoryFilter || resource.category === categoryFilter;
+            const cat = (resource && resource.extra && resource.extra.category) ? String(resource.extra.category).trim() : (resource.category || '');
+            const matchesCategory = !categoryFilter || String(cat).toLowerCase() === String(categoryFilter).toLowerCase();
 
             return matchesSearch && matchesCategory;
         });
@@ -556,7 +557,7 @@ class InformationHub {
             description: description || '',
             url: url,
             tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-            category: 'process',
+            extra: { category: 'process' },
             createdAt: new Date().toISOString()
         };
 
@@ -724,7 +725,7 @@ class InformationHub {
         return (playbookTemplates[sectionId] || []).map(playbook => ({
             ...playbook,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            category: 'process',
+            extra: { category: 'process' },
             createdAt: new Date().toISOString()
         }));
     }
@@ -739,7 +740,7 @@ class InformationHub {
         return (boxLinkTemplates[sectionId] || []).map(link => ({
             ...link,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            category: 'process',
+            extra: { category: 'process' },
             createdAt: new Date().toISOString()
         }));
     }
@@ -754,7 +755,7 @@ class InformationHub {
         return (dashboardTemplates[sectionId] || []).map(dashboard => ({
             ...dashboard,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            category: 'process',
+            extra: { category: 'process' },
             createdAt: new Date().toISOString()
         }));
     }
@@ -1406,10 +1407,10 @@ window.exportAllData = async () => {
                 }
             }
         } catch (e) {
-            // Fall through to JSON/CSV fallbacks
+            // Fall through to JSON backup only
         }
 
-        // Fallback 1: JSON backup from database (if available)
+        // JSON backup from database (if available)
         try {
             if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.exportAllData === 'function') {
                 const payload = await hubDatabase.exportAllData();
@@ -1425,50 +1426,6 @@ window.exportAllData = async () => {
                 URL.revokeObjectURL(url);
                 informationHub.showMessage(`Downloaded JSON backup: ${jsonName}`, 'error');
                 informationHub.logActivity('EXPORT', `Exported JSON backup - ${jsonName}`);
-                return;
-            }
-        } catch (_) {
-            // Continue to CSV fallback
-        }
-
-        // Fallback 2: CSV from localStorage (legacy)
-        try {
-            const data = [];
-            const sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
-            sections.forEach(section => {
-                const sectionData = localStorage.getItem(`section_${section}`);
-                if (sectionData) {
-                    const parsed = JSON.parse(sectionData);
-                    ['playbooks', 'boxLinks', 'dashboards'].forEach(type => {
-                        (parsed[type] || []).forEach(item => {
-                            data.push({
-                                'Section': section.replace('-', ' ').toUpperCase(),
-                                'Type': type.replace('boxLinks', 'Box Links').replace(/([A-Z])/g, ' $1').trim(),
-                                'Title': item.title,
-                                'Description': item.description || '',
-                                'URL': item.url,
-                                'Tags': (item.tags || []).join(', '),
-                'Created': formatCST(item.createdAt, true)
-                            });
-                        });
-                    });
-                }
-            });
-            if (data.length > 0) {
-                const headers = Object.keys(data[0]);
-                const csvContent = [
-                    headers.join(','),
-                    ...data.map(row => headers.map(header => `"${(row[header] || '').toString().replace(/"/g, '""')}"`).join(','))
-                ].join('\n');
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `Information_Hub_Export_${new Date().toISOString().split('T')[0]}.csv`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                informationHub.showMessage('Downloaded CSV fallback', 'error');
                 return;
             }
         } catch (_) {}
@@ -1853,7 +1810,7 @@ async function __upsertExcelPayload(payload) {
                 description: r.description || '',
                 url: r.url || null,
                 tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : []),
-                extra: { category: r.category || '', originalType: originalType || null, originalTitle: generatedTitle ? (r.title || '') : undefined }
+                extra: { category: String(r.category || '').trim(), originalType: originalType || null, originalTitle: generatedTitle ? (r.title || '') : undefined }
             };
             const { error } = await window.supabaseClient.from('resources').insert(payloadRow);
             if (error) throw error;
@@ -2069,7 +2026,7 @@ window.importJsonSectionsTabsResources = async () => {
                                 title,
                                 description: r.description || '',
                                 url: r.url || '',
-                                category: (r.extra && r.extra.category) ? r.extra.category : (r.category || ''),
+                                category: (r.extra && r.extra.category) ? r.extra.category : '',
                                 tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : [])
                             });
                         });
@@ -2086,7 +2043,7 @@ window.importJsonSectionsTabsResources = async () => {
                                     title,
                                     description: r.description || '',
                                     url: r.url || '',
-                                    category: (r.extra && r.extra.category) ? r.extra.category : (r.category || ''),
+                                    category: (r.extra && r.extra.category) ? r.extra.category : '',
                                     tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : [])
                                 });
                             });

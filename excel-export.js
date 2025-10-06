@@ -5,66 +5,7 @@ class ExcelExporter {
         this._xlsxReady = false;
     }
 
-    _buildLocalSnapshot() {
-        try {
-            const users = JSON.parse(localStorage.getItem('hubUsers') || '[]');
-            const activities = JSON.parse(localStorage.getItem('hubActivities') || '[]');
-            let views = [];
-            try { views = JSON.parse(localStorage.getItem('views') || '[]'); } catch (_) { views = []; }
-            const hub = JSON.parse(localStorage.getItem('informationHub') || '{}');
-            // Derive section names from sectionOrder if available
-            let sectionOrder = [];
-            try { sectionOrder = JSON.parse(localStorage.getItem('sectionOrder') || '[]'); } catch (_) { sectionOrder = []; }
-            const nameById = {};
-            (sectionOrder || []).forEach(s => { if (s && s.id) nameById[s.id] = s.name || s.id; });
-
-            const sections = Object.entries(hub).map(([sid, s]) => ({ sectionId: sid, id: sid, name: s?.name || nameById[sid] || sid, icon: s?.icon || '', color: s?.color || '' }));
-            const resources = [];
-            // Newer structure
-            Object.entries(hub).forEach(([sid, s]) => {
-                ['playbooks','boxLinks','dashboards'].forEach(type => (s?.[type] || []).forEach(r => resources.push({ ...r, sectionId: sid, type })));
-                // Include any custom types stored under other keys
-                Object.keys(s || {}).forEach(k => {
-                    if (k === 'updatedAt' || k === 'playbooks' || k === 'boxLinks' || k === 'dashboards' || k === 'name' || k === 'icon' || k === 'color') return;
-                    (s[k] || []).forEach(r => resources.push({ ...r, sectionId: sid, type: k }));
-                });
-            });
-            // Legacy per-section keys: section_<id>
-            try {
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (!key || !/^section_/i.test(key)) continue;
-                    const sid = key.replace(/^section_/i, '');
-                    try {
-                        const parsed = JSON.parse(localStorage.getItem(key) || '{}');
-                        ['playbooks','boxLinks','dashboards'].forEach(type => (parsed?.[type] || []).forEach(r => resources.push({ ...r, sectionId: sid, type })));
-                        const nm = nameById[sid] || (parsed && parsed.name) || sid;
-                        if (!sections.find(s => String(s.sectionId) === String(sid))) {
-                            sections.push({ sectionId: sid, id: sid, name: nm, icon: parsed?.icon || '', color: parsed?.color || '' });
-                        }
-                    } catch (_) {}
-                }
-            } catch (_) {}
-            return {
-                users,
-                sections,
-                resources,
-                activities,
-                views,
-                exportDate: new Date().toISOString(),
-                source: 'localStorage',
-                totalRecords: {
-                    users: users.length,
-                    sections: sections.length,
-                    resources: resources.length,
-                    activities: activities.length,
-                    views: views.length
-                }
-            };
-        } catch (_) {
-            return { users: [], sections: [], resources: [], activities: [], views: [], exportDate: new Date().toISOString(), source: 'none', totalRecords: { users: 0, sections: 0, resources: 0, activities: 0, views: 0 } };
-        }
-    }
+    // Removed legacy local snapshot builder; export relies on Supabase database only
 
     async _waitForDbReady(maxMs = 10000) {
         try {

@@ -36,47 +36,8 @@
         
         // Wait for Supabase library to load
         const initSupabase = async () => {
-            // Fallback loader to ensure Supabase library is available even if the primary CDN fails
-            async function ensureSupabaseLibrary() {
-                if (window.supabase) return true;
-                return await new Promise((resolve) => {
-                    let resolved = false;
-                    const done = (ok) => { if (!resolved) { resolved = true; resolve(!!ok); } };
-                    
-                    // Try alternate UMD CDN first (unpkg)
-                    const existingAlt = document.querySelector('script[data-supabase-alt]');
-                    if (!existingAlt) {
-                        const s1 = document.createElement('script');
-                        s1.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
-                        s1.async = true;
-                        s1.setAttribute('data-supabase-alt', '1');
-                        s1.onload = () => setTimeout(() => done(window.supabase), 0);
-                        s1.onerror = () => {
-                            // If UMD fails, try ESM import fallback
-                            const m = document.createElement('script');
-                            m.type = 'module';
-                            m.textContent = "import{createClient}from 'https://esm.sh/@supabase/supabase-js@2'; window.supabase={createClient}; window.dispatchEvent(new Event('supabase-ready'));";
-                            document.head.appendChild(m);
-                            window.addEventListener('supabase-ready', () => done(true), { once: true });
-                            // Hard timeout guard
-                            setTimeout(() => done(window.supabase), 2500);
-                        };
-                        document.head.appendChild(s1);
-                    }
-                    
-                    // If script tag already present, poll briefly
-                    let tries = 0;
-                    const poll = setInterval(() => {
-                        tries++;
-                        if (window.supabase || tries > 30) {
-                            clearInterval(poll);
-                            if (!resolved) done(window.supabase);
-                        }
-                    }, 100);
-                    // Final safety timeout
-                    setTimeout(() => { if (!resolved) done(window.supabase); }, 4000);
-                });
-            }
+            // No alternate CDN fallbacks; require primary script tag
+            async function ensureSupabaseLibrary() { return !!window.supabase; }
 
             let attempts = 0;
             while (!window.supabase && attempts < 50) {
@@ -85,20 +46,13 @@
                 attempts++;
             }
             
-            if (!window.supabase) {
-                console.warn('Supabase library not available, attempting fallback loaders...');
-                const ok = await ensureSupabaseLibrary();
-                if (!ok) {
-                    console.error('Supabase library failed to load after fallbacks');
-                    return;
-                }
-            }
+            if (!window.supabase) { console.error('Supabase library not available'); return; }
             
             // Build CONFIG from meta/local if config.js is not present
             if (!window.CONFIG) {
                 try {
-                    const metaUrl = document.querySelector('meta[name="supabase-url"]').content;
-                    const metaKey = document.querySelector('meta[name="supabase-anon-key"]').content;
+                    const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
                     const url = window.SUPABASE_URL || metaUrl;
                     const key = window.SUPABASE_ANON_KEY || metaKey;
                     if (url && key) {
@@ -123,6 +77,24 @@
                     console.error('Failed to derive CONFIG from meta/local', e);
                     return;
                 }
+            } else {
+                // Patch CONFIG if it contains placeholders; prefer meta/localStorage values
+                try {
+                    const isPlaceholder = (v) => { try { return !v || /YOUR[-_]/i.test(String(v)); } catch(_) { return true; } };
+                    const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                    let lsUrl = ''; let lsKey = '';
+                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
+                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
+                    if (isPlaceholder(window.CONFIG.SUPABASE_URL)) {
+                        const pickedUrl = metaUrl || lsUrl || window.SUPABASE_URL || '';
+                        if (pickedUrl) { window.CONFIG.SUPABASE_URL = pickedUrl; }
+                    }
+                    if (isPlaceholder(window.CONFIG.SUPABASE_ANON_KEY)) {
+                        const pickedKey = metaKey || lsKey || window.SUPABASE_ANON_KEY || '';
+                        if (pickedKey) { window.CONFIG.SUPABASE_ANON_KEY = pickedKey; }
+                    }
+                } catch(_) {}
             }
             
             // Initialize Supabase client
@@ -146,6 +118,54 @@
                 });
             } catch (_) {}
             console.log('✅ Supabase client initialized successfully');
+
+            // Supabase-only minimal bootstrap: fetch sections and render basic cards immediately
+            try {
+                if (window.supabaseClient) {
+                    const grid = document.querySelector('.hub-grid');
+                    if (grid) {
+                        const { data: rows } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, name, icon, config')
+                            .order('config->order', { ascending: true, nullsFirst: true })
+                            .order('name', { ascending: true });
+                        const list = Array.isArray(rows) ? rows.filter(s => (s && s.config && s.config.visible === false) ? false : true) : [];
+                        if (list.length > 0 && (!grid.innerHTML || grid.innerHTML.indexOf('hub-card') === -1)) {
+                            const html = list.map(s => (
+                                `<div class="hub-card" data-section-id="${s.section_id}" onclick="navigateToSection('${s.section_id}')">
+                                    <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                                    <h3>${(s.name||s.section_id)}</h3>
+                                    <p class="card-intro"></p>
+                                </div>`
+                            )).join('');
+                            grid.innerHTML = html;
+                            try {
+                                const loadingScreen = document.getElementById('loadingScreen');
+                                const mainContent = document.getElementById('mainContent');
+                                if (loadingScreen) loadingScreen.style.display = 'none';
+                                if (mainContent) mainContent.style.display = 'block';
+                            } catch(_) {}
+                            // Auto-upgrade to full cards (description, tabs, counts) when builder becomes available
+                            try {
+                                let tries = 0;
+                                const iv = setInterval(async () => {
+                                    tries++;
+                                    try {
+                                        if (typeof updateMainHubSections === 'function') {
+                                            try { await updateMainHubSections(); } catch(_) { /* retry */ }
+                                            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+                                            clearInterval(iv);
+                                        }
+                                    } catch(_) {}
+                                    if (tries > 40) { // ~8s max
+                                        try { clearInterval(iv); } catch(_) {}
+                                    }
+                                }, 200);
+                            } catch(_) {}
+                        }
+                    }
+                }
+            } catch(_) { /* best effort */ }
         };
         
         initSupabase();
@@ -667,24 +687,7 @@
             
             // The hub-script.js will handle all authentication and data loading
             // No need to duplicate the logic here
-            // Watchdog: if hub initialization stalls, load sections directly
-            setTimeout(async () => {
-                try {
-                    const grid = document.querySelector('.hub-grid');
-                    const stillLoading = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
-                    if (stillLoading) {
-                        console.warn('Hub init watchdog triggered, loading sections directly');
-                        try {
-                            const loadingScreen = document.getElementById('loadingScreen');
-                            const mainContent = document.getElementById('mainContent');
-                            if (loadingScreen) loadingScreen.style.display = 'none';
-                            try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-                            if (mainContent) mainContent.style.display = 'block';
-                        } catch (_) {}
-                        await loadSectionsFromSupabase();
-                    }
-                } catch (e) { console.error('Watchdog error:', e); }
-            }, 3000);
+            // Removed watchdog: rely solely on primary initialization/loading
             
             // Add basic navigation function if not available
             if (typeof window.navigateToSection !== 'function') {
@@ -739,12 +742,9 @@
                         tries++;
                     }
                 }
-                if (!user) {
-                    console.error('[Hub] Authentication error: session missing');
-                    updateHubProgress('❌ Authentication failed', 100);
-                    setTimeout(() => showFallbackSections(), 2000);
-                    return;
-                }
+            if (!user) {
+                console.warn('[Hub] No authenticated user; proceeding as guest');
+            }
                 
                 updateHubProgress(`✅ Authenticated as ${user.email}`, 35);
                 
@@ -768,13 +768,12 @@
                 const { data: sections, error } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, icon, color, config')
-                    .eq('config->>visible', 'true')
+                    .order('config->order', { ascending: true, nullsFirst: true })
                     .order('name', { ascending: true });
                 
                 if (error) {
                     console.error('[Hub] Error fetching sections:', error);
                     updateHubProgress('❌ Error loading sections: ' + error.message, 100);
-                    setTimeout(() => showFallbackSections(), 2000);
                     return;
                 }
                 
@@ -783,18 +782,8 @@
                 
                 if (!sections || sections.length === 0) {
                     console.log('No sections found in database');
-                    updateHubProgress('ℹ️ No sections found - showing empty state', 90);
-                    setTimeout(() => {
-                        showEmptyState();
-                        updateHubProgress('✅ Ready!', 100);
-                        try {
-                            const loadingScreen = document.getElementById('loadingScreen');
-                            const mainContent = document.getElementById('mainContent');
-                            if (loadingScreen) loadingScreen.style.display = 'none';
-                            if (mainContent) mainContent.style.display = 'block';
-                        } catch (_) {}
-                        console.timeEnd('loadSectionsFromSupabase');
-                    }, 1000);
+                    updateHubProgress('ℹ️ No sections found', 100);
+                    // Leave grid blank per requirements
                     return;
                 }
                 
@@ -808,6 +797,7 @@
                         updateHubProgress('Finalizing layout...', 95);
                         setTimeout(() => {
                             renderSections(sections);
+                            try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                             updateHubProgress('✅ Hub loaded successfully!', 100);
                             try {
                                 const loadingScreen = document.getElementById('loadingScreen');
@@ -819,7 +809,7 @@
                                 // Hide progress after success
                                 const progressContainer = document.querySelector('.hub-grid > div');
                                 try { if (progressContainer) progressContainer.remove(); } catch (_) {}
-                                console.timeEnd('loadSectionsFromSupabase');
+                                try { console.timeEnd('loadSectionsFromSupabase'); } catch(_) {}
                             }, 1500);
                         }, 300);
                     }, 300);
@@ -890,37 +880,40 @@
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) return;
             
-            const sectionsHtml = sections.map(section => `
+            const sortedSections = (sections || []).slice().sort((a, b) => {
+                const ao = (a && a.config && typeof a.config.order === 'number') ? a.config.order : 0;
+                const bo = (b && b.config && typeof b.config.order === 'number') ? b.config.order : 0;
+                if (ao !== bo) return ao - bo;
+                const an = (a && a.name) ? String(a.name) : '';
+                const bn = (b && b.name) ? String(b.name) : '';
+                return an.localeCompare(bn);
+            });
+            const sectionsHtml = sortedSections.map(section => {
+                let cfg = section && section.config ? section.config : null;
+                if (typeof cfg === 'string') {
+                    try { cfg = JSON.parse(cfg); } catch (_) { cfg = null; }
+                }
+                const introRaw = (cfg && typeof cfg.intro === 'string') ? cfg.intro : (section && section.description ? section.description : '');
+                const intro = String(introRaw || '').trim();
+                return `
                 <div class="hub-card" data-section-id="${section.section_id}" onclick="navigateToSection('${section.section_id}')">
                     <div class="card-icon" style="color: ${section.color || '#3498db'};">
                         <i class="${section.icon || 'fas fa-folder'}"></i>
                     </div>
                     <h3>${section.name || section.section_id}</h3>
-                    <p>Access ${section.name || section.section_id} resources and tools</p>
+                    <p>${intro}</p>
                 </div>
-            `).join('');
+            `; }).join('');
             
             hubGrid.innerHTML = sectionsHtml;
         }
         
         // Function to show empty state when no sections exist
         function showEmptyState() {
-            console.log('Showing empty state - no sections in database');
+            console.log('Showing empty state - leaving grid blank');
             const hubGrid = document.querySelector('.hub-grid');
             if (!hubGrid) return;
-            
-            hubGrid.innerHTML = `
-                <div style="text-align: center; padding: 60px 20px; color: #666; grid-column: 1 / -1;">
-                    <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">
-                        <i class="fas fa-folder-open"></i>
-                    </div>
-                    <h3>No Sections Available</h3>
-                    <p>There are no sections configured in the database yet.</p>
-                    <p style="font-size: 14px; margin-top: 10px; opacity: 0.7;">
-                        Contact an administrator to add sections to the Information Hub.
-                    </p>
-                </div>
-            `;
+            hubGrid.innerHTML = '';
         }
         
         // Function to show fallback sections if database fails
@@ -935,7 +928,7 @@
             showEmptyState();
         }
 
-        // Hard failsafe: if still loading after 6s, show empty state and reveal UI
+        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI
         setTimeout(() => {
             try {
                 const grid = document.querySelector('.hub-grid');
@@ -943,13 +936,27 @@
                 const main = document.getElementById('mainContent');
                 const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
                 if (stuck) {
-                    console.warn('Failsafe: showing empty state');
-                    showEmptyState();
+                    console.warn('Failsafe: rebuilding hub cards');
+                    try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
                 }
             } catch (_) {}
         }, 6000);
+
+        // Early failsafe: after 2.5s, ensure UI is visible and try to build cards
+        setTimeout(() => {
+            try {
+                const loadingOverlay = document.getElementById('loadingScreen');
+                const main = document.getElementById('mainContent');
+                if (loadingOverlay && getComputedStyle(loadingOverlay).display !== 'none') {
+                    console.warn('Early failsafe: revealing UI and attempting card build');
+                    loadingOverlay.style.display = 'none';
+                    if (main) main.style.display = 'block';
+                    try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                }
+            } catch(_) {}
+        }, 2500);
             
             // Initialize basic functions
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
@@ -1288,7 +1295,7 @@
                 if (error || !user) return null;
                 
                 // Get full user profile from database
-            const { data: profile, error: profileError } = await (window.supabaseClient || supabase)
+            const { data: profile, error: profileError } = await window.supabaseClient
                     .from('profiles')
                     .select('*')
                     .eq('id', user.id)
@@ -1376,44 +1383,25 @@
                     console.warn('Error direct-loading sections for stats:', e);
                 }
             }
-            const visibleRows = (rows || []).filter(s => !(s && s.config && s.config.visible === false));
+            // Normalize config for each row (parse JSON string -> object)
+            const normRows = (rows || []).map(s => {
+                let cfg = s && s.config ? s.config : {};
+                if (typeof cfg === 'string') {
+                    try { cfg = JSON.parse(cfg); } catch (_) { cfg = {}; }
+                }
+                return Object.assign({}, s, { config: (cfg && typeof cfg === 'object') ? cfg : {} });
+            });
+            const visibleRows = normRows.filter(s => !(s && s.config && s.config.visible === false));
             const sections = visibleRows.map(s => s.section_id);
 
-            // Build config map from the same Supabase-sourced rows
+            // Build config map from normalized rows
             const sectionConfigById = new Map();
             visibleRows.forEach(s => sectionConfigById.set(s.section_id, s.config || {}));
 
-            const normUiType = (t) => String(t || '').toLowerCase().trim();
-            const mapUiToDbType = (ui) => String(ui || '').toLowerCase().trim();
-
-            function resolveDbTypeForUiType(sectionId, uiTid) {
-                // Map UI tab ids to canonical DB types
-                const t = normUiType(uiTid);
-                if (t === 'boxlinks' || t === 'box-links' || t === 'box') return 'box-links';
-                if (t === 'playbook' || t === 'playbooks') return 'playbooks';
-                if (t === 'dashboard' || t === 'dashboards') return 'dashboards';
-                return t;
-            }
-
-            function getSingleDbType(sectionId, uiTid) {
-                return resolveDbTypeForUiType(sectionId, uiTid);
-            }
-
+            const makeSafeDomId = (raw) => String(raw || '').replace(/[^A-Za-z0-9\-:\._]/g, '_');
             function updateCountDom(sectionId, tid, count) {
                 try {
-                    const candidates = [];
-                    const rawId = String(tid || '').trim();
-                    const uiId = (typeof normalizeTypeId === 'function') ? normalizeTypeId(rawId) : rawId;
-                    const hyphenId = rawId.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
-                    candidates.push(`${sectionId}-${rawId}`);
-                    if (uiId && uiId !== rawId) candidates.push(`${sectionId}-${uiId}`);
-                    if (hyphenId && hyphenId !== rawId && hyphenId !== uiId) candidates.push(`${sectionId}-${hyphenId}`);
-                    // Known aliases
-                    if (uiId === 'boxLinks' || rawId === 'boxLinks' || rawId === 'box-links' || hyphenId === 'box-links') {
-                        candidates.push(`${sectionId}-boxlinks`, `${sectionId}-box-links`, `${sectionId}-boxLinks`);
-                    }
-                    let el = null;
-                    for (const id of candidates) { el = document.getElementById(id); if (el) break; }
+                    const el = document.getElementById(`${sectionId}-${makeSafeDomId(tid)}`);
                     if (el) el.textContent = count;
                 } catch(_) {}
             }
@@ -1429,29 +1417,15 @@
                         typesList = cfg.tabs.map(x => String(x || '').trim()).filter(Boolean);
                     }
                 } catch (_) {}
-                // If still empty, derive from resources (distinct types for this section)
-                if ((!typesList || typesList.length === 0) && window.supabaseClient) {
-                    try {
-                        const { data } = await window.supabaseClient
-                            .from('resources')
-                            .select('type')
-                            .eq('section_id', sectionId);
-                        const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
-                        const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
-                        typesList = Array.from(new Set(mapped));
-                    } catch (_) {}
-                }
-                // No legacy defaults: if nothing is configured and no resources exist, show nothing
+                // If nothing configured, no counts to display
                 if (!typesList || typesList.length === 0) {
-                    typesList = [];
+                    return;
                 }
-                const normalizedTypes = Array.from(new Set(typesList.map(normUiType))).filter(Boolean);
 
-                // Query Supabase counts per type and update DOM using robust candidates
-                await Promise.all(normalizedTypes.map(async (tid) => {
+                // Query Supabase counts per type exactly as configured
+                await Promise.all(typesList.map(async (tid) => {
                     if (!window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
-                    const dbType = getSingleDbType(sectionId, tid);
-                    if (!dbType) { updateCountDom(sectionId, tid, 0); return; }
+                    const dbType = String(tid || '').trim();
                     try {
                         const { count, error } = await window.supabaseClient
                             .from('resources')
@@ -1941,7 +1915,7 @@
             console.log('Logout called');
             try {
                 // Sign out from Supabase
-                const { error } = await supabase.auth.signOut();
+                const { error } = await window.supabaseClient.auth.signOut();
                 if (error) {
                     console.error('Error signing out:', error);
                 } else {
@@ -2020,45 +1994,38 @@
             document.body.appendChild(modal);
         };
         
-        window.searchAcrossHub = function() {
+        window.searchAcrossHub = async function() {
             const searchTerm = prompt('Enter search term to search across all sections:');
-            if (searchTerm) {
-                // Simple search implementation
-                const results = [];
-                const sections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
-                
-                sections.forEach(section => {
-                    const sectionData = localStorage.getItem(`section_${section}`);
-                    if (sectionData) {
-                        const data = JSON.parse(sectionData);
-                        // Search in playbooks, boxLinks, and dashboards
-                        ['playbooks', 'boxLinks', 'dashboards'].forEach(type => {
-                            if (data[type]) {
-                                data[type].forEach(item => {
-                                    if (item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                        item.description.toLowerCase().includes(searchTerm.toLowerCase())) {
-                                        results.push({
-                                            section: section,
-                                            type: type,
-                                            title: item.title,
-                                            url: item.url
-                                        });
-                                    }
-                                });
-                            }
-                        });
+            if (!searchTerm) return;
+            try {
+                if (!window.supabaseClient) { alert('Database not ready'); return; }
+                // Case-insensitive search over resources (title/description)
+                const term = `%${searchTerm}%`;
+                let query = window.supabaseClient.from('resources')
+                    .select('id, section_id, title, description, type, url')
+                    .or(`title.ilike.${term},description.ilike.${term}`)
+                    .limit(100);
+                const { data: rows, error } = await query;
+                if (error) { alert('Search failed: ' + error.message); return; }
+                const results = Array.isArray(rows) ? rows : [];
+                if (results.length === 0) { alert(`No results found for "${searchTerm}"`); return; }
+                // Optionally map section names if available via DB
+                let nameById = {};
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady && hubDatabase.getAllSections) {
+                        const secs = await hubDatabase.getAllSections();
+                        (secs || []).forEach(s => { const id = String(s.section_id || s.sectionId || s.id || ''); if (id) nameById[id] = s.name || id; });
                     }
+                } catch (_) {}
+                let resultText = `Found ${results.length} results for "${searchTerm}":\n\n`;
+                results.forEach(r => {
+                    const sec = String(r.section_id || '');
+                    const secName = nameById[sec] || sec || 'Unknown';
+                    resultText += `• ${r.title} (${secName} - ${r.type})\n`;
                 });
-                
-                if (results.length > 0) {
-                    let resultText = `Found ${results.length} results for "${searchTerm}":\n\n`;
-                    results.forEach(result => {
-                        resultText += `• ${result.title} (${result.section} - ${result.type})\n`;
-                    });
-                    alert(resultText);
-                } else {
-                    alert(`No results found for "${searchTerm}"`);
-                }
+                alert(resultText);
+            } catch (e) {
+                alert('Search failed');
             }
         };
         
@@ -2301,6 +2268,7 @@
                 const { data: secs, error: sErr } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, config')
+                    .order('config->order', { ascending: true, nullsFirst: true })
                     .order('name', { ascending: true });
                 if (sErr) { log('❌ ' + sErr.message); } else { log('✅ ' + (secs?.length || 0) + ' rows'); }
 
@@ -2531,14 +2499,14 @@
         }
         window.showUserProfile = async function() {
             // Check if user is authenticated
-            const { data: { user }, error } = await supabase.auth.getUser();
+            const { data: { user }, error } = await window.supabaseClient.auth.getUser();
             if (error || !user) {
                 alert('Please log in to view profile.');
                 return;
             }
             
             // Get full user profile from database
-            const { data: profile, error: profileError } = await supabase
+            const { data: profile, error: profileError } = await window.supabaseClient
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
@@ -2821,25 +2789,26 @@ Permissions:
             console.log('=== UPDATE USER INTERFACE CALLED ===');
             
             try {
+                // Ensure Supabase client is ready
+                try { await _waitForSupabaseReady(2000); } catch(_) {}
                 // Get current user from Supabase
-                const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+                const { data: { user: authUser }, error: authError } = await window.supabaseClient.auth.getUser();
                 if (authError || !authUser) {
-                    console.log('No authenticated user found, redirecting to auth page');
-                    window.location.href = 'auth.html';
-                    return;
+                    console.log('No authenticated user found; continuing in limited mode');
                 }
                 
                 // Get full user profile from database (profiles table)
-                const { data: user, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', authUser.id)
-                    .single();
-                
-                if (profileError || !user) {
-                    console.log('User profile not found in database, redirecting to auth page');
-                    window.location.href = 'auth.html';
-                    return;
+                let user = null;
+                if (authUser) {
+                    const { data: prof } = await window.supabaseClient
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', authUser.id)
+                        .maybeSingle();
+                    user = prof || null;
+                }
+                if (!user) {
+                    user = { id: null, username: 'Guest', role: 'user', permissions: { sections: [], editableSections: [], canManageUsers: false } };
                 }
                 
                 console.log('User from database:', user);
@@ -2945,47 +2914,78 @@ Permissions:
                 }
             } catch (e) { 
                 console.warn('Error reading visible sections', e);
-                // Fallback to default sections
-                visibleSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                return;
             }
             if (visibleSections.length === 0) {
-                visibleSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                console.log('No visible sections; leaving UI unchanged');
+                return;
             }
 
-            // Get allowed sections (admins see all visible; others intersect with visible)
-            let allowedSections = [];
-                if (user.role === 'admin') {
-                allowedSections = visibleSections;
-                console.log('✅ Admin sees all visible sections:', allowedSections);
-            } else if (user.permissions && Array.isArray(user.permissions.sections) && user.permissions.sections.length > 0) {
-                allowedSections = user.permissions.sections.filter(id => visibleSections.includes(id));
-                console.log('✅ Using user-specific section permissions (intersect visible):', allowedSections);
-            } else {
-                // No specific permissions - show no sections
-                allowedSections = [];
-                console.log('No specific permissions - showing no sections');
-            }
+            // Show all visible sections regardless of user permissions
+            const allowedSections = visibleSections;
+            console.log('Showing all visible sections:', allowedSections);
             
             console.log('Final allowed sections for', user.username, ':', allowedSections);
             
-            const hubCards = document.querySelectorAll('.hub-card');
+            let hubCards = document.querySelectorAll('.hub-card');
             console.log('Found', hubCards.length, 'hub cards');
+            // If no cards are present yet, build them now and retry
+            if (!hubCards || hubCards.length === 0) {
+                try {
+                    if (typeof updateMainHubSections === 'function') {
+                        await updateMainHubSections();
+                        // Re-query after build
+                        hubCards = document.querySelectorAll('.hub-card');
+                        console.log('Built hub cards on demand. Now found', hubCards.length, 'hub cards');
+                    }
+                } catch (_) { /* non-blocking */ }
+            }
+
+            // If still no cards, render a minimal set directly from Supabase
+            if (!hubCards || hubCards.length === 0) {
+                try {
+                    if (window.supabaseClient) {
+                        const { data: rows, error } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, name, icon, color, config')
+                            .order('config->order', { ascending: true, nullsFirst: true })
+                            .order('name', { ascending: true });
+                        if (!error && Array.isArray(rows)) {
+                            const hubGrid = document.querySelector('.hub-grid');
+                            if (hubGrid) {
+                                const minimal = rows
+                                    .filter(s => (s && s.config && s.config.visible === false) ? false : true)
+                                    .map(s => (
+                                        `<div class="hub-card" data-section-id="${s.section_id}" onclick="navigateToSection('${s.section_id}')">
+                                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                                            <h3>${(s.name||s.section_id)}</h3>
+                                            <p class="card-intro"></p>
+                                        </div>`
+                                    )).join('');
+                                hubGrid.innerHTML = minimal;
+                                // hide overlay to reveal UI
+                                try {
+                                    const loadingScreen = document.getElementById('loadingScreen');
+                                    const mainContent = document.getElementById('mainContent');
+                                    if (loadingScreen) loadingScreen.style.display = 'none';
+                                    if (mainContent) mainContent.style.display = 'block';
+                                } catch(_) {}
+                                // refresh hubCards reference
+                                hubCards = document.querySelectorAll('.hub-card');
+                                console.log('Rendered minimal hub cards. Now found', hubCards.length, 'hub cards');
+                            }
+                        }
+                    }
+                } catch(_) { /* best effort */ }
+            }
             
             hubCards.forEach(card => {
                 try {
-                    const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-                    console.log('Processing card for section:', sectionId);
-                    
-                    if (!allowedSections.includes(sectionId)) {
-                        card.style.display = 'none'; // Hide sections user can't access
-                        console.log('❌ Hiding section:', sectionId, 'for user:', user.username);
-                    } else {
-                        card.style.display = 'block'; // Show sections user can access
-                        console.log('✅ Showing section:', sectionId, 'for user:', user.username);
-                    }
-                } catch (error) {
-                    console.error('Error processing card:', error);
-                }
+                    const sectionId = card.getAttribute('data-section-id') || '';
+                    if (!sectionId) return;
+                    // All visible sections remain shown
+                    card.style.display = '';
+                } catch (_) {}
             });
             
             console.log('=== HUB CARDS UPDATE COMPLETE ===');
@@ -3004,7 +3004,7 @@ Permissions:
             select.innerHTML = '<option value="">Choose a user...</option>';
             
             // Check if user is authenticated
-            const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+            const { data: { user: currentUser }, error } = await window.supabaseClient.auth.getUser();
             if (error || !currentUser) return;
             
             // Load users from Supabase
@@ -3824,10 +3824,7 @@ Permissions:
                     alert('Database unavailable – cannot delete.');
                     return;
                 }
-                // Mirror to local/DB
-                const updatedUsers = users.filter(u => u.id !== userId);
-                localStorage.setItem('hubUsers', JSON.stringify(updatedUsers));
-                try { if (window.hubDatabase && hubDatabase.deleteUser) { await hubDatabase.deleteUser(userId); } } catch(_){ }
+                // Already deleted from Supabase; no local mirrors
                 loadUsersList();
                 alert('User deleted successfully');
             }
@@ -4473,7 +4470,7 @@ Permissions:
                     const message = ek.message || '';
                     const name = ek.name || '';
                     const origin = (typeof location !== 'undefined' ? location.origin : '');
-                    const supaUrl = (window.CONFIG && window.CONFIG.SUPABASE_URL) || window.SUPABASE_URL || '';
+                    const supaUrl = (window.CONFIG && window.CONFIG.SUPABASE_URL) || '';
                     let hint = '';
                     if (String(status) === '409' || String(code) === 'PGRST116') {
                         hint = ' The section ID already exists. It may have been updated.';
@@ -5086,41 +5083,28 @@ Permissions:
         // Helpers for dynamic card tab rendering (mirror section page)
             function normalizeTypeId(raw) {
             try {
-                const t = String(raw || '').toLowerCase().trim();
-                if (t === 'playbooks' || t === 'playbook') return 'playbooks';
-                if (t === 'box-links' || t === 'boxlinks' || t === 'boxlink' || t === 'box') return 'boxLinks';
-                if (t === 'dashboards' || t === 'dashboard') return 'dashboards';
-                return t;
+                return String(raw || '').toLowerCase().trim();
             } catch (_) { return String(raw || '').toLowerCase(); }
         }
-        function iconForType(tid) {
-            const t = normalizeTypeId(tid);
-            if (t === 'playbooks') return 'fas fa-book';
-            if (t === 'boxLinks') return 'fas fa-link';
-            if (t === 'dashboards') return 'fas fa-chart-bar';
-            return 'fas fa-folder';
-        }
+        function iconForType() { return 'fas fa-folder'; }
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
         async function updateMainHubSections() {
             console.log('Loading sections from Supabase...');
             
-            // Check if hubDatabase is available
-            if (!window.hubDatabase || !window.hubDatabaseReady) {
-                console.warn('Database not ready, keeping existing content');
-                return; // Keep the existing content, don't replace it
-            }
-            
             const now = Date.now();
             if (isUpdatingSections) {
-                console.log('Update already in progress, skipping...');
+                console.log('Update already in progress, scheduling retry...');
+                try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
-                console.log('Update called too frequently, skipping...');
+                const waitMs = Math.max(75, 1000 - (now - lastUpdateTime));
+                console.log('Update called too frequently, retrying in', waitMs, 'ms');
+                try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, waitMs); } catch(_) {}
                 return;
             }
             
@@ -5134,45 +5118,32 @@ Permissions:
                 return;
             }
             
-            // Load sections from Supabase database
+            // Load sections from Supabase database (Supabase-only)
             let visibleSections = [];
-            
             try {
-                // Wait for database to be ready
-                let retries = 0;
-                const maxRetries = 20;
-                while (retries < maxRetries && (!window.hubDatabase || !window.hubDatabaseReady)) {
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    retries++;
-                }
-                
-                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getAllSections === 'function') {
-                    // Read sections from Supabase wrapper with a robust direct-query fallback
-                    let sections = await hubDatabase.getAllSections();
-                    if ((!sections || sections.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data: directSections } = await window.supabaseClient
-                                .from('sections')
-                                .select('*')
-                                .order('name', { ascending: true });
-                            sections = Array.isArray(directSections) ? directSections : [];
-                        } catch (_) {}
-                    }
-                    console.log('Loaded sections from database:', sections);
-                    
-                    if (sections && sections.length > 0) {
-                        // Trust Supabase RLS to return only accessible sections; apply only visibility and order
-                        visibleSections = sections
-                            .filter(s => s.config?.visible !== false)
-                            .sort((a,b) => (a.config?.order||0) - (b.config?.order||0));
-                    } else {
-                        console.warn('No sections found in database');
-                    }
+                if (!window.supabaseClient) {
+                    console.error('Supabase client not available');
                 } else {
-                    console.error('Database not available');
+                    const { data: sections, error } = await window.supabaseClient
+                        .from('sections')
+                        .select('*')
+                        .order('config->order', { ascending: true, nullsFirst: true })
+                        .order('name', { ascending: true });
+                    if (error) throw error;
+                    const rows = (Array.isArray(sections) ? sections : []).map(s => {
+                        let cfg = s && s.config ? s.config : {};
+                        if (typeof cfg === 'string') {
+                            try { cfg = JSON.parse(cfg); } catch(_) { cfg = {}; }
+                        }
+                        return Object.assign({}, s, { config: (cfg && typeof cfg === 'object') ? cfg : {} });
+                    });
+                    console.log('Loaded sections from Supabase:', rows);
+                    visibleSections = rows
+                        .filter(s => (s && s.config && s.config.visible === false) ? false : true)
+                        .sort((a,b) => ((a && a.config && a.config.order) || 0) - ((b && b.config && b.config.order) || 0));
                 }
             } catch (error) {
-                console.error('Error loading sections from database:', error);
+                console.error('Error loading sections from Supabase:', error);
             }
             
             // If no sections found after filtering, preserve existing content if present
@@ -5184,6 +5155,13 @@ Permissions:
                         hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                     }
                 } catch(_) {}
+                // Ensure overlay is hidden even when nothing to render
+                try {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (mainContent) mainContent.style.display = 'block';
+                } catch (_) {}
                 isUpdatingSections = false;
                 return;
             }
@@ -5242,6 +5220,8 @@ Permissions:
                 }
             } catch (_) {}
 
+            const makeSafeDomId = (raw) => String(raw || '').replace(/[^A-Za-z0-9\-:\._]/g, '_');
+
             for (const section of visibleSections) {
                 try {
                     // Build types list to mirror the section detail tabs (align with section page fallbacks)
@@ -5262,7 +5242,7 @@ Permissions:
                                 return { id, name, icon };
                             }).filter(t => t.id);
                         } else {
-                            // Fallback 1: configured types (not hidden)
+                            // Use configured types (not hidden) only
                             visibleTypes = (typesArr || [])
                                 .filter(t => t && !t.hidden)
                                 .map(t => {
@@ -5270,7 +5250,7 @@ Permissions:
                                     return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
                                 })
                                 .filter(Boolean);
-                            // Fallback 2: derive ids from tab_names if still empty
+                            // Fallback: derive ids from tab_names if still empty
                             if (visibleTypes.length === 0 && tabNames.length > 0) {
                                 visibleTypes = tabNames.map((nm) => {
                                     const id = String(nm || '').trim();
@@ -5282,33 +5262,18 @@ Permissions:
                         }
                         typesList = visibleTypes;
                     } catch (_) {}
-                    // If still empty, derive from resources (distinct types for this section)
-                    if ((!typesList || typesList.length === 0) && window.supabaseClient) {
-                        try {
-                            const { data } = await window.supabaseClient
-                                .from('resources')
-                                .select('type')
-                                .eq('section_id', section.id);
-                            const raw = Array.isArray(data) ? data.map(r => String(r.type||'').trim()).filter(Boolean) : [];
-                            const mapped = raw.map(v => v.toLowerCase() === 'playbook' ? 'playbooks' : v.toLowerCase() === 'link' ? 'box-links' : v.toLowerCase() === 'dashboard' ? 'dashboards' : v);
-                            const uniq = Array.from(new Set(mapped));
-                            typesList = uniq.map(id => ({ id, name: id === 'playbooks' ? 'Playbooks' : id === 'box-links' ? 'Box Links' : id === 'dashboards' ? 'Dashboards' : id, icon: '' }));
-                        } catch (_) {}
-                    }
-                    // No legacy defaults: if nothing is configured and no resources exist, show nothing
+                    // If nothing configured, show nothing (follow exactly from Supabase config)
                     if (!typesList || typesList.length === 0) {
                         typesList = [];
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
                     const statsHTML = typesList.map(t => {
-                        const nid = normalizeTypeId(t.id);
-                        const iconVal = (t.icon || '').trim();
-                        const isImg = /^(https?:|data:)|\.(svg|png|jpe?g|gif)$/i.test(iconVal);
-                        const iconHtml = iconVal && isImg
-                            ? `<img src="${iconVal}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-2px;" />`
-                            : `<i class="${iconVal ? normalizeIconClass(iconVal) : iconForType(nid)}"></i>`;
-                        return `<span>${iconHtml} <span id="${section.id}-${nid}">0</span> ${escapeHtml(t.name || nid)}</span>`;
+                        const id = String(t.id || '').trim();
+                        const label = String(t.name || id).trim();
+                        const iconClass = (t.icon && String(t.icon).trim()) ? String(t.icon).trim() : iconForType(id);
+                        const safeId = `${section.id}-${makeSafeDomId(id)}`;
+                        return `<span><i class="${iconClass}"></i> <span id="${safeId}">0</span> ${escapeHtml(label)}</span>`;
                     }).join(' ');
                     
                     const cardHTML = `
@@ -5330,8 +5295,35 @@ Permissions:
                 // Background will be scheduled lazily
             }
             
+            // If advanced build produced nothing, fall back to a minimal card renderer
+            if (!newContent || String(newContent).trim().length === 0) {
+                try {
+                    newContent = visibleSections.map(s => (
+                        `<div class="hub-card" data-section-id="${s.id}" onclick="navigateToSection('${s.id}')">
+                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                            <h3>${(s.name||s.id)}</h3>
+                            <p class="card-intro"></p>
+                        </div>`
+                    )).join('');
+                } catch(_) {}
+            }
+
             // Replace grid content all at once to prevent flashing
-            hubGrid.innerHTML = newContent;
+            try {
+                hubGrid.innerHTML = newContent;
+            } catch (e) {
+                console.warn('Hub grid update failed; rendering minimal cards', e);
+                try {
+                    const fallback = visibleSections.map(s => (
+                        `<div class="hub-card" data-section-id="${s.id}" onclick="navigateToSection('${s.id}')">
+                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                            <h3>${(s.name||s.id)}</h3>
+                            <p class="card-intro"></p>
+                        </div>`
+                    )).join('');
+                    hubGrid.innerHTML = fallback;
+                } catch(_) {}
+            }
             // Ensure the main UI is visible once content is ready
             try {
                 const loadingScreen = document.getElementById('loadingScreen');
@@ -5340,10 +5332,10 @@ Permissions:
                 if (mainContent) mainContent.style.display = 'block';
             } catch (_) {}
             
-            // Stats for currently built sections
-            updateSectionStats();
+            // Stats for currently built sections (non-blocking)
+            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
             // Initialize lazy loading for backgrounds (skip when disabled)
-            if (!backgroundsDisabled()) initBackgroundLazyLoad(visibleSections);
+            try { if (typeof backgroundsDisabled === 'function' && !backgroundsDisabled()) initBackgroundLazyLoad(visibleSections); } catch(_) {}
             updateBackgroundToggleButton();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
             
@@ -6291,13 +6283,25 @@ Permissions:
             if (window.supabaseClient) return;
             function ensureKeys(){
                 try {
-                    // No localStorage fallbacks; keys must be provided by CONFIG/meta/constants
+                    // Populate CONFIG from meta tags or localStorage if missing
+                    if (!window.CONFIG) { window.CONFIG = {}; }
+                    var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                    var lsUrl = '';
+                    var lsKey = '';
+                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
+                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
+                    function pick(v1,v2,v3){ return (v1 && v1.trim()) || (v2 && v2.trim()) || (v3 && v3.trim()) || ''; }
+                    var url = pick(window.SUPABASE_URL || (window.CONFIG && window.CONFIG.SUPABASE_URL) || '', metaUrl, lsUrl);
+                    var key = pick(window.SUPABASE_ANON_KEY || (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY) || '', metaKey, lsKey);
+                    if (url) { window.SUPABASE_URL = url; if (!window.CONFIG.SUPABASE_URL) window.CONFIG.SUPABASE_URL = url; }
+                    if (key) { window.SUPABASE_ANON_KEY = key; if (!window.CONFIG.SUPABASE_ANON_KEY) window.CONFIG.SUPABASE_ANON_KEY = key; }
                 } catch(_) {}
             }
             function initClient(){
                 ensureKeys();
-                var SUPABASE_URL = window.SUPABASE_URL || 'https://YOUR-PROJECT-ref.supabase.co';
-                var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
+                var SUPABASE_URL = (window.SUPABASE_URL || '');
+                var SUPABASE_ANON_KEY = (window.SUPABASE_ANON_KEY || '');
                 try {
                     if (window.supabase && !window.supabaseClient) {
                         window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
@@ -6381,6 +6385,7 @@ Permissions:
                     var q = window.supabaseClient
                         .from('sections')
                         .select('section_id,name,icon,color,config')
+                        .order('config->order', { ascending: true, nullsFirst: true })
                         .order('name', { ascending: true });
                     var res = await q;
                     if (res.error) throw res.error;
