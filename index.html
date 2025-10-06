@@ -145,6 +145,23 @@
                                 if (loadingScreen) loadingScreen.style.display = 'none';
                                 if (mainContent) mainContent.style.display = 'block';
                             } catch(_) {}
+                            // Auto-upgrade to full cards (description, tabs, counts) when builder becomes available
+                            try {
+                                let tries = 0;
+                                const iv = setInterval(async () => {
+                                    tries++;
+                                    try {
+                                        if (typeof updateMainHubSections === 'function') {
+                                            try { await updateMainHubSections(); } catch(_) { /* retry */ }
+                                            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+                                            clearInterval(iv);
+                                        }
+                                    } catch(_) {}
+                                    if (tries > 40) { // ~8s max
+                                        try { clearInterval(iv); } catch(_) {}
+                                    }
+                                }, 200);
+                            } catch(_) {}
                         }
                     }
                 }
