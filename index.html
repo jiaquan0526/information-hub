@@ -743,7 +743,7 @@
                                 // Hide progress after success
                                 const progressContainer = document.querySelector('.hub-grid > div');
                                 try { if (progressContainer) progressContainer.remove(); } catch (_) {}
-                                console.timeEnd('loadSectionsFromSupabase');
+                                try { console.timeEnd('loadSectionsFromSupabase'); } catch(_) {}
                             }, 1500);
                         }, 300);
                     }, 300);
@@ -5185,7 +5185,21 @@ Permissions:
             }
             
             // Replace grid content all at once to prevent flashing
-            hubGrid.innerHTML = newContent;
+            try {
+                hubGrid.innerHTML = newContent;
+            } catch (e) {
+                console.warn('Hub grid update failed; rendering minimal cards', e);
+                try {
+                    const fallback = visibleSections.map(s => (
+                        `<div class="hub-card" data-section-id="${s.id}" onclick="navigateToSection('${s.id}')">
+                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                            <h3>${(s.name||s.id)}</h3>
+                            <p class="card-intro"></p>
+                        </div>`
+                    )).join('');
+                    hubGrid.innerHTML = fallback;
+                } catch(_) {}
+            }
             // Ensure the main UI is visible once content is ready
             try {
                 const loadingScreen = document.getElementById('loadingScreen');
@@ -5194,10 +5208,10 @@ Permissions:
                 if (mainContent) mainContent.style.display = 'block';
             } catch (_) {}
             
-            // Stats for currently built sections
-            updateSectionStats();
+            // Stats for currently built sections (non-blocking)
+            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
             // Initialize lazy loading for backgrounds (skip when disabled)
-            if (!backgroundsDisabled()) initBackgroundLazyLoad(visibleSections);
+            try { if (typeof backgroundsDisabled === 'function' && !backgroundsDisabled()) initBackgroundLazyLoad(visibleSections); } catch(_) {}
             updateBackgroundToggleButton();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
             
