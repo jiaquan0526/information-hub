@@ -118,6 +118,37 @@
                 });
             } catch (_) {}
             console.log('✅ Supabase client initialized successfully');
+
+            // Supabase-only minimal bootstrap: fetch sections and render basic cards immediately
+            try {
+                if (window.supabaseClient) {
+                    const grid = document.querySelector('.hub-grid');
+                    if (grid) {
+                        const { data: rows } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, name, icon, config')
+                            .order('config->order', { ascending: true, nullsFirst: true })
+                            .order('name', { ascending: true });
+                        const list = Array.isArray(rows) ? rows.filter(s => (s && s.config && s.config.visible === false) ? false : true) : [];
+                        if (list.length > 0 && (!grid.innerHTML || grid.innerHTML.indexOf('hub-card') === -1)) {
+                            const html = list.map(s => (
+                                `<div class="hub-card" data-section-id="${s.section_id}" onclick="navigateToSection('${s.section_id}')">
+                                    <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                                    <h3>${(s.name||s.section_id)}</h3>
+                                    <p class="card-intro"></p>
+                                </div>`
+                            )).join('');
+                            grid.innerHTML = html;
+                            try {
+                                const loadingScreen = document.getElementById('loadingScreen');
+                                const mainContent = document.getElementById('mainContent');
+                                if (loadingScreen) loadingScreen.style.display = 'none';
+                                if (mainContent) mainContent.style.display = 'block';
+                            } catch(_) {}
+                        }
+                    }
+                }
+            } catch(_) { /* best effort */ }
         };
         
         initSupabase();
@@ -2898,6 +2929,44 @@ Permissions:
                         console.log('Built hub cards on demand. Now found', hubCards.length, 'hub cards');
                     }
                 } catch (_) { /* non-blocking */ }
+            }
+
+            // If still no cards, render a minimal set directly from Supabase
+            if (!hubCards || hubCards.length === 0) {
+                try {
+                    if (window.supabaseClient) {
+                        const { data: rows, error } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, name, icon, color, config')
+                            .order('config->order', { ascending: true, nullsFirst: true })
+                            .order('name', { ascending: true });
+                        if (!error && Array.isArray(rows)) {
+                            const hubGrid = document.querySelector('.hub-grid');
+                            if (hubGrid) {
+                                const minimal = rows
+                                    .filter(s => (s && s.config && s.config.visible === false) ? false : true)
+                                    .map(s => (
+                                        `<div class="hub-card" data-section-id="${s.section_id}" onclick="navigateToSection('${s.section_id}')">
+                                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
+                                            <h3>${(s.name||s.section_id)}</h3>
+                                            <p class="card-intro"></p>
+                                        </div>`
+                                    )).join('');
+                                hubGrid.innerHTML = minimal;
+                                // hide overlay to reveal UI
+                                try {
+                                    const loadingScreen = document.getElementById('loadingScreen');
+                                    const mainContent = document.getElementById('mainContent');
+                                    if (loadingScreen) loadingScreen.style.display = 'none';
+                                    if (mainContent) mainContent.style.display = 'block';
+                                } catch(_) {}
+                                // refresh hubCards reference
+                                hubCards = document.querySelectorAll('.hub-card');
+                                console.log('Rendered minimal hub cards. Now found', hubCards.length, 'hub cards');
+                            }
+                        }
+                    }
+                } catch(_) { /* best effort */ }
             }
             
             hubCards.forEach(card => {
