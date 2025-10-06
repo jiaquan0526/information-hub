@@ -5293,12 +5293,18 @@ Permissions:
                                 return { id, name, icon };
                             }).filter(t => t.id);
                         } else {
-                            // Use configured types (not hidden) only
+                            // Use configured types (support string or object; ignore hidden when object)
                             visibleTypes = (typesArr || [])
-                                .filter(t => t && !t.hidden)
                                 .map(t => {
-                                    const id = String(t.id || t.name || '').trim();
-                                    return id ? { id, name: t.name || id, icon: t.icon || '' } : null;
+                                    if (typeof t === 'string') {
+                                        const id = String(t).trim();
+                                        return id ? { id, name: id, icon: '' } : null;
+                                    }
+                                    if (t && t.hidden) return null;
+                                    const id = String(t && (t.id || t.name) || '').trim();
+                                    const name = String((t && t.name !== undefined && t.name !== null && String(t.name).trim()) ? t.name : id).trim();
+                                    const icon = String((t && t.icon) || '').trim();
+                                    return id ? { id, name, icon } : null;
                                 })
                                 .filter(Boolean);
                             // Fallback: derive ids from tab_names if still empty
