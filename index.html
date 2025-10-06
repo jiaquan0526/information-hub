@@ -1417,7 +1417,7 @@
             }
 
             await Promise.all(sections.map(async (sectionId) => {
-                // Determine types to mirror section detail tabs with defaults
+                // Determine types to mirror section detail tabs; if none, derive from Supabase resources
                 let typesList = [];
                 try {
                     const cfg = sectionConfigById.get(sectionId);
@@ -1427,12 +1427,16 @@
                         typesList = cfg.tabs.map(x => String(x || '').trim()).filter(Boolean);
                     }
                 } catch (_) {}
-                // If nothing configured, no counts to display
+                // If nothing configured, derive from actual resources in this section
                 if (!typesList || typesList.length === 0) {
-                    return;
+                    try {
+                        const derived = await getDistinctTypesForSection(sectionId);
+                        typesList = (Array.isArray(derived) ? derived : []).map(t => String(t && t.id || '').trim()).filter(Boolean);
+                    } catch (_) { typesList = []; }
                 }
+                if (!typesList || typesList.length === 0) return;
 
-                // Query Supabase counts per type exactly as configured
+                // Query Supabase counts per type
                 await Promise.all(typesList.map(async (tid) => {
                     if (!window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
                     const dbType = String(tid || '').trim();
