@@ -1005,6 +1005,16 @@
                         window.addEventListener('beforeunload', () => { try { window.supabaseClient.removeChannel(window.__hubSectionsRt); } catch(_) {} }, { once: true });
                     }
                 } catch(_) {}
+                // Fallback: periodic refresh if Realtime is unavailable or misses events
+                try {
+                    if (!window.__hubSectionsPoller) {
+                        window.__hubSectionsPoller = setInterval(() => {
+                            try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+                        }, 60000);
+                        window.addEventListener('beforeunload', () => { try { clearInterval(window.__hubSectionsPoller); } catch(_) {} }, { once: true });
+                    }
+                } catch(_) {}
             } catch(_) {}
         }, { once: true });
 
