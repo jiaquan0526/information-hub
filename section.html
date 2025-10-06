@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"></noscript>
+    <!-- Supabase config (match index.html) -->
+    <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
+    <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
 </head>
 <body>
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
@@ -65,13 +68,33 @@
     <!-- <script src="githubData.js" defer></script> -->
     <script src="auth-script.js" defer></script>
     <script>
-        window.SUPABASE_URL = '';
-        window.SUPABASE_ANON_KEY = '';
+        // Bootstrap Supabase keys from meta/localStorage if globals are empty
+        (function(){
+            try {
+                var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                var lsUrl = ''; var lsKey = '';
+                try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
+                try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
+                window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || lsUrl || '';
+                window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || lsKey || '';
+            } catch(_) {}
+        })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
         (function(){
-            function ensureKeys(){ /* no-op: keys must be provided on window */ }
+            function ensureKeys(){
+                try {
+                    var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                    var lsUrl = ''; var lsKey = '';
+                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
+                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
+                    window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || lsUrl || '';
+                    window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || lsKey || '';
+                } catch(_) {}
+            }
             function initClient(){
                 ensureKeys();
                 try {
@@ -79,9 +102,8 @@
                         window.supabaseClient = window.supabase.createClient(
                             window.SUPABASE_URL,
                             window.SUPABASE_ANON_KEY,
-                            { auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: true } }
+                            { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
                         );
-                        // If tokens are present in URL (Supabase-compatible names), set session, then clean URL
                         (async function setSessionFromUrl(){
                             try {
                                 const u = new URL(window.location.href);
@@ -97,10 +119,16 @@
                                 }
                             } catch(_) {}
                         })();
+                        // Reveal UI early to avoid spinner hang
+                        try {
+                            const loadingEl = document.getElementById('loadingScreen');
+                            const contentEl = document.getElementById('mainContent');
+                            if (loadingEl) loadingEl.style.display = 'none';
+                            if (contentEl) contentEl.style.display = 'block';
+                        } catch(_) {}
                     }
                 } catch (e) { console.warn('Supabase init (section) failed', e); }
             }
-            // No alternate CDN fallbacks; require primary script tag
             if (!(window.supabase && window.supabase.createClient)) { console.error('Supabase library not available'); } else { initClient(); }
         })();
     </script>
