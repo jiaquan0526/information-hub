@@ -2854,8 +2854,19 @@ Permissions:
             
             console.log('Final allowed sections for', user.username, ':', allowedSections);
             
-            const hubCards = document.querySelectorAll('.hub-card');
+            let hubCards = document.querySelectorAll('.hub-card');
             console.log('Found', hubCards.length, 'hub cards');
+            // If no cards are present yet, build them now and retry
+            if (!hubCards || hubCards.length === 0) {
+                try {
+                    if (typeof updateMainHubSections === 'function') {
+                        await updateMainHubSections();
+                        // Re-query after build
+                        hubCards = document.querySelectorAll('.hub-card');
+                        console.log('Built hub cards on demand. Now found', hubCards.length, 'hub cards');
+                    }
+                } catch (_) { /* non-blocking */ }
+            }
             
             hubCards.forEach(card => {
                 try {
