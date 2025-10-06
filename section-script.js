@@ -74,34 +74,23 @@ class SectionManager {
         } catch (_) {}
     }
 
-    // Content activity logger (Supabase-only)
+    // Content activity logger (records to activities table via wrapper)
     async logContentActivity(action, resourceType, title) {
         try {
-            if (!window.supabaseClient) return;
-            const mapped = String(action || 'updated').toUpperCase();
-            const payload = {
+            if (!window.hubDatabase || !window.hubDatabaseReady) return;
+            const upper = String(action || 'updated').toUpperCase();
+            const mapped = upper === 'CREATED' ? 'CREATE_RESOURCE'
+                : upper === 'UPDATED' ? 'UPDATE_RESOURCE'
+                : upper === 'DELETED' ? 'DELETE_RESOURCE'
+                : upper;
+            await hubDatabase.addActivity({
                 action: mapped,
-                resourceId: null,
-                section: this.currentSection || null,
-                title: title || '',
                 type: resourceType || '',
+                title: title || '',
+                section: this.currentSection || null,
                 username: (this.currentUser && (this.currentUser.username || this.currentUser.email)) || null,
                 timestamp: new Date().toISOString()
-            };
-            // Use activities table directly
-            try {
-                await window.supabaseClient.from('activities').insert({
-                    action: payload.action,
-                    section_id: payload.section,
-                    resource_id: payload.resourceId,
-                    metadata: {
-                        username: payload.username,
-                        title: payload.title,
-                        type: payload.type
-                    },
-                    timestamp: new Date(payload.timestamp)
-                });
-            } catch (_) {}
+            });
         } catch (_) {}
     }
 
@@ -151,8 +140,12 @@ class SectionManager {
 		// Do not auto-infer tabs from resources; show blank until configured in Supabase
         this.bindEvents();
         this.renderDynamicUI();
-        // One-time fetch on init only; further updates are manual via Refresh
+        // Asynchronously refresh section config from Supabase so all users share the same tabs
         try { this._refreshSectionConfigFromDb(); } catch (_) {}
+        // Periodic auto-refresh from Supabase to keep view fresh
+        try { this._setupAutoRefresh(); } catch (_) {}
+        // Realtime: subscribe to resources/config for this section
+        try { this._setupRealtime(); } catch (_) {}
         // Ensure filters are cleared on entry to avoid stale search/category narrowing results
         try {
             const searchInput = document.getElementById('searchInput');
@@ -316,7 +309,15 @@ class SectionManager {
         const iconEl = document.getElementById('sectionIcon');
         if (nameEl) {
             const nm = (sectionConfig && sectionConfig.name) ? String(sectionConfig.name).trim() : '';
-            nameEl.textContent = nm;
+            // Fallback to readable section id if name missing
+            try {
+                const fallbackName = String(this.currentSection || 'Section')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\b\w/g, c => c.toUpperCase());
+                nameEl.textContent = nm || fallbackName;
+            } catch (_) {
+                nameEl.textContent = nm || (this.currentSection || 'Section');
+            }
         }
         if (iconEl) {
             const icn = sectionConfig && sectionConfig.icon ? String(sectionConfig.icon).trim() : '';
@@ -356,17 +357,24 @@ class SectionManager {
 
         // Apply persistent background image per section (deterministic and global-seed based)
         try {
-            // Determine enablement via Supabase only
+            // Determine enablement via Supabase (fallback to hub page flag)
             let enabled = false;
             try {
-                if (window.supabaseClient && window.supabaseClient.from) {
-                    const { data } = await window.supabaseClient
-                        .from('site_settings')
-                        .select('value')
-                        .eq('key', 'backgrounds')
-                        .single();
-                    const v = data && data.value;
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.getSiteSetting === 'function') {
+                    const v = await hubDatabase.getSiteSetting('backgrounds');
                     enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                } else if (window.supabaseClient && window.supabaseClient.from) {
+                    try {
+                        const { data } = await window.supabaseClient
+                            .from('site_settings')
+                            .select('value')
+                            .eq('key', 'backgrounds')
+                            .single();
+                        const v = data && data.value;
+                        enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                    } catch (_) {}
+                } else if (typeof window.globalBackgroundsEnabled !== 'undefined') {
+                    enabled = window.globalBackgroundsEnabled === true;
                 }
             } catch (_) { enabled = false; }
             const disable = !enabled;
@@ -374,17 +382,24 @@ class SectionManager {
             // Deterministic list built from manifest, filtered and sorted
             const loadImages = async () => {
                 try {
-                    const bust = Date.now();
-                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
-                    if (resp && resp.ok) {
-                        const data = await resp.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            return data.map(p => `background-pic/${p}`).sort();
+                    // Fallback to fetching manifest.json
+                    try {
+                        const bust = Date.now();
+                        const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                        if (resp && resp.ok) {
+                            const data = await resp.json();
+                            if (Array.isArray(data) && data.length > 0) {
+                                return data.map(p => `background-pic/${p}`).sort();
+                            }
                         }
-                    }
-                } catch (_) {}
-                // No background images if manifest is missing or empty
-                return [];
+                    } catch (_) {}
+                    // Final fallback static list
+                    return [
+                        'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                        'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
+                        'background-pic/537082_K.png','background-pic/560846_L.png'
+                    ].sort();
+                } catch (_) { return []; }
             };
             const images = await loadImages();
             if (container && Array.isArray(images) && images.length > 0) {
@@ -571,9 +586,15 @@ class SectionManager {
             this._sectionSessionLogged = true;
             const durationMs = Date.now() - (this.sectionSessionStartMs || Date.now());
             try {
-                if (window.supabaseClient && this.currentUser) {
+                if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
                     const desc = `Closed section ${this.currentSection} after ${Math.round(durationMs/1000)}s`;
-                    try { window.supabaseClient.from('activities').insert({ action: 'CLOSE_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
+                    this._safeDbCall(hubDatabase.saveActivity({
+                        action: 'CLOSE_SECTION',
+                        section: this.currentSection,
+                        description: desc,
+                        timestamp: new Date().toISOString(),
+                        username: this.currentUser.username || this.currentUser.email || null
+                    }), 1200);
                 }
             } catch (_) {}
         };
@@ -583,9 +604,15 @@ class SectionManager {
         });
         // Log open
         try {
-            if (window.supabaseClient && this.currentUser) {
+            if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
                 const desc = `Opened section ${this.currentSection}`;
-                try { window.supabaseClient.from('activities').insert({ action: 'OPEN_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
+                this._safeDbCall(hubDatabase.saveActivity({
+                    action: 'OPEN_SECTION',
+                    section: this.currentSection,
+                    description: desc,
+                    timestamp: new Date().toISOString(),
+                    username: this.currentUser.username || this.currentUser.email || null
+                }), 1200);
             }
         } catch (_) {}
     }
@@ -626,27 +653,8 @@ class SectionManager {
     }
 
 	renderCurrentTab() {
-		let tab = this.currentTab;
-		if (!tab) {
-			const firstSection = document.querySelector('.content-section.active') || document.querySelector('.content-section');
-			if (firstSection && firstSection.id) {
-				tab = firstSection.id.replace(/-section$/, '');
-				this.currentTab = tab;
-			}
-		}
-		if (!tab) return;
-		let grid = document.getElementById(`${tab.replace('-', '-')}-grid`);
-		if (!grid) {
-			const firstSection = document.querySelector('.content-section');
-			if (firstSection && firstSection.id) {
-				const fallback = firstSection.id.replace(/-section$/, '');
-				this.currentTab = fallback;
-				grid = document.getElementById(`${fallback.replace('-', '-')}-grid`);
-				tab = fallback;
-			}
-		}
-		if (!tab) return;
-		this.renderResources(tab);
+		if (!this.currentTab) return;
+		this.renderResources(this.currentTab);
 	}
 
     async renderResources(type) {
@@ -667,16 +675,7 @@ class SectionManager {
             const resources = await this.getResources(type);
             // Rebuild category options based on the current tab's resources
             try { this._populateCategoryFilterFromResources(resources); } catch (_) {}
-            let filteredResources = this.getFilteredResources(resources);
-            // If a non-empty category filter yields no results, clear it once to avoid a blank view
-            try {
-                const catSel = document.getElementById('categoryFilter');
-                const hasCat = !!(catSel && String(catSel.value || '').trim());
-                if (hasCat && filteredResources.length === 0) {
-                    catSel.value = '';
-                    filteredResources = this.getFilteredResources(resources);
-                }
-            } catch (_) {}
+            const filteredResources = this.getFilteredResources(resources);
             if (filteredResources.length === 0) {
                 grid.style.display = 'none';
                 emptyState.style.display = 'block';
@@ -714,8 +713,10 @@ class SectionManager {
 
     async getSectionData() {
         try {
-            // Supabase-only: no local hubDatabase fallback
-            return { playbooks: [], boxLinks: [], dashboards: [] };
+            const section = window.hubDatabase && hubDatabase.getSection
+                ? await this._safeDbFetch(hubDatabase.getSection(this.currentSection), 1500, null)
+                : null;
+            return section ? section.data : { playbooks: [], boxLinks: [], dashboards: [] };
         } catch (error) {
             console.error('Error loading section data:', error);
             return { playbooks: [], boxLinks: [], dashboards: [] };
@@ -763,7 +764,7 @@ class SectionManager {
                 </div>
                 
                 <div class="resource-footer">
-                    ${resource.createdAt ? `<span>Added: ${new Date(resource.createdAt).toLocaleDateString()}</span>` : ''}
+                    <span>Added: ${new Date(resource.createdAt).toLocaleDateString()}</span>
                     <div>
                         ${canEdit ? `
                             <button class="action-btn edit-btn" onclick="editResource('${type}', '${resource.id}')" title="Edit">
@@ -795,16 +796,29 @@ class SectionManager {
                     const uid = (u && u.data && u.data.user && u.data.user.id) ? u.data.user.id : null;
                     await window.supabaseClient.rpc('increment_view', { p_user_id: uid, p_resource_id: resourceId });
                 }
-                // Audit: record resource open with details (non-blocking, Supabase-only)
+                // Audit: record resource open with details (non-blocking)
                 try {
-                    if (window.supabaseClient && this.currentUser) {
+                    if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
                         const titleEl = card.querySelector('.resource-title');
                         const typeEl = card.querySelector('.resource-type');
                         const title = titleEl ? String(titleEl.textContent || '').trim() : '';
                         const typeLabel = typeEl ? String(typeEl.textContent || '').trim() : '';
                         const href = anchor && anchor.getAttribute('href') ? String(anchor.getAttribute('href')).trim() : '';
-                        const meta = { title, description: title || '', type: typeLabel, url: href, section: this.currentSection };
-                        await window.supabaseClient.from('activities').insert({ action: 'OPEN_RESOURCE', resource_id: resourceId, section_id: this.currentSection, metadata: meta, timestamp: new Date() });
+                        const meta = {
+                            title,
+                            description: title || '',
+                            type: typeLabel,
+                            url: href,
+                            section: this.currentSection
+                        };
+                        this._safeDbCall(hubDatabase.saveActivity({
+                            action: 'OPEN_RESOURCE',
+                            resourceId,
+                            section: this.currentSection,
+                            timestamp: new Date().toISOString(),
+                            username: this.currentUser.username || this.currentUser.email || null,
+                            metadata: meta
+                        }), 1200);
                     }
                 } catch (_) {}
             } catch (_) {}
@@ -844,14 +858,13 @@ class SectionManager {
                     .filter(Boolean)
             ));
             const normCats = Array.from(new Set(cats.map(c => c.toLowerCase()))).sort();
-            // Preserve current selection even if not present in current resource set
-            if (current && !normCats.includes(current)) {
-                normCats.unshift(current);
-            }
             const toLabel = (c) => c.charAt(0).toUpperCase() + c.slice(1);
             const options = ['<option value="">All Categories</option>']
                 .concat(normCats.map(c => `<option value="${this.escapeHtml(c)}"${current === c ? ' selected' : ''}>${this.escapeHtml(toLabel(c))}</option>`));
             sel.innerHTML = options.join('');
+            if (current && !normCats.includes(current)) {
+                sel.value = '';
+            }
         } catch (_) {}
     }
 
@@ -1310,29 +1323,21 @@ class SectionManager {
     }
     _normalizeResourceRow(row, uiType) {
         try {
-            // Robustly extract category from extra (object or JSON string) with legacy fallbacks
-            let extra = row.extra;
-            if (typeof extra === 'string') {
-                try { extra = JSON.parse(extra); } catch (_) { extra = {}; }
-            }
-            if (!extra || typeof extra !== 'object') extra = {};
-            const resolvedCategory = (extra && extra.category != null) ? extra.category : '';
-
             return {
                 id: row.id,
                 title: row.title || '',
                 description: row.description || '',
                 url: row.url || '',
                 tags: Array.isArray(row.tags) ? row.tags : [],
-                category: resolvedCategory || '',
-                createdAt: row.created_at || row.createdAt || null,
-                updatedAt: row.updated_at || row.updatedAt || null,
+                category: (row.extra && row.extra.category) ? row.extra.category : '',
+                createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+                updatedAt: row.updated_at || row.updatedAt || undefined,
                 userId: row.created_by || row.user_id || row.userId || null,
                 type: uiType,
                 section_name: (row.sections && row.sections.name) ? row.sections.name : undefined
             };
         } catch (_) {
-            return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: null, type: uiType };
+            return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: new Date().toISOString(), type: uiType };
         }
     }
     isValidUrl(string) {
@@ -1472,9 +1477,19 @@ class SectionManager {
                 }
             } catch (_) {}
 
-            // Supabase-only upsert with merged config
-            {
-                if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            // Use wrapper first
+            let writeOk = false;
+            let lastErr = null;
+            try {
+                if (window.hubDatabase && window.hubDatabaseReady && typeof hubDatabase.saveSectionConfig === 'function') {
+                    await hubDatabase.saveSectionConfig(this.currentSection, merged);
+                    writeOk = true;
+                }
+            } catch (we) { lastErr = we; }
+
+            // Fallback: direct upsert with merged config
+            if (!writeOk) {
+                if (!window.supabaseClient) throw (lastErr || new Error('Supabase unavailable'));
                 // Ensure required non-null columns (e.g., name) are present on insert
                 let ensure = {};
                 try {
@@ -1496,6 +1511,7 @@ class SectionManager {
                     .from('sections')
                     .upsert(payload, { onConflict: 'section_id' });
                 if (upErr) throw upErr;
+                writeOk = true;
             }
 
             // Verify persisted value matches (best-effort)
@@ -1645,16 +1661,11 @@ class SectionManager {
 					}
 				}
 			}
-        // Render category filter (normalize values and preserve selection)
+        // Render category filter
         const catSel = document.getElementById('categoryFilter');
         if (catSel) {
-            const current = String(catSel.value || '').trim().toLowerCase();
-            const cats = (this.sectionConfig.categories || []).map(c => String(c || '').trim()).filter(Boolean);
-            const normCats = Array.from(new Set(cats.map(c => c.toLowerCase())));
-            if (current && !normCats.includes(current)) normCats.unshift(current);
-            const toLabel = (c) => c.charAt(0).toUpperCase() + c.slice(1);
             const options = ['<option value="">All Categories</option>'].concat(
-                normCats.map(c => `<option value="${this.escapeHtml(c)}"${current === c ? ' selected' : ''}>${this.escapeHtml(toLabel(c))}</option>`) 
+                (this.sectionConfig.categories || []).map(c => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c.charAt(0).toUpperCase()+c.slice(1))}</option>`) 
             );
             catSel.innerHTML = options.join('');
         }
@@ -1922,11 +1933,11 @@ class SectionManager {
 				const ok = await this.saveSectionConfig(cfgMerged);
             if (!ok) { showAlert('Failed to save configuration', 'error'); return; }
 				// Record tab activities (create/update/delete) to activities table
-                try {
-                    if (window.supabaseClient && this.currentUser) {
-                        const prevIds = Array.isArray(existingCfg.tabs) ? existingCfg.tabs.map(s => String(s || '').trim()).filter(Boolean) : [];
-                        const prevNamesArr = Array.isArray(existingCfg.tab_names) ? existingCfg.tab_names.map(s => String(s || '').trim()) : [];
-                        const prevTypesArr = Array.isArray(existingCfg.types) ? existingCfg.types : [];
+				try {
+					if (window.hubDatabase && typeof hubDatabase.saveActivity === 'function' && this.currentUser) {
+						const prevIds = Array.isArray(existingCfg.tabs) ? existingCfg.tabs.map(s => String(s || '').trim()).filter(Boolean) : [];
+						const prevNamesArr = Array.isArray(existingCfg.tab_names) ? existingCfg.tab_names.map(s => String(s || '').trim()) : [];
+						const prevTypesArr = Array.isArray(existingCfg.types) ? existingCfg.types : [];
 						const prevNameById = new Map();
 						prevIds.forEach((id, idx) => {
 							let nm = prevNamesArr[idx];
@@ -1951,30 +1962,48 @@ class SectionManager {
 						const uname = this.currentUser.username || this.currentUser.email || null;
 						const sid = this.currentSection;
 
-                        // Creates
-                        nextIds.forEach(async (id) => {
-                            if (!prevSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, name: nextNameById.get(id) || id, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
-                            }
-                        });
+						// Creates
+						nextIds.forEach(id => {
+							if (!prevSet.has(id)) {
+								this._safeDbCall(hubDatabase.saveActivity({
+									action: 'CREATE_TAB',
+									section: sid,
+									timestamp: ts,
+									username: uname,
+									metadata: { tabId: id, name: nextNameById.get(id) || id }
+								}), 1200);
+							}
+						});
 
-                        // Deletions
-                        prevIds.forEach(async (id) => {
-                            if (!nextSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, name: prevNameById.get(id) || id, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
-                            }
-                        });
+						// Deletions
+						prevIds.forEach(id => {
+							if (!nextSet.has(id)) {
+								this._safeDbCall(hubDatabase.saveActivity({
+									action: 'DELETE_TAB',
+									section: sid,
+									timestamp: ts,
+									username: uname,
+									metadata: { tabId: id, name: prevNameById.get(id) || id }
+								}), 1200);
+							}
+						});
 
-                        // Renames (ids unchanged, name changed)
-                        nextIds.forEach(async (id) => {
-                            if (prevSet.has(id)) {
-                                const oldName = prevNameById.get(id) || id;
-                                const newName = nextNameById.get(id) || id;
-                                if (String(oldName).trim() !== String(newName).trim()) {
-                                    try { await window.supabaseClient.from('activities').insert({ action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
-                                }
-                            }
-                        });
+						// Renames (ids unchanged, name changed)
+						nextIds.forEach(id => {
+							if (prevSet.has(id)) {
+								const oldName = prevNameById.get(id) || id;
+								const newName = nextNameById.get(id) || id;
+								if (String(oldName).trim() !== String(newName).trim()) {
+									this._safeDbCall(hubDatabase.saveActivity({
+										action: 'UPDATE_TAB',
+										section: sid,
+										timestamp: ts,
+										username: uname,
+										metadata: { tabId: id, oldName, newName }
+									}), 1200);
+								}
+							}
+						});
 					}
 				} catch (_) { /* best-effort logging; ignore */ }
             // Seed example resources for any types that have none yet in Supabase
@@ -2005,11 +2034,42 @@ class SectionManager {
     _setupAutoRefresh() {
         // Avoid duplicate timers
         if (this._ghRefreshTimer) try { clearInterval(this._ghRefreshTimer); } catch(_) {}
-        // Disabled auto-refresh per requirement; rely on manual refresh
+        const tick = async () => {
+            try {
+                // Skip heavy work if tab not visible
+                if (document.hidden) return;
+                // Refresh config (types/categories) and re-render tabs if changed
+                await this._refreshSectionConfigFromDb();
+                // Refresh currently visible tab resources
+                await this.renderCurrentTab();
+            } catch (_) {}
+        };
+        // First delayed run to avoid contention at load
+        setTimeout(tick, 2000);
+        this._ghRefreshTimer = setInterval(tick, 60000);
+        // Clean up on unload
+        window.addEventListener('beforeunload', () => { try { clearInterval(this._ghRefreshTimer); } catch(_) {} });
+        document.addEventListener('visibilitychange', () => { /* opportunistic tick on return */ if (!document.hidden) setTimeout(() => tick().catch(()=>{}), 250); });
     }
 
     _setupRealtime() {
-        // Disabled realtime per requirement; rely on manual refresh
+        try {
+            if (!window.supabaseClient) return;
+            if (this._rtCh) { try { window.supabaseClient.removeChannel(this._rtCh); } catch(_) {} }
+            const sid = this.currentSection;
+            const ch = window.supabaseClient
+                .channel('section-' + sid)
+				.on('postgres_changes', { event: '*', schema: 'public', table: 'resources', filter: 'section_id=eq.' + sid }, async () => {
+					// Do not auto-add tabs from resources; only refresh current tab content if one is selected
+					try { await this.renderCurrentTab(); } catch(_) {}
+				})
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter: 'section_id=eq.' + sid }, async () => {
+                    try { await this._refreshSectionConfigFromDb(); } catch(_) {}
+                })
+                .subscribe();
+            this._rtCh = ch;
+            window.addEventListener('beforeunload', () => { try { window.supabaseClient.removeChannel(ch); } catch(_) {} }, { once: true });
+        } catch (_) {}
     }
 }
 

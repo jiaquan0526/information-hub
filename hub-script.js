@@ -529,8 +529,7 @@ class InformationHub {
                 (resource.tags && resource.tags.some(tag => tag.toLowerCase().includes(searchTerm))) ||
                 resource.url.toLowerCase().includes(searchTerm);
 
-            const cat = (resource && resource.extra && resource.extra.category) ? String(resource.extra.category).trim() : (resource.category || '');
-            const matchesCategory = !categoryFilter || String(cat).toLowerCase() === String(categoryFilter).toLowerCase();
+            const matchesCategory = !categoryFilter || resource.category === categoryFilter;
 
             return matchesSearch && matchesCategory;
         });
@@ -557,7 +556,7 @@ class InformationHub {
             description: description || '',
             url: url,
             tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-            extra: { category: 'process' },
+            category: 'process',
             createdAt: new Date().toISOString()
         };
 
@@ -725,7 +724,7 @@ class InformationHub {
         return (playbookTemplates[sectionId] || []).map(playbook => ({
             ...playbook,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            extra: { category: 'process' },
+            category: 'process',
             createdAt: new Date().toISOString()
         }));
     }
@@ -740,7 +739,7 @@ class InformationHub {
         return (boxLinkTemplates[sectionId] || []).map(link => ({
             ...link,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            extra: { category: 'process' },
+            category: 'process',
             createdAt: new Date().toISOString()
         }));
     }
@@ -755,7 +754,7 @@ class InformationHub {
         return (dashboardTemplates[sectionId] || []).map(dashboard => ({
             ...dashboard,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            extra: { category: 'process' },
+            category: 'process',
             createdAt: new Date().toISOString()
         }));
     }
@@ -1854,7 +1853,7 @@ async function __upsertExcelPayload(payload) {
                 description: r.description || '',
                 url: r.url || null,
                 tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : []),
-                extra: { category: String(r.category || '').trim(), originalType: originalType || null, originalTitle: generatedTitle ? (r.title || '') : undefined }
+                extra: { category: r.category || '', originalType: originalType || null, originalTitle: generatedTitle ? (r.title || '') : undefined }
             };
             const { error } = await window.supabaseClient.from('resources').insert(payloadRow);
             if (error) throw error;
@@ -2070,7 +2069,7 @@ window.importJsonSectionsTabsResources = async () => {
                                 title,
                                 description: r.description || '',
                                 url: r.url || '',
-                                category: (r.extra && r.extra.category) ? r.extra.category : '',
+                                category: (r.extra && r.extra.category) ? r.extra.category : (r.category || ''),
                                 tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : [])
                             });
                         });
@@ -2087,7 +2086,7 @@ window.importJsonSectionsTabsResources = async () => {
                                     title,
                                     description: r.description || '',
                                     url: r.url || '',
-                                    category: (r.extra && r.extra.category) ? r.extra.category : '',
+                                    category: (r.extra && r.extra.category) ? r.extra.category : (r.category || ''),
                                     tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? r.tags.split(',').map(s=>s.trim()).filter(Boolean) : [])
                                 });
                             });

@@ -219,10 +219,8 @@ class HubDatabase {
         try {
             const client = window.supabaseClient || this.supabase;
             if (!client) throw new Error('Supabase client not ready');
-            // Prefer explicit config.order, then name, fallback to section_id, then no ordering
-            let resp = await client.from('sections').select('*')
-                .order('config->order', { ascending: true, nullsFirst: true })
-                .order('name', { ascending: true });
+            // Prefer name, fallback to section_id, then no ordering
+            let resp = await client.from('sections').select('*').order('name', { ascending: true });
             if (resp.error) {
                 resp = await client.from('sections').select('*').order('section_id', { ascending: true });
             }
@@ -785,8 +783,12 @@ class HubDatabase {
                 .from('site_settings')
                 .select('value')
                 .eq('key', key)
-                .maybeSingle();
-            if (error) throw error;
+                .single();
+            if (error) {
+                // If no rows, return null instead of throwing
+                if (String(error.message || '').toLowerCase().includes('no rows')) return null;
+                throw error;
+            }
             if (!data) return null;
             let v = data.value || null;
             try {
