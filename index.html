@@ -5097,6 +5097,31 @@ Permissions:
             } catch (_) { return String(raw || '').toLowerCase(); }
         }
         function iconForType() { return 'fas fa-folder'; }
+        // Derive distinct resource types for a section directly from Supabase
+        async function getDistinctTypesForSection(sectionId) {
+            try {
+                if (!window.supabaseClient) return [];
+                const { data, error } = await window.supabaseClient
+                    .from('resources')
+                    .select('type')
+                    .eq('section_id', sectionId)
+                    .not('type', 'is', null)
+                    .limit(2000);
+                if (error) throw error;
+                const seen = new Set();
+                const types = [];
+                (Array.isArray(data) ? data : []).forEach(r => {
+                    const raw = (r && r.type !== undefined && r.type !== null) ? String(r.type).trim() : '';
+                    if (!raw) return;
+                    const id = raw;
+                    const key = id.toLowerCase();
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    types.push({ id, name: id, icon: '' });
+                });
+                return types;
+            } catch (_) { return []; }
+        }
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
@@ -5134,12 +5159,24 @@ Permissions:
                 if (!window.supabaseClient) {
                     console.error('Supabase client not available');
                 } else {
-                    const { data: sections, error } = await window.supabaseClient
-                        .from('sections')
-                        .select('*')
-                        .order('config->order', { ascending: true, nullsFirst: true })
-                        .order('name', { ascending: true });
-                    if (error) throw error;
+                    let sections = [];
+                    try {
+                        const resp = await window.supabaseClient
+                            .from('sections')
+                            .select('*')
+                            .order('config->order', { ascending: true, nullsFirst: true })
+                            .order('name', { ascending: true });
+                        if (resp.error) throw resp.error;
+                        sections = resp.data || [];
+                    } catch (orderErr) {
+                        console.warn('Order by config->order failed; retry by name only', orderErr);
+                        const resp2 = await window.supabaseClient
+                            .from('sections')
+                            .select('*')
+                            .order('name', { ascending: true });
+                        if (resp2.error) throw resp2.error;
+                        sections = resp2.data || [];
+                    }
                     const rows = (Array.isArray(sections) ? sections : []).map(s => {
                         let cfg = s && s.config ? s.config : {};
                         if (typeof cfg === 'string') {
@@ -5184,7 +5221,7 @@ Permissions:
                 id: section.section_id || section.id,
                 name: section.name,
                 description: section.description,
-                intro: (section.config && typeof section.config.intro === 'string') ? section.config.intro : '',
+                intro: (() => { try { const ci = section && section.config && section.config.intro; if (typeof ci === 'string' && ci.trim()) return ci; } catch(_) {} const d = section && section.description; return (typeof d === 'string') ? d : ''; })(),
                 icon: section.icon || 'fas fa-th-large',
                 image: section.image,
                 visible: !(section.config && section.config.visible === false),
@@ -5272,9 +5309,9 @@ Permissions:
                         }
                         typesList = visibleTypes;
                     } catch (_) {}
-                    // If nothing configured, show nothing (follow exactly from Supabase config)
+                    // If nothing configured, derive from actual resources for this section
                     if (!typesList || typesList.length === 0) {
-                        typesList = [];
+                        try { typesList = await getDistinctTypesForSection(section.id); } catch(_) { typesList = []; }
                     }
                     // Do not auto-augment; mirror only the configured tabs (or robust defaults)
 
