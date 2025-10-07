@@ -720,7 +720,23 @@
                 console.warn('[Hub] No authenticated user; proceeding as guest');
             }
                 
-                updateHubProgress(`✅ Authenticated as ${user.email}`, 35);
+                updateHubProgress(`✅ Authenticated as ${user?.email || 'Guest'}`, 35);
+                
+                // Ensure Supabase client is ready before DB checks
+                try {
+                    let __tries = 0;
+                    while (!(window.supabaseClient && typeof window.supabaseClient.from === 'function') && __tries < 50) {
+                        try { if (typeof window.ensureSupabaseClient === 'function') { await window.ensureSupabaseClient(); } } catch(_) {}
+                        await new Promise(r => setTimeout(r, 100));
+                        __tries++;
+                    }
+                    if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
+                        console.error('[Hub] Supabase client not ready');
+                        updateHubProgress('❌ Supabase client not ready', 100);
+                        setTimeout(() => showFallbackSections(), 2000);
+                        return;
+                    }
+                } catch(_) {}
                 
                 // Test database connection (lightweight, correct count usage)
                 updateHubProgress('Testing database connection...', 40);
