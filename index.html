@@ -108,6 +108,11 @@
                 if (window.supabaseClient && window.supabaseClient.auth) {
                     window.supabaseClient.auth.onAuthStateChange((event, session) => {
                         console.log('[AuthStateChange]', event, session && session.user ? session.user.email : null);
+                        try {
+                            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+                                if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                            }
+                        } catch(_) {}
                     });
                 }
             } catch (_) {}
@@ -5142,6 +5147,14 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
                     if (loadingScreen) loadingScreen.style.display = 'none';
                     if (mainContent) mainContent.style.display = 'block';
                 } catch (_) {}
+                // Limited retries in case Supabase session/permissions finalize moments later
+                try {
+                    if (!window.__hubEmptyRetries) window.__hubEmptyRetries = 0;
+                    if (window.__hubEmptyRetries < 3) {
+                        window.__hubEmptyRetries++;
+                        setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 800);
+                    }
+                } catch(_) {}
                 isUpdatingSections = false;
                 return;
             }
