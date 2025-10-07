@@ -28,6 +28,24 @@
     <!-- Load Supabase and config -->
     <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
     <script src="config.js"></script>
+    <!-- Ensure Supabase singleton is available early on the hub page -->
+    <script src="database-supabase.js" defer></script>
+    <script>
+    // Fallback: derive CONFIG from meta if config.js not present or didn't set it
+    (function(){
+        if (!window.CONFIG) {
+            try {
+                const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                if (metaUrl && metaKey) window.CONFIG = { SUPABASE_URL: metaUrl, SUPABASE_ANON_KEY: metaKey };
+            } catch(_) {}
+        }
+        // Initialize client as soon as possible
+        document.addEventListener('DOMContentLoaded', async () => {
+            try { await (window.ensureSupabaseClient && window.ensureSupabaseClient()); } catch(_) {}
+        });
+    })();
+    </script>
     
     <script>
     // Initialize Supabase client immediately after config loads
