@@ -755,16 +755,27 @@
                 
                 // Fetch sections from Supabase
                 updateHubProgress('Fetching sections from database...', 60);
-                const { data: sections, error } = await window.supabaseClient
-                    .from('sections')
-                    .select('section_id, name, icon, color, config')
-                    .order('config->order', { ascending: true, nullsFirst: true })
-                    .order('name', { ascending: true });
-                
-                if (error) {
-                    console.error('[Hub] Error fetching sections:', error);
-                    updateHubProgress('❌ Error loading sections: ' + error.message, 100);
-                    return;
+                let sections = [];
+                try {
+                    const resp = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id, name, icon, color, config')
+                        .order('config->order', { ascending: true, nullsFirst: true })
+                        .order('name', { ascending: true });
+                    if (resp.error) throw resp.error;
+                    sections = resp.data || [];
+                } catch (orderErr) {
+                    console.warn('[Hub] Order by config->order failed; retrying by name only', orderErr);
+                    const fallback = await window.supabaseClient
+                        .from('sections')
+                        .select('section_id, name, icon, color, config')
+                        .order('name', { ascending: true });
+                    if (fallback.error) {
+                        console.error('[Hub] Error fetching sections (fallback):', fallback.error);
+                        updateHubProgress('❌ Error loading sections: ' + fallback.error.message, 100);
+                        return;
+                    }
+                    sections = fallback.data || [];
                 }
                 
                 console.log('[Hub] Sections loaded:', { count: (sections||[]).length, sample: (sections||[])[0] });
