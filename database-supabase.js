@@ -73,7 +73,7 @@ class HubDatabase {
 			let retries = 0;
 			const maxRetries = 100; // 20 seconds max wait
 			while (retries < maxRetries && !(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
-				try { await ensureSupabaseClient(); } catch(_) {}
+				if (!window.DISABLE_FAILSAFES) { try { await ensureSupabaseClient(); } catch(_) {} }
 				if (window.supabaseClient) break;
 				console.log('Waiting for Supabase client...', retries + 1);
 				await new Promise(resolve => setTimeout(resolve, 200));

@@ -33,6 +33,7 @@
     // Initialize Supabase client immediately after config loads
     document.addEventListener('DOMContentLoaded', () => {
         console.log('Initializing Supabase client...');
+        try { if (typeof window.DISABLE_FAILSAFES === 'undefined') window.DISABLE_FAILSAFES = false; } catch(_) {}
         
         // Wait for Supabase library to load
         const initSupabase = async () => {
@@ -63,7 +64,7 @@
             let attempts = 0;
             while (!window.supabase && attempts < 50) {
                 console.log('Waiting for Supabase library...', attempts + 1);
-                try { await ensureSupabaseLibrary(); } catch(_) {}
+                if (!window.DISABLE_FAILSAFES) { try { await ensureSupabaseLibrary(); } catch(_) {} }
                 await new Promise(resolve => setTimeout(resolve, 100));
                 attempts++;
             }
@@ -125,7 +126,7 @@
                 window.SUPABASE_URL = window.CONFIG.SUPABASE_URL;
                 window.SUPABASE_ANON_KEY = window.CONFIG.SUPABASE_ANON_KEY;
             } catch (_) {}
-            try { await window.ensureSupabaseClient?.(); } catch (_) {}
+            if (!window.DISABLE_FAILSAFES) { try { await window.ensureSupabaseClient?.(); } catch (_) {} }
             try {
                 if (window.supabaseClient && window.supabaseClient.auth) {
                     window.supabaseClient.auth.onAuthStateChange((event, session) => {
@@ -595,16 +596,15 @@
             if (typeof window.informationHub === 'undefined') {
                 console.error('hub-script.js failed to load after waiting');
                 // Graceful fallback: hide overlay and load sections directly via Supabase
-                try {
+                if (!window.DISABLE_FAILSAFES) try {
                     const loadingScreen = document.getElementById('loadingScreen');
                     const mainContent = document.getElementById('mainContent');
                     if (loadingScreen) loadingScreen.style.display = 'none';
                     if (mainContent) mainContent.style.display = 'block';
                 } catch (_) {}
-                try {
-                    await loadSectionsFromSupabase();
-                } catch (e) {
-                    console.error('Fallback section load failed:', e);
+                if (!window.DISABLE_FAILSAFES) {
+                    try { await loadSectionsFromSupabase(); }
+                    catch (e) { console.error('Fallback section load failed:', e); }
                 }
                 return;
             }
@@ -615,13 +615,15 @@
             const loadingScreen = document.getElementById('loadingScreen');
             const mainContent = document.getElementById('mainContent');
             
-            if (loadingScreen) loadingScreen.style.display = 'none';
-            try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-            if (mainContent) mainContent.style.display = 'block';
+            if (!window.DISABLE_FAILSAFES) {
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
+                if (mainContent) mainContent.style.display = 'block';
+            }
             
             // Show loading message while waiting for database
             const hubGrid = document.querySelector('.hub-grid');
-            if (hubGrid) {
+            if (hubGrid && !window.DISABLE_FAILSAFES) {
                 hubGrid.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #666; max-width: 500px; margin: 0 auto;">
                         <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
@@ -937,9 +939,10 @@
         
         
         
-        // On bfcache restore or fast back/forward, ensure hub is visible and refresh counts quickly
-        window.addEventListener('pageshow', () => {
+            // On bfcache restore or fast back/forward, ensure hub is visible and refresh counts quickly
+            window.addEventListener('pageshow', () => {
             try {
+                    if (window.DISABLE_FAILSAFES) return;
                 const loadingScreen = document.getElementById('loadingScreen');
                 const mainContent = document.getElementById('mainContent');
                 if (loadingScreen) loadingScreen.style.display = 'none';
@@ -953,11 +956,13 @@
         // Show hub as soon as database is ready, then build sections
         document.addEventListener('hubdb-ready', () => {
             try {
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-                if (mainContent) mainContent.style.display = 'block';
+                if (!window.DISABLE_FAILSAFES) {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
+                    if (mainContent) mainContent.style.display = 'block';
+                }
                 if (typeof updateMainHubSections === 'function') updateMainHubSections();
                 // Show/hide admin-only global backgrounds button
                 // Global button is always visible in quick actions
