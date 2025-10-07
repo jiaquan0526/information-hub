@@ -112,6 +112,8 @@
                 }
             } catch (_) {}
             console.log('✅ Supabase client ready');
+            // Kick the advanced builder immediately (in addition to later hooks)
+            try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
 
             // Advanced cards only: skip minimal bootstrap; builder will be invoked by later hooks
         };
