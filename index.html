@@ -4712,6 +4712,8 @@ Permissions:
             } catch (_) { return ''; }
         }
 
+
+
         function truncate(text, maxLen) {
             const t = String(text || '');
             if (t.length <= maxLen) return t;
@@ -5316,8 +5318,7 @@ Permissions:
                         return `<span><i class="${iconClass}"></i> <span id="${safeId}">0</span> ${escapeHtml(label)}</span>`;
                     }).join(' ');
                     
-                    const cardHTML = `
-                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
+                    const cardHTML = `                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
                     <div class="card-header">
                         <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                         <div class="card-title">
@@ -5513,7 +5514,6 @@ Permissions:
         }
         function isLowDataConnection() { return false; }
         function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
-    
     </script>
     <style>
         @keyframes spin {
