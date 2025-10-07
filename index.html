@@ -36,12 +36,34 @@
         
         // Wait for Supabase library to load
         const initSupabase = async () => {
-            // No alternate CDN fallbacks; require primary script tag
-            async function ensureSupabaseLibrary() { return !!window.supabase; }
+            // Fallback loader to ensure Supabase library is available even if the primary CDN fails
+            async function ensureSupabaseLibrary() {
+                if (window.supabase) return true;
+                const tryLoad = (src) => new Promise((resolve) => {
+                    try {
+                        const s = document.createElement('script');
+                        s.src = src;
+                        s.defer = true;
+                        s.onload = () => resolve(true);
+                        s.onerror = () => resolve(false);
+                        document.head.appendChild(s);
+                    } catch (_) { resolve(false); }
+                });
+                const candidates = [
+                    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+                    'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js'
+                ];
+                for (const url of candidates) {
+                    const ok = await tryLoad(url);
+                    if (ok && window.supabase) return true;
+                }
+                return !!window.supabase;
+            }
 
             let attempts = 0;
             while (!window.supabase && attempts < 50) {
                 console.log('Waiting for Supabase library...', attempts + 1);
+                try { await ensureSupabaseLibrary(); } catch(_) {}
                 await new Promise(resolve => setTimeout(resolve, 100));
                 attempts++;
             }
