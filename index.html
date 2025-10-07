@@ -5099,9 +5099,6 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
-        }
-        // Expose builder globally for early callers
-        try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
         // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
                 const waitMs = Math.max(75, 1000 - (now - lastUpdateTime));
@@ -5188,8 +5185,6 @@ Permissions:
                 return;
             }
             const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-            const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
-            const truncate = (t, n) => { const s = String(t||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
             
             // Normalize section data for rendering (Supabase is the single source of truth)
             const normalizeSection = (section) => ({
@@ -5375,6 +5370,8 @@ Permissions:
             // Reset the flag
             isUpdatingSections = false;
         }
+        // Expose builder globally for early callers
+        try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
