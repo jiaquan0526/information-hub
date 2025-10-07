@@ -113,12 +113,7 @@
             } catch (_) {}
             console.log('✅ Supabase client ready');
 
-            // Advanced cards only: skip minimal bootstrap. If nothing renders, investigate.
-            try {
-                if (!window.updateMainHubSections) {
-                    console.warn('Advanced hub section builder not available yet (updateMainHubSections missing).');
-                }
-            } catch(_) {}
+            // Advanced cards only: skip minimal bootstrap; builder will be invoked by later hooks
         };
         
         initSupabase();
@@ -5062,6 +5057,8 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
+// Expose builder globally for early callers
+try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
