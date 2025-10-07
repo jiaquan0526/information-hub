@@ -5144,22 +5144,21 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
                 console.error('Error loading sections from Supabase:', error);
             }
             
-            // If no sections found after filtering, replace any spinner with explicit empty state
+            // If no sections found after filtering, attempt recovery using raw list (admin/recovery path)
             if (visibleSections.length === 0) {
-                // If data exists but everything appears hidden, render anyway (admin/recovery path)
                 try { if (Array.isArray(allSectionsRaw) && allSectionsRaw.length > 0) visibleSections = allSectionsRaw.slice(); } catch(_) {}
-                console.log('No sections to display');
+            }
+            // If still empty after recovery, show explicit empty state and exit
+            if (visibleSections.length === 0) {
                 try {
                     hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                 } catch(_) {}
-                // Ensure overlay is hidden even when nothing to render
                 try {
                     const loadingScreen = document.getElementById('loadingScreen');
                     const mainContent = document.getElementById('mainContent');
                     if (loadingScreen) loadingScreen.style.display = 'none';
                     if (mainContent) mainContent.style.display = 'block';
                 } catch (_) {}
-                // Limited retries in case Supabase session/permissions finalize moments later
                 try {
                     if (!window.__hubEmptyRetries) window.__hubEmptyRetries = 0;
                     if (window.__hubEmptyRetries < 3) {
