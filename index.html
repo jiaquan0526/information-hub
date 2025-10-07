@@ -5099,10 +5099,10 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
-// Expose builder globally for early callers
-try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
-            
-            // Prevent too frequent updates (debounce)
+        }
+        // Expose builder globally for early callers
+        try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
+        // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
                 const waitMs = Math.max(75, 1000 - (now - lastUpdateTime));
                 console.log('Update called too frequently, retrying in', waitMs, 'ms');
