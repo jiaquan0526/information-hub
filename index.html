@@ -1445,7 +1445,7 @@
                             .from('resources')
                             .select('*', { count: 'exact', head: true })
                             .eq('section_id', sectionId)
-                            .eq('type', dbType);
+                            .ilike('type', dbType);
                         if (error) throw error;
                         updateCountDom(sectionId, tid, count || 0);
                     } catch (_) {
@@ -2911,98 +2911,64 @@ Permissions:
         // Function to update hub cards based on user permissions
         async function updateHubCardsAccess(user) {
             console.log('=== UPDATING HUB CARDS ACCESS ===');
-            console.log('User object:', user);
-            console.log('User permissions:', user.permissions);
-            console.log('User sections:', user.permissions?.sections);
-            
-            // Determine visible sections from database
-            let visibleSections = [];
             try {
+                const role = String(user?.role || '').toLowerCase();
+                const perms = user?.permissions || {};
+                const userSections = Array.isArray(perms.sections) ? perms.sections : [];
+                const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
+
+                // Determine visible sections from database
+                let visibleSections = [];
                 if (window.hubDatabase && window.hubDatabaseReady) {
-                    const sections = await hubDatabase.getAllSections();
-                    visibleSections = sections.filter(s => s.config?.visible !== false).map(s => s.section_id);
-                    console.log('Loaded visible sections from database:', visibleSections);
-                } else {
-                    console.error('Database not ready');
+                    try {
+                        const sections = await hubDatabase.getAllSections();
+                        visibleSections = (sections || []).filter(s => s?.config?.visible !== false).map(s => s.section_id);
+                    } catch (e) {
+                        console.warn('Error reading visible sections', e);
+                    }
+                }
+                // Fallback to Supabase if needed
+                if (visibleSections.length === 0 && window.supabaseClient) {
+                    try {
+                        const { data } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, config')
+                            .order('name', { ascending: true });
+                        visibleSections = (Array.isArray(data) ? data : [])
+                            .filter(s => (s && s.config && s.config.visible === false) ? false : true)
+                            .map(s => s.section_id);
+                    } catch (e) { console.warn('Supabase fallback for sections failed', e); }
+                }
+                if (visibleSections.length === 0) {
+                    console.log('No visible sections; leaving UI unchanged');
                     return;
                 }
-            } catch (e) { 
-                console.warn('Error reading visible sections', e);
-                return;
-            }
-            if (visibleSections.length === 0) {
-                console.log('No visible sections; leaving UI unchanged');
-                return;
-            }
 
-            // Show all visible sections regardless of user permissions
-            const allowedSections = visibleSections;
-            console.log('Showing all visible sections:', allowedSections);
-            
-            console.log('Final allowed sections for', user.username, ':', allowedSections);
-            
-            let hubCards = document.querySelectorAll('.hub-card');
-            console.log('Found', hubCards.length, 'hub cards');
-            // If no cards are present yet, build them now and retry
-            if (!hubCards || hubCards.length === 0) {
-                try {
-                    if (typeof updateMainHubSections === 'function') {
-                        await updateMainHubSections();
-                        // Re-query after build
-                        hubCards = document.querySelectorAll('.hub-card');
-                        console.log('Built hub cards on demand. Now found', hubCards.length, 'hub cards');
-                    }
-                } catch (_) { /* non-blocking */ }
-            }
+                const allowedSections = canViewAll ? visibleSections : visibleSections.filter(id => userSections.includes(id));
+                const blockedSections = new Set(visibleSections.filter(id => !allowedSections.includes(id)));
 
-            // If still no cards, render a minimal set directly from Supabase
-            if (!hubCards || hubCards.length === 0) {
-                try {
-                    if (window.supabaseClient) {
-                        const { data: rows, error } = await window.supabaseClient
-                            .from('sections')
-                            .select('section_id, name, icon, color, config')
-                            .order('config->order', { ascending: true, nullsFirst: true })
-                            .order('name', { ascending: true });
-                        if (!error && Array.isArray(rows)) {
-                            const hubGrid = document.querySelector('.hub-grid');
-                            if (hubGrid) {
-                                const minimal = rows
-                                    .filter(s => (s && s.config && s.config.visible === false) ? false : true)
-                                    .map(s => (
-                                        `<div class="hub-card" data-section-id="${s.section_id}" onclick="navigateToSection('${s.section_id}')">
-                                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
-                                            <h3>${(s.name||s.section_id)}</h3>
-                                            <p class="card-intro"></p>
-                                        </div>`
-                                    )).join('');
-                                hubGrid.innerHTML = minimal;
-                                // hide overlay to reveal UI
-                                try {
-                                    const loadingScreen = document.getElementById('loadingScreen');
-                                    const mainContent = document.getElementById('mainContent');
-                                    if (loadingScreen) loadingScreen.style.display = 'none';
-                                    if (mainContent) mainContent.style.display = 'block';
-                                } catch(_) {}
-                                // refresh hubCards reference
-                                hubCards = document.querySelectorAll('.hub-card');
-                                console.log('Rendered minimal hub cards. Now found', hubCards.length, 'hub cards');
-                            }
+                let hubCards = document.querySelectorAll('.hub-card');
+                if (!hubCards || hubCards.length === 0) {
+                    try { if (typeof updateMainHubSections === 'function') await updateMainHubSections(); } catch(_) {}
+                    hubCards = document.querySelectorAll('.hub-card');
+                }
+
+                hubCards.forEach(card => {
+                    try {
+                        const sectionId = card.getAttribute('data-section-id') || '';
+                        if (!sectionId) return;
+                        if (blockedSections.has(sectionId)) {
+                            card.classList.add('restricted');
+                            card.onclick = (e) => { e?.stopPropagation?.(); alert('You do not have access to this section'); };
+                        } else {
+                            card.classList.remove('restricted');
+                            card.onclick = () => { try { navigateToSection(sectionId); } catch(_) {} };
                         }
-                    }
-                } catch(_) { /* best effort */ }
-            }
-            
-            hubCards.forEach(card => {
-                try {
-                    const sectionId = card.getAttribute('data-section-id') || '';
-                    if (!sectionId) return;
-                    // All visible sections remain shown
-                    card.style.display = '';
-                } catch (_) {}
-            });
-            
-            console.log('=== HUB CARDS UPDATE COMPLETE ===');
+                    } catch (_) {}
+                });
+
+                console.log('=== HUB CARDS UPDATE COMPLETE ===');
+            } catch (e) { console.warn('updateHubCardsAccess failed', e); }
         }
         
         // Permission Management Functions
@@ -5391,6 +5357,12 @@ Permissions:
             
             // Stats for currently built sections (non-blocking)
             try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+            // Enforce access restrictions on freshly rendered cards
+            try {
+                const raw = localStorage.getItem('currentUserSession');
+                const sessionUser = raw ? JSON.parse(raw) : window.informationHub?.currentUser || null;
+                if (sessionUser && typeof updateHubCardsAccess === 'function') await updateHubCardsAccess(sessionUser);
+            } catch (_) {}
             // Initialize lazy loading for backgrounds (skip when disabled)
             try { if (typeof backgroundsDisabled === 'function' && !backgroundsDisabled()) initBackgroundLazyLoad(visibleSections); } catch(_) {}
             updateBackgroundToggleButton();

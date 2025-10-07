@@ -282,14 +282,20 @@ class InformationHub {
         const hubCards = document.querySelectorAll('.hub-card');
         hubCards.forEach(card => {
             const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
-            // For now, allow access to all sections - remove restrictions
-            // const allowed = (this.currentUser && this.currentUser.permissions && Array.isArray(this.currentUser.permissions.sections)) ? this.currentUser.permissions.sections : [];
-            // if (!allowed.includes(sectionId)) {
-            //     card.classList.add('restricted');
-            //     card.onclick = () => {
-            //         this.showMessage('You do not have access to this section', 'error');
-            //     };
-            // }
+            try {
+                const role = String(this.currentUser?.role || '').toLowerCase();
+                const perms = this.currentUser?.permissions || {};
+                const userSections = Array.isArray(perms.sections) ? perms.sections : [];
+                const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
+                const allowed = canViewAll ? null : new Set(userSections);
+                if (!canViewAll && allowed && !allowed.has(sectionId)) {
+                    card.classList.add('restricted');
+                    card.onclick = (e) => { e?.stopPropagation?.(); this.showMessage('You do not have access to this section', 'error'); };
+                } else {
+                    card.classList.remove('restricted');
+                    card.onclick = () => this.navigateToSection(sectionId);
+                }
+            } catch (_) {}
         });
     }
 
