@@ -312,25 +312,26 @@ class AuthSystem {
             this.showLoginProgress('Setting up permissions...', 70);
             const uid = data && data.user ? data.user.id : null;
             if (uid) {
-                // Assign default access to all visible sections in hub (from Supabase)
+                // Assign default view-only access to visible sections (config.visible !== false)
                 let sectionIds = [];
                 try {
                     const { data: secs } = await window.supabaseClient
                         .from('sections')
-                        .select('section_id')
-                        .eq('config->>visible', 'true');
-                    sectionIds = Array.isArray(secs) ? secs.map(s => s.section_id).filter(Boolean) : [];
+                        .select('section_id, config');
+                    sectionIds = Array.isArray(secs) ? secs
+                        .filter(s => !(s && s.config && s.config.visible === false))
+                        .map(s => s.section_id)
+                        .filter(Boolean) : [];
                 } catch (_) { 
-                    console.warn('Failed to load sections during signup, using default list');
-                    // Fallback to default sections if database query fails
+                    console.warn('Failed to load sections during signup; defaulting to no explicit sections');
                     sectionIds = [];
                 }
                 
-                // Default viewer with view access to all visible sections; no edit
+                // Default viewer with view access to visible sections; no edit
                 const permissions = {
-                    sections: sectionIds.length > 0 ? sectionIds : ['*'], // Access to all sections
+                    sections: sectionIds,
                     editableSections: [],
-                    canViewAllSections: true,
+                    canViewAllSections: false,
                     canEditAllSections: false,
                     canManageUsers: false,
                     canDeleteResources: false,
@@ -416,34 +417,32 @@ class AuthSystem {
                 .eq('id', authUser.id)
                 .single();
             if (error) {
-                console.warn('User profile not found, creating default profile with full access');
-                
-                // Get all available sections from Supabase
-                let allSections = [];
+                console.warn('User profile not found, creating default minimal profile');
+                // Get visible sections (config.visible !== false)
+                let visibleSectionIds = [];
                 try {
                     const { data: sections } = await window.supabaseClient
                         .from('sections')
-                        .select('section_id')
-                        .eq('config->>visible', 'true');
-                    allSections = sections ? sections.map(s => s.section_id) : [];
+                        .select('section_id, config');
+                    visibleSectionIds = Array.isArray(sections) ? sections
+                        .filter(s => !(s && s.config && s.config.visible === false))
+                        .map(s => s.section_id)
+                        .filter(Boolean) : [];
                 } catch (sectionsError) {
-                    console.warn('Could not fetch sections, using default list:', sectionsError);
-                    // Fallback to default sections if database query fails
-                    allSections = ['costing', 'supply-planning', 'operations', 'quality', 'hr', 'it', 'sales', 'compliance'];
+                    console.warn('Could not fetch sections for default profile:', sectionsError);
+                    visibleSectionIds = [];
                 }
-                
-                // Create a default profile with full access to all sections
+                // Create a default viewer profile with view-only access
                 const defaultPermissions = {
-                    sections: allSections, // Access to all visible sections
-                    editableSections: allSections, // Can edit all sections
-                    canViewAllSections: true,
-                    canEditAllSections: true,
+                    sections: visibleSectionIds,
+                    editableSections: [],
+                    canViewAllSections: false,
+                    canEditAllSections: false,
                     canManageUsers: false,
-                    canDeleteResources: true,
+                    canDeleteResources: false,
                     canViewAuditLog: false,
                     canManageRoles: false
                 };
-                
                 try {
                     const { data: newProfile, error: profileError } = await window.supabaseClient
                         .from('profiles')
@@ -452,12 +451,11 @@ class AuthSystem {
                             email: authUser.email,
                             username: authUser.email,
                             name: authUser.user_metadata?.name || '',
-                            role: 'editor', // Give editor role for full access
+                            role: 'viewer',
                             permissions: defaultPermissions
                         })
                         .select()
                         .single();
-                    
                     if (profileError) {
                         console.error('Failed to create user profile:', profileError);
                     } else {
@@ -466,8 +464,6 @@ class AuthSystem {
                 } catch (profileError) {
                     console.error('Failed to create user profile:', profileError);
                 }
-                
-                // Session is managed by Supabase auth only
                 return;
             }
             // Session is managed by Supabase auth only
@@ -536,36 +532,65 @@ class AuthSystem {
         authSystem.logout();
     }
 
-    getCurrentUser() {
-        // Get current user from Supabase auth
-        if (window.supabaseClient) {
-            return window.supabaseClient.auth.getUser();
-        }
-        return null;
+    async getCurrentAuthUser() {
+        try {
+            if (!window.supabaseClient) return null;
+            const { data: { user } } = await window.supabaseClient.auth.getUser();
+            return user || null;
+        } catch (_) { return null; }
     }
 
-    hasPermission(permission) {
-        const user = this.getCurrentUser();
-        if (!user) return false;
-        return user.permissions[permission] || false;
+    async getCurrentUserProfile() {
+        try {
+            const authUser = await this.getCurrentAuthUser();
+            if (!authUser) return null;
+            const { data, error } = await window.supabaseClient
+                .from('profiles')
+                .select('id, username, role, name, email, permissions')
+                .eq('id', authUser.id)
+                .single();
+            if (error) return null;
+            const profile = data || null;
+            // Normalize permissions if stored as string
+            let perms = profile && profile.permissions;
+            if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
+            if (!perms || typeof perms !== 'object') perms = {};
+            return Object.assign({}, profile, { permissions: perms });
+        } catch (_) { return null; }
     }
 
-    canAccessSection(sectionId) {
-        const user = this.getCurrentUser();
-        if (!user) return false;
-        return user.permissions.sections.includes(sectionId);
+    async hasPermission(permission) {
+        const profile = await this.getCurrentUserProfile();
+        if (!profile) return false;
+        return !!profile.permissions[permission];
     }
 
-    canEditResource(sectionId) {
-        const user = this.getCurrentUser();
-        if (!user) return false;
-        return user.permissions.canEditAllSections || user.permissions.sections.includes(sectionId);
+    async canAccessSection(sectionId) {
+        const profile = await this.getCurrentUserProfile();
+        if (!profile) return false;
+        const role = String(profile.role || '').toLowerCase();
+        const sections = Array.isArray(profile.permissions.sections) ? profile.permissions.sections : [];
+        const canAll = profile.permissions.canViewAllSections === true || sections.includes('*') || role === 'admin';
+        return canAll || sections.includes(sectionId);
     }
 
-    canDeleteResource(sectionId) {
-        const user = this.getCurrentUser();
-        if (!user) return false;
-        return user.permissions.canDeleteResources && this.canEditResource(sectionId);
+    async canEditResource(sectionId) {
+        const profile = await this.getCurrentUserProfile();
+        if (!profile) return false;
+        const role = String(profile.role || '').toLowerCase();
+        const sections = Array.isArray(profile.permissions.sections) ? profile.permissions.sections : [];
+        const editable = Array.isArray(profile.permissions.editableSections) ? profile.permissions.editableSections : [];
+        if (role === 'admin' || profile.permissions.canEditAllSections === true) return true;
+        return (!!sectionId && (editable.includes(sectionId) || sections.includes(sectionId)));
+    }
+
+    async canDeleteResource(sectionId) {
+        const profile = await this.getCurrentUserProfile();
+        if (!profile) return false;
+        const role = String(profile.role || '').toLowerCase();
+        const canDelete = profile.permissions.canDeleteResources === true || role === 'admin' || role === 'editor' || profile.permissions.canEditAllSections === true;
+        if (!canDelete) return false;
+        return await this.canEditResource(sectionId);
     }
 
     logActivity(action, description) {
