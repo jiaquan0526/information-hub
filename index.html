@@ -5344,6 +5344,8 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
             // Reset the flag
             isUpdatingSections = false;
         }
+        // Ensure the builder is globally accessible for console/manual calls
+        try { if (typeof window.updateMainHubSections !== 'function') window.updateMainHubSections = updateMainHubSections; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
