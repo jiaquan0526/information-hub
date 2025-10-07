@@ -5120,14 +5120,11 @@ Permissions:
                 console.error('Error loading sections from Supabase:', error);
             }
             
-            // If no sections found after filtering, preserve existing content if present
+            // If no sections found after filtering, replace any spinner with explicit empty state
             if (visibleSections.length === 0) {
                 console.log('No sections to display');
                 try {
-                    const hasExisting = (hubGrid.innerHTML || '').trim().length > 0;
-                    if (!hasExisting) {
-                        hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
-                    }
+                    hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                 } catch(_) {}
                 // Ensure overlay is hidden even when nothing to render
                 try {
