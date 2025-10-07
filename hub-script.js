@@ -284,7 +284,9 @@ class InformationHub {
             const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
             try {
                 const role = String(this.currentUser?.role || '').toLowerCase();
-                const perms = this.currentUser?.permissions || {};
+                let perms = this.currentUser?.permissions;
+                if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
+                if (!perms || typeof perms !== 'object') perms = {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
                 const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
                 const allowed = canViewAll ? null : new Set(userSections);

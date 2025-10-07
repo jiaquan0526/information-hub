@@ -883,15 +883,19 @@
             showEmptyState();
         }
 
-        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI
+        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI (runs once)
         setTimeout(() => {
             try {
                 const grid = document.querySelector('.hub-grid');
                 const loadingOverlay = document.getElementById('loadingScreen');
                 const main = document.getElementById('mainContent');
-                const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
-                if (stuck) {
-                    console.warn('Failsafe: rebuilding hub cards');
+                const hasCards = !!(grid && grid.querySelector && grid.querySelector('.hub-card'));
+                const overlayVisible = !!(loadingOverlay && getComputedStyle(loadingOverlay).display !== 'none');
+                const spinnerPresent = !!(grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub'));
+                const stuck = !hasCards && (spinnerPresent || overlayVisible);
+                if (stuck && !window.__hubFailsafeTriggered) {
+                    window.__hubFailsafeTriggered = true;
+                    console.info('Failsafe: rebuilding hub cards');
                     try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
@@ -899,7 +903,9 @@
                     setTimeout(() => {
                         try {
                             const g = document.querySelector('.hub-grid');
-                            if (g && g.innerHTML && g.innerHTML.includes('Loading Information Hub')) {
+                            const stillSpinner = !!(g && g.innerHTML && g.innerHTML.includes('Loading Information Hub'));
+                            const stillNoCards = !!(g && (!g.querySelector || !g.querySelector('.hub-card')));
+                            if (stillSpinner || stillNoCards) {
                                 g.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                             }
                         } catch(_) {}
@@ -2877,7 +2883,9 @@ Permissions:
             console.log('=== UPDATING HUB CARDS ACCESS ===');
             try {
                 const role = String(user?.role || '').toLowerCase();
-                const perms = user?.permissions || {};
+                let perms = user?.permissions;
+                if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
+                if (!perms || typeof perms !== 'object') perms = {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
                 const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
 
@@ -5188,7 +5196,9 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
                 try { const raw = localStorage.getItem('currentUserSession'); if (raw) sessionUser = JSON.parse(raw); } catch(_) {}
                 if (!sessionUser && window.informationHub && window.informationHub.currentUser) sessionUser = window.informationHub.currentUser;
                 const role = String(sessionUser?.role || '').toLowerCase();
-                const perms = sessionUser?.permissions || {};
+                let perms = sessionUser?.permissions;
+                if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
+                if (!perms || typeof perms !== 'object') perms = {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
                 const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
                 if (!canViewAll && userSections.length > 0) {
