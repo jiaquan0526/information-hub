@@ -289,11 +289,9 @@ class InformationHub {
                 const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
                 const allowed = canViewAll ? null : new Set(userSections);
                 if (!canViewAll && allowed && !allowed.has(sectionId)) {
-                    card.classList.add('restricted');
-                    card.onclick = (e) => { e?.stopPropagation?.(); this.showMessage('You do not have access to this section', 'error'); };
+                    card.style.display = 'none';
                 } else {
-                    card.classList.remove('restricted');
-                    card.onclick = () => this.navigateToSection(sectionId);
+                    card.style.display = '';
                 }
             } catch (_) {}
         });

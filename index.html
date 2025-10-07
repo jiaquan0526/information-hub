@@ -2958,11 +2958,9 @@ Permissions:
                         const sectionId = card.getAttribute('data-section-id') || '';
                         if (!sectionId) return;
                         if (blockedSections.has(sectionId)) {
-                            card.classList.add('restricted');
-                            card.onclick = (e) => { e?.stopPropagation?.(); alert('You do not have access to this section'); };
+                            card.style.display = 'none';
                         } else {
-                            card.classList.remove('restricted');
-                            card.onclick = () => { try { navigateToSection(sectionId); } catch(_) {} };
+                            card.style.display = '';
                         }
                     } catch (_) {}
                 });
@@ -5201,6 +5199,21 @@ Permissions:
             
             // Normalize all sections
             visibleSections = visibleSections.map(normalizeSection);
+
+            // Filter visible sections by current user's permissions (admins see all)
+            try {
+                let sessionUser = null;
+                try { const raw = localStorage.getItem('currentUserSession'); if (raw) sessionUser = JSON.parse(raw); } catch(_) {}
+                if (!sessionUser && window.informationHub && window.informationHub.currentUser) sessionUser = window.informationHub.currentUser;
+                const role = String(sessionUser?.role || '').toLowerCase();
+                const perms = sessionUser?.permissions || {};
+                const userSections = Array.isArray(perms.sections) ? perms.sections : [];
+                const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
+                if (!canViewAll && userSections.length > 0) {
+                    const allowed = new Set(userSections);
+                    visibleSections = visibleSections.filter(s => allowed.has(s.id));
+                }
+            } catch(_) {}
 
             // Build new content first
             let newContent = '';
