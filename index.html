@@ -119,53 +119,12 @@
             } catch (_) {}
             console.log('✅ Supabase client initialized successfully');
 
-            // Supabase-only minimal bootstrap: fetch sections and render basic cards immediately
+            // Advanced cards only: skip minimal bootstrap. If nothing renders, investigate.
             try {
-                if (window.supabaseClient) {
-                    const grid = document.querySelector('.hub-grid');
-                    if (grid) {
-                        const { data: rows } = await window.supabaseClient
-                            .from('sections')
-                            .select('section_id, name, icon, config')
-                            .order('config->order', { ascending: true, nullsFirst: true })
-                            .order('name', { ascending: true });
-                        const list = Array.isArray(rows) ? rows.filter(s => (s && s.config && s.config.visible === false) ? false : true) : [];
-                        if (list.length > 0 && (!grid.innerHTML || grid.innerHTML.indexOf('hub-card') === -1)) {
-                            const html = list.map(s => (
-                                `<div class="hub-card" data-section-id="${s.section_id}" onclick="navigateToSection('${s.section_id}')">
-                                    <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
-                                    <h3>${(s.name||s.section_id)}</h3>
-                                    <p class="card-intro"></p>
-                                </div>`
-                            )).join('');
-                            grid.innerHTML = html;
-                            try {
-                                const loadingScreen = document.getElementById('loadingScreen');
-                                const mainContent = document.getElementById('mainContent');
-                                if (loadingScreen) loadingScreen.style.display = 'none';
-                                if (mainContent) mainContent.style.display = 'block';
-                            } catch(_) {}
-                            // Auto-upgrade to full cards (description, tabs, counts) when builder becomes available
-                            try {
-                                let tries = 0;
-                                const iv = setInterval(async () => {
-                                    tries++;
-                                    try {
-                                        if (typeof updateMainHubSections === 'function') {
-                                            try { await updateMainHubSections(); } catch(_) { /* retry */ }
-                                            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
-                                            clearInterval(iv);
-                                        }
-                                    } catch(_) {}
-                                    if (tries > 40) { // ~8s max
-                                        try { clearInterval(iv); } catch(_) {}
-                                    }
-                                }, 200);
-                            } catch(_) {}
-                        }
-                    }
+                if (!window.updateMainHubSections) {
+                    console.warn('Advanced hub section builder not available yet (updateMainHubSections missing).');
                 }
-            } catch(_) { /* best effort */ }
+            } catch(_) {}
         };
         
         initSupabase();
@@ -5331,34 +5290,16 @@ Permissions:
                 // Background will be scheduled lazily
             }
             
-            // If advanced build produced nothing, fall back to a minimal card renderer
+            // If advanced build produced nothing, do not render minimal cards; log for investigation
             if (!newContent || String(newContent).trim().length === 0) {
-                try {
-                    newContent = visibleSections.map(s => (
-                        `<div class="hub-card" data-section-id="${s.id}" onclick="navigateToSection('${s.id}')">
-                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
-                            <h3>${(s.name||s.id)}</h3>
-                            <p class="card-intro"></p>
-                        </div>`
-                    )).join('');
-                } catch(_) {}
+                console.warn('Advanced hub card build produced no content. Investigate data and builder logic.');
             }
 
             // Replace grid content all at once to prevent flashing
             try {
                 hubGrid.innerHTML = newContent;
             } catch (e) {
-                console.warn('Hub grid update failed; rendering minimal cards', e);
-                try {
-                    const fallback = visibleSections.map(s => (
-                        `<div class="hub-card" data-section-id="${s.id}" onclick="navigateToSection('${s.id}')">
-                            <div class="card-icon"><i class="${(s.icon||'fas fa-th-large')}"></i></div>
-                            <h3>${(s.name||s.id)}</h3>
-                            <p class="card-intro"></p>
-                        </div>`
-                    )).join('');
-                    hubGrid.innerHTML = fallback;
-                } catch(_) {}
+                console.error('Hub grid update failed; not rendering minimal fallback. Investigate error:', e);
             }
             // Ensure the main UI is visible once content is ready
             try {
