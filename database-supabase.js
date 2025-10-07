@@ -1,4 +1,31 @@
 // Database System for Information Hub - Supabase Implementation
+// Centralized Supabase client singleton
+async function ensureSupabaseClient() {
+	try {
+		// Reuse existing client
+		if (window.supabaseClient && typeof window.supabaseClient.from === 'function') return window.supabaseClient;
+		// Library must be available
+		if (!window.supabase || typeof window.supabase.createClient !== 'function') return null;
+		// Resolve config (prefer config.js)
+		const url = (window.CONFIG && window.CONFIG.SUPABASE_URL) || window.SUPABASE_URL || '';
+		const key = (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY) || window.SUPABASE_ANON_KEY || '';
+		if (!url || !key) return null;
+		// Create singleton client with stable auth settings
+		window.supabaseClient = window.supabase.createClient(url, key, {
+			auth: {
+				persistSession: true,
+				autoRefreshToken: true,
+				detectSessionInUrl: true
+			}
+		});
+		try { window.SUPABASE_CLIENT_READY = true; } catch(_) {}
+		return window.supabaseClient;
+	} catch (_) { return null; }
+}
+
+// Expose globally for all pages to use
+try { window.ensureSupabaseClient = ensureSupabaseClient; } catch(_) {}
+
 class HubDatabase {
     constructor() {
         this.supabase = null;
@@ -42,14 +69,16 @@ class HubDatabase {
 
     async init() {
         try {
-            // Wait for Supabase client to be available
-            let retries = 0;
-            const maxRetries = 100; // 20 seconds max wait
-            while (retries < maxRetries && !window.supabaseClient) {
-                console.log('Waiting for Supabase client...', retries + 1);
-                await new Promise(resolve => setTimeout(resolve, 200));
-                retries++;
-            }
+			// Ensure a single Supabase client instance exists
+			let retries = 0;
+			const maxRetries = 100; // 20 seconds max wait
+			while (retries < maxRetries && !(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
+				try { await ensureSupabaseClient(); } catch(_) {}
+				if (window.supabaseClient) break;
+				console.log('Waiting for Supabase client...', retries + 1);
+				await new Promise(resolve => setTimeout(resolve, 200));
+				retries++;
+			}
             
             if (!window.supabaseClient) {
                 console.error('Supabase client not initialized after waiting');
@@ -57,7 +86,7 @@ class HubDatabase {
                 return false;
             }
             
-            this.supabase = window.supabaseClient;
+			this.supabase = window.supabaseClient;
             console.log('Supabase database initialized successfully');
             return true;
         } catch (error) {
@@ -219,8 +248,10 @@ class HubDatabase {
         try {
             const client = window.supabaseClient || this.supabase;
             if (!client) throw new Error('Supabase client not ready');
-            // Prefer name, fallback to section_id, then no ordering
-            let resp = await client.from('sections').select('*').order('name', { ascending: true });
+            // Prefer explicit config.order, then name, fallback to section_id, then no ordering
+            let resp = await client.from('sections').select('*')
+                .order('config->order', { ascending: true, nullsFirst: true })
+                .order('name', { ascending: true });
             if (resp.error) {
                 resp = await client.from('sections').select('*').order('section_id', { ascending: true });
             }
@@ -783,12 +814,8 @@ class HubDatabase {
                 .from('site_settings')
                 .select('value')
                 .eq('key', key)
-                .single();
-            if (error) {
-                // If no rows, return null instead of throwing
-                if (String(error.message || '').toLowerCase().includes('no rows')) return null;
-                throw error;
-            }
+                .maybeSingle();
+            if (error) throw error;
             if (!data) return null;
             let v = data.value || null;
             try {

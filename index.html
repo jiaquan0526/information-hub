@@ -97,27 +97,21 @@
                 } catch(_) {}
             }
             
-            // Initialize Supabase client
+            // Initialize Supabase client via singleton
             try {
                 // Normalize globals to avoid mixed sources overriding
                 window.SUPABASE_URL = window.CONFIG.SUPABASE_URL;
                 window.SUPABASE_ANON_KEY = window.CONFIG.SUPABASE_ANON_KEY;
             } catch (_) {}
-            window.supabaseClient = window.supabase.createClient(
-                window.CONFIG.SUPABASE_URL, 
-                window.CONFIG.SUPABASE_ANON_KEY,
-                { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
-            );
-            
-            // Guard to prevent fallback re-initialization with placeholders
-            window.SUPABASE_CLIENT_READY = true;
+            try { await window.ensureSupabaseClient?.(); } catch (_) {}
             try {
-                // Lightweight auth-state debug (visible only in console)
-                window.supabaseClient.auth.onAuthStateChange((event, session) => {
-                    console.log('[AuthStateChange]', event, session && session.user ? session.user.email : null);
-                });
+                if (window.supabaseClient && window.supabaseClient.auth) {
+                    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+                        console.log('[AuthStateChange]', event, session && session.user ? session.user.email : null);
+                    });
+                }
             } catch (_) {}
-            console.log('✅ Supabase client initialized successfully');
+            console.log('✅ Supabase client ready');
 
             // Advanced cards only: skip minimal bootstrap. If nothing renders, investigate.
             try {

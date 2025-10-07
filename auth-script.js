@@ -26,37 +26,26 @@ class AuthSystem {
 
     ensureSupabaseClient() {
         try {
-            // Use CONFIG if available, otherwise fallback to old method
-            if (window.CONFIG) {
-                window.SUPABASE_URL = window.CONFIG.SUPABASE_URL;
-                window.SUPABASE_ANON_KEY = window.CONFIG.SUPABASE_ANON_KEY;
+            if (typeof window.ensureSupabaseClient === 'function') {
+                window.ensureSupabaseClient();
             } else {
-                // Fallback: pull keys from <meta> tags if not present on window
-                if (!window.SUPABASE_URL) {
-                    try {
-                        var m1 = document.querySelector('meta[name="supabase-url"]');
-                        window.SUPABASE_URL = (m1 && m1.content) || window.SUPABASE_URL;
-                    } catch(_) {}
+                // Minimal fallback: normalize config, then create if still missing
+                if (window.CONFIG) {
+                    window.SUPABASE_URL = window.CONFIG.SUPABASE_URL;
+                    window.SUPABASE_ANON_KEY = window.CONFIG.SUPABASE_ANON_KEY;
                 }
-                if (!window.SUPABASE_ANON_KEY) {
+                if (!window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
+                    window.supabaseClient = window.supabase.createClient(
+                        window.SUPABASE_URL,
+                        window.SUPABASE_ANON_KEY,
+                        { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+                    );
                     try {
-                        var m2 = document.querySelector('meta[name="supabase-anon-key"]');
-                        window.SUPABASE_ANON_KEY = (m2 && m2.content) || window.SUPABASE_ANON_KEY;
-                    } catch(_) {}
+                        window.supabaseClient.auth.onAuthStateChange((event, session) => {
+                            console.log('[AuthStateChange@auth]', event, session && session.user ? session.user.email : null);
+                        });
+                    } catch (_) {}
                 }
-            }
-            
-            if (!window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
-                window.supabaseClient = window.supabase.createClient(
-                    window.SUPABASE_URL,
-                    window.SUPABASE_ANON_KEY,
-                    { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
-                );
-                try {
-                    window.supabaseClient.auth.onAuthStateChange((event, session) => {
-                        console.log('[AuthStateChange@auth]', event, session && session.user ? session.user.email : null);
-                    });
-                } catch (_) {}
             }
         } catch (error) {
             console.error('Error ensuring Supabase client:', error);
