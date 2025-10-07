@@ -5096,6 +5096,7 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
             
             // Load sections from Supabase database (Supabase-only)
             let visibleSections = [];
+            let allSectionsRaw = [];
             try {
                 if (!window.supabaseClient) {
                     console.error('Supabase client not available');
@@ -5125,6 +5126,7 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
                         }
                         return Object.assign({}, s, { config: (cfg && typeof cfg === 'object') ? cfg : {} });
                     });
+                    allSectionsRaw = rows;
                     console.log('Loaded sections from Supabase:', rows);
                     visibleSections = rows
                         .filter(s => (s && s.config && s.config.visible === false) ? false : true)
@@ -5136,6 +5138,8 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
             
             // If no sections found after filtering, replace any spinner with explicit empty state
             if (visibleSections.length === 0) {
+                // If data exists but everything appears hidden, render anyway (admin/recovery path)
+                try { if (Array.isArray(allSectionsRaw) && allSectionsRaw.length > 0) visibleSections = allSectionsRaw.slice(); } catch(_) {}
                 console.log('No sections to display');
                 try {
                     hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
