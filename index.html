@@ -890,6 +890,15 @@
                     try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
+                    // If spinner still persists shortly after retry, replace with empty state to avoid "pending" UI
+                    setTimeout(() => {
+                        try {
+                            const g = document.querySelector('.hub-grid');
+                            if (g && g.innerHTML && g.innerHTML.includes('Loading Information Hub')) {
+                                g.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
+                            }
+                        } catch(_) {}
+                    }, 700);
                 }
             } catch (_) {}
         }, 6000);
