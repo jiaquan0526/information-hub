@@ -1116,7 +1116,7 @@
                     .from('site_settings')
                     .select('value')
                     .eq('key', 'backgrounds')
-                    .single();
+                    .maybeSingle();
                 let v = data && data.value;
                 try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
                 const force = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
@@ -1151,7 +1151,7 @@
                         .from('site_settings')
                         .select('value')
                         .eq('key', 'backgrounds')
-                        .single();
+                        .maybeSingle();
                     current = data && data.value;
                 } catch(_) { current = null; }
                 try { if (typeof current === 'string') current = JSON.parse(current); } catch(_) {}
@@ -1193,7 +1193,7 @@
                         .from('site_settings')
                         .select('value')
                         .eq('key', 'backgrounds')
-                        .single();
+                        .maybeSingle();
                     v = data && data.value;
                 } catch (_) { v = null; }
                 try { if (typeof v === 'string') v = JSON.parse(v); } catch(_) {}
@@ -4712,7 +4712,11 @@ Permissions:
                 if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
                 try {
                     const bust = Date.now();
-                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                    let resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                    if (!resp || !resp.ok) {
+                        // Retry without query param for hosts that reject it (406 Not Acceptable)
+                        resp = await fetch('background-pic/manifest.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                    }
                     if (resp && resp.ok) {
                         const data = await resp.json();
                         if (Array.isArray(data) && data.length > 0) {
@@ -4912,8 +4916,11 @@ Permissions:
             let files = [];
             try {
                 const bust = Date.now();
-                const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
-                if (resp.ok) {
+                let resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                if (!resp || !resp.ok) {
+                    resp = await fetch('background-pic/manifest.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                }
+                if (resp && resp.ok) {
                     const data = await resp.json();
                     if (Array.isArray(data) && data.length > 0) {
                         files = data.map(p => `background-pic/${p}`);
