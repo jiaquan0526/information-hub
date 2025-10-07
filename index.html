@@ -28,24 +28,6 @@
     <!-- Load Supabase and config -->
     <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
     <script src="config.js"></script>
-    <!-- Ensure Supabase singleton is available early on the hub page -->
-    <script src="database-supabase.js" defer></script>
-    <script>
-    // Fallback: derive CONFIG from meta if config.js not present or didn't set it
-    (function(){
-        if (!window.CONFIG) {
-            try {
-                const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
-                const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
-                if (metaUrl && metaKey) window.CONFIG = { SUPABASE_URL: metaUrl, SUPABASE_ANON_KEY: metaKey };
-            } catch(_) {}
-        }
-        // Initialize client as soon as possible
-        document.addEventListener('DOMContentLoaded', async () => {
-            try { await (window.ensureSupabaseClient && window.ensureSupabaseClient()); } catch(_) {}
-        });
-    })();
-    </script>
     
     <script>
     // Initialize Supabase client immediately after config loads
@@ -126,11 +108,6 @@
                 if (window.supabaseClient && window.supabaseClient.auth) {
                     window.supabaseClient.auth.onAuthStateChange((event, session) => {
                         console.log('[AuthStateChange]', event, session && session.user ? session.user.email : null);
-                        try {
-                            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-                                if (typeof updateMainHubSections === 'function') updateMainHubSections();
-                            }
-                        } catch(_) {}
                     });
                 }
             } catch (_) {}
@@ -901,33 +878,18 @@
             showEmptyState();
         }
 
-        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI (runs once)
+        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI
         setTimeout(() => {
             try {
                 const grid = document.querySelector('.hub-grid');
                 const loadingOverlay = document.getElementById('loadingScreen');
                 const main = document.getElementById('mainContent');
-                const hasCards = !!(grid && grid.querySelector && grid.querySelector('.hub-card'));
-                const overlayVisible = !!(loadingOverlay && getComputedStyle(loadingOverlay).display !== 'none');
-                const spinnerPresent = !!(grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub'));
-                const stuck = !hasCards && (spinnerPresent || overlayVisible);
-                if (stuck && !window.__hubFailsafeTriggered) {
-                    window.__hubFailsafeTriggered = true;
-                    console.info('Failsafe: rebuilding hub cards');
+                const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
+                if (stuck) {
+                    console.warn('Failsafe: rebuilding hub cards');
                     try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
-                    // If spinner still persists shortly after retry, replace with empty state to avoid "pending" UI
-                    setTimeout(() => {
-                        try {
-                            const g = document.querySelector('.hub-grid');
-                            const stillSpinner = !!(g && g.innerHTML && g.innerHTML.includes('Loading Information Hub'));
-                            const stillNoCards = !!(g && (!g.querySelector || !g.querySelector('.hub-card')));
-                            if (stillSpinner || stillNoCards) {
-                                g.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
-                            }
-                        } catch(_) {}
-                    }, 700);
                 }
             } catch (_) {}
         }, 6000);
@@ -2901,9 +2863,7 @@ Permissions:
             console.log('=== UPDATING HUB CARDS ACCESS ===');
             try {
                 const role = String(user?.role || '').toLowerCase();
-                let perms = user?.permissions;
-                if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
-                if (!perms || typeof perms !== 'object') perms = {};
+                const perms = user?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
                 const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
 
@@ -4712,8 +4672,6 @@ Permissions:
             } catch (_) { return ''; }
         }
 
-
-
         function truncate(text, maxLen) {
             const t = String(text || '');
             if (t.length <= maxLen) return t;
@@ -5101,7 +5059,10 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
-        // Prevent too frequent updates (debounce)
+// Expose builder globally for early callers
+try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
+            
+            // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
                 const waitMs = Math.max(75, 1000 - (now - lastUpdateTime));
                 console.log('Update called too frequently, retrying in', waitMs, 'ms');
@@ -5121,7 +5082,6 @@ Permissions:
             
             // Load sections from Supabase database (Supabase-only)
             let visibleSections = [];
-            let allSectionsRaw = [];
             try {
                 if (!window.supabaseClient) {
                     console.error('Supabase client not available');
@@ -5151,7 +5111,6 @@ Permissions:
                         }
                         return Object.assign({}, s, { config: (cfg && typeof cfg === 'object') ? cfg : {} });
                     });
-                    allSectionsRaw = rows;
                     console.log('Loaded sections from Supabase:', rows);
                     visibleSections = rows
                         .filter(s => (s && s.config && s.config.visible === false) ? false : true)
@@ -5161,32 +5120,25 @@ Permissions:
                 console.error('Error loading sections from Supabase:', error);
             }
             
-            // If no sections found after filtering, attempt recovery using raw list (admin/recovery path)
+            // If no sections found after filtering, replace any spinner with explicit empty state
             if (visibleSections.length === 0) {
-                try { if (Array.isArray(allSectionsRaw) && allSectionsRaw.length > 0) visibleSections = allSectionsRaw.slice(); } catch(_) {}
-            }
-            // If still empty after recovery, show explicit empty state and exit
-            if (visibleSections.length === 0) {
+                console.log('No sections to display');
                 try {
                     hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                 } catch(_) {}
+                // Ensure overlay is hidden even when nothing to render
                 try {
                     const loadingScreen = document.getElementById('loadingScreen');
                     const mainContent = document.getElementById('mainContent');
                     if (loadingScreen) loadingScreen.style.display = 'none';
                     if (mainContent) mainContent.style.display = 'block';
                 } catch (_) {}
-                try {
-                    if (!window.__hubEmptyRetries) window.__hubEmptyRetries = 0;
-                    if (window.__hubEmptyRetries < 3) {
-                        window.__hubEmptyRetries++;
-                        setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 800);
-                    }
-                } catch(_) {}
                 isUpdatingSections = false;
                 return;
             }
             const prettyName = (id) => String(id || '').replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+            const escapeHtml = (t) => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
+            const truncate = (t, n) => { const s = String(t||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
             
             // Normalize section data for rendering (Supabase is the single source of truth)
             const normalizeSection = (section) => ({
@@ -5210,9 +5162,7 @@ Permissions:
                 try { const raw = localStorage.getItem('currentUserSession'); if (raw) sessionUser = JSON.parse(raw); } catch(_) {}
                 if (!sessionUser && window.informationHub && window.informationHub.currentUser) sessionUser = window.informationHub.currentUser;
                 const role = String(sessionUser?.role || '').toLowerCase();
-                let perms = sessionUser?.permissions;
-                if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
-                if (!perms || typeof perms !== 'object') perms = {};
+                const perms = sessionUser?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
                 const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
                 if (!canViewAll && userSections.length > 0) {
@@ -5318,7 +5268,8 @@ Permissions:
                         return `<span><i class="${iconClass}"></i> <span id="${safeId}">0</span> ${escapeHtml(label)}</span>`;
                     }).join(' ');
                     
-                    const cardHTML = `                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
+                    const cardHTML = `
+                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
                     <div class="card-header">
                         <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                         <div class="card-title">
@@ -5371,8 +5322,6 @@ Permissions:
             // Reset the flag
             isUpdatingSections = false;
         }
-        // Expose builder globally for early callers
-        try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
@@ -5514,6 +5463,7 @@ Permissions:
         }
         function isLowDataConnection() { return false; }
         function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
+    }
     </script>
     <style>
         @keyframes spin {
