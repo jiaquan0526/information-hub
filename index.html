@@ -1024,7 +1024,7 @@
                 const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
                 if (stuck) {
                     console.warn('Failsafe: rebuilding hub cards');
-                    try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                    try { if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
                 }
@@ -1040,7 +1040,7 @@
                     console.warn('Early failsafe: revealing UI and attempting card build');
                     loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
-                    try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                    try { if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                 }
             } catch(_) {}
         }, 2500);
@@ -1084,6 +1084,38 @@
                 }
             })();
         }
+
+        // Global, robust rebuild that forces card rebuild with minimal fallback
+        if (!window.rebuildHubCardsNow) {
+            window.rebuildHubCardsNow = async function() {
+                try {
+                    const grid = document.querySelector('.hub-grid');
+                    const loadingOverlay = document.getElementById('loadingScreen');
+                    const main = document.getElementById('mainContent');
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
+                    if (main) main.style.display = 'block';
+                    // Prefer advanced builder
+                    if (typeof window.updateMainHubSections === 'function') {
+                        await window.updateMainHubSections();
+                    }
+                    // If still no cards, attempt direct Supabase load fallback
+                    const hasCards = !!(grid && grid.querySelector('.hub-card'));
+                    if (!hasCards && typeof window.loadSectionsFromSupabase === 'function') {
+                        try { await window.loadSectionsFromSupabase(); } catch(_) {}
+                    }
+                } catch (_) {}
+            };
+        }
+
+        // Rebuild cards when connection is restored
+        try {
+            window.addEventListener('online', () => {
+                try {
+                    if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow();
+                    else if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections();
+                } catch(_) {}
+            });
+        } catch(_) {}
 
         // Show hub as soon as database is ready, then build sections
         document.addEventListener('hubdb-ready', () => {
