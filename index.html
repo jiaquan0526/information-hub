@@ -675,13 +675,18 @@
             
             // Kick the advanced builder via readiness helper to avoid timing races
             const hubGrid = document.querySelector('.hub-grid');
+            console.log('[Init] hubGrid exists:', !!hubGrid);
             if (hubGrid) {
                 // Ensure Supabase client is initialized first
                 try { if (typeof window.ensureSupabaseClient === 'function') await window.ensureSupabaseClient(); } catch(_) {}
                 // Invoke builder (waiting for readiness helper when available)
-                try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') await updateMainHubSections(); } catch(_) {}
+                try {
+                    console.log('[Init] Triggering builder (immediate)');
+                    if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon();
+                    else if (typeof updateMainHubSections === 'function') await updateMainHubSections();
+                } catch(_) {}
                 // Safety: invoke builder again shortly after in case of late readiness
-                try { setTimeout(() => { try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
+                try { setTimeout(() => { try { console.log('[Init] Triggering builder (retry 600ms)'); if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
                 // Late fallback: if still no cards after a short delay, force a rebuild
                 try {
                     setTimeout(() => {
@@ -696,6 +701,20 @@
                             }
                         } catch(_) {}
                     }, 2500);
+                } catch(_) {}
+                // Diagnostic loop: attempt a few times with logs
+                try {
+                    let attempts = 0;
+                    const max = 5;
+                    const t = setInterval(() => {
+                        attempts++;
+                        try {
+                            const hasCards = !!(document.querySelector('.hub-grid')?.querySelector('.hub-card'));
+                            console.log(`[Init] Check #${attempts} hasCards=`, hasCards);
+                            if (hasCards || attempts >= max) { clearInterval(t); return; }
+                            if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                        } catch(_) {}
+                    }, 1000);
                 } catch(_) {}
             }
             
