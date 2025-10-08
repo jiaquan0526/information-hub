@@ -676,6 +676,13 @@
             // Kick the advanced builder via readiness helper to avoid timing races
             const hubGrid = document.querySelector('.hub-grid');
             console.log('[Init] hubGrid exists:', !!hubGrid);
+            try {
+                console.log('[Init] builder presence:', {
+                    callUpdateMainHubSectionsSoon: typeof callUpdateMainHubSectionsSoon,
+                    updateMainHubSections: typeof updateMainHubSections,
+                    rebuildHubCardsNow: typeof rebuildHubCardsNow
+                });
+            } catch(_) {}
             if (hubGrid) {
                 // Ensure Supabase client is initialized first
                 try { if (typeof window.ensureSupabaseClient === 'function') await window.ensureSupabaseClient(); } catch(_) {}
