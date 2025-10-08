@@ -5201,8 +5201,8 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
-// Advanced builder defined (no global exposure)
-try { window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
+            // Advanced builder defined (no global exposure)
+            try { window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
