@@ -850,8 +850,16 @@
             if (typeof window.updateMainHubSections !== 'function') {
                 window.updateMainHubSections = async function() {
                     try {
+                        const now = Date.now();
+                        if (window.__hubBuildInFlight) return;
+                        if (window.__hubBuildLastAt && (now - window.__hubBuildLastAt) < 2000) return;
+                        window.__hubBuildInFlight = true;
                         await loadSectionsFromSupabase();
                     } catch (_) {}
+                    finally {
+                        try { window.__hubBuildLastAt = Date.now(); } catch(_) {}
+                        try { window.__hubBuildInFlight = false; } catch(_) {}
+                    }
                 };
             }
         } catch (_) {}
