@@ -684,7 +684,10 @@
         });
         
         // Function to load sections from Supabase database
+        let __sectionsLoadInProgress = false;
         async function loadSectionsFromSupabase() {
+            if (__sectionsLoadInProgress) { console.warn("Timer 'loadSectionsFromSupabase' already exists"); return; }
+            __sectionsLoadInProgress = true;
             console.time('loadSectionsFromSupabase');
             console.log('[Hub] Loading sections from Supabase...');
             updateHubProgress('Initializing Supabase connection...', 5);
@@ -703,7 +706,7 @@
                 console.error('Supabase client not available after waiting');
                 updateHubProgress('❌ Supabase connection failed', 100);
                 setTimeout(() => showFallbackSections(), 2000);
-                return;
+                __sectionsLoadInProgress = false; return;
             }
             
             try {
@@ -758,7 +761,7 @@
                     console.error('[Hub] Database connection test failed:', testError);
                     updateHubProgress('❌ Database connection failed', 100);
                     setTimeout(() => showFallbackSections(), 2000);
-                    return;
+                    __sectionsLoadInProgress = false; return;
                 }
                 
                 updateHubProgress('✅ Database connection verified', 50);
@@ -793,7 +796,7 @@
                     console.log('No sections found in database');
                     updateHubProgress('ℹ️ No sections found', 100);
                     // Leave grid blank per requirements
-                    return;
+                    __sectionsLoadInProgress = false; return;
                 }
                 
                 console.log('[Hub] Loaded sections from Supabase (rendering)...');
@@ -818,6 +821,7 @@
                                 const progressContainer = document.querySelector('.hub-grid > div');
                                 try { if (progressContainer) progressContainer.remove(); } catch (_) {}
                                 try { console.timeEnd('loadSectionsFromSupabase'); } catch(_) {}
+                                __sectionsLoadInProgress = false;
                             }, 1500);
                         }, 300);
                     }, 300);
@@ -827,6 +831,7 @@
                 console.error('[Hub] Error loading sections:', error);
                 updateHubProgress('❌ Unexpected error: ' + error.message, 100);
                 setTimeout(() => showFallbackSections(), 2000);
+                __sectionsLoadInProgress = false;
             }
         }
         // Expose for console debugging on the hub page
