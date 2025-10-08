@@ -655,13 +655,19 @@
                 }
                 // If still no cards, show a helpful message instead of spinner
                 if (hubGrid && !hubGrid.querySelector('.hub-card')) {
-                    hubGrid.innerHTML = `
-                        <div style="text-align:center;padding:24px;color:#555;max-width:560px;margin:0 auto;">
-                            <h3 style="margin:0 0 8px 0;color:#333;">Couldn't load sections</h3>
-                            <p style="margin:0 0 16px 0;opacity:0.8;">Check your network or Supabase configuration, then try again.</p>
-                            <button style="background:#3498db;color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;" onclick="(async function(){ try { if (typeof window.updateMainHubSections==='function') await window.updateMainHubSections(); } catch(_) {} })()">Retry</button>
-                        </div>
-                    `;
+                    try {
+                        if (typeof window.showSectionsLoadError === 'function') {
+                            window.showSectionsLoadError();
+                        } else {
+                            hubGrid.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#555;max-width:560px;margin:0 auto;">
+                                    <h3 style="margin:0 0 8px 0;color:#333;">Couldn't load sections</h3>
+                                    <p style="margin:0 0 16px 0;opacity:0.8;">Check your network or Supabase configuration, then try again.</p>
+                                    <button style="background:#3498db;color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;" onclick="(async function(){ try { if (typeof window.rebuildHubCardsNow==='function') await window.rebuildHubCardsNow(); else if (typeof window.updateMainHubSections==='function') await window.updateMainHubSections(); } catch(_) {} })()">Retry</button>
+                                </div>
+                            `;
+                        }
+                    } catch (_) {}
                 }
             })();
             
@@ -1085,6 +1091,48 @@
             })();
         }
 
+        // Inline diagnostics for section loading failures
+        if (!window.showSectionsLoadError) {
+            window.showSectionsLoadError = function(lastError) {
+                try {
+                    const hubGrid = document.querySelector('.hub-grid');
+                    if (!hubGrid) return;
+                    const cfg = window.CONFIG || {};
+                    const url = cfg.SUPABASE_URL || '';
+                    const key = (cfg.SUPABASE_ANON_KEY ? (cfg.SUPABASE_ANON_KEY.slice(0,8) + '…') : '');
+                    const libOk = !!window.supabase;
+                    const clientOk = !!window.supabaseClient;
+                    const online = (typeof navigator !== 'undefined' ? navigator.onLine : true);
+                    let errMsg = '';
+                    try { errMsg = lastError?.message || ''; } catch(_) {}
+                    const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                    const steps = `
+                        <ul style="text-align:left;max-width:640px;margin:12px auto 0;padding-left:18px;">
+                            <li>Verify network connectivity (you appear ${online ? 'online' : 'offline'}).</li>
+                            <li>Confirm Supabase config in config.js or meta tags matches your project.</li>
+                            <li>Check RLS/permissions and that the 'sections' table has rows.</li>
+                            <li>Open console and run <code>rebuildHubCardsNow()</code> after fixing config/data.</li>
+                        </ul>`;
+                    hubGrid.innerHTML = `
+                        <div style="text-align:center;padding:24px;color:#555;max-width:720px;margin:0 auto;">
+                            <h3 style="margin:0 0 8px 0;color:#333;">Couldn't load sections</h3>
+                            <p style="margin:0 0 12px 0;opacity:0.8;">Check your network or Supabase configuration, then try again.</p>
+                            <div style="font-size:12px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;text-align:left;padding:12px;margin:10px 0;color:#444;">
+                                <div><b>Status</b>: online=${online}, lib=${libOk}, client=${clientOk}</div>
+                                <div><b>Supabase URL</b>: <code>${(url||metaUrl)||'(unset)'}</code></div>
+                                <div><b>Anon key</b>: <code>${key||'(unset)'}</code></div>
+                                ${errMsg ? `<div style="margin-top:6px;color:#b91c1c;"><b>Error</b>: ${errMsg}</div>` : ''}
+                            </div>
+                            ${steps}
+                            <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                                <button style="background:#3498db;color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;" onclick="(async function(){ try { if (typeof window.rebuildHubCardsNow==='function') await window.rebuildHubCardsNow(); else if (typeof window.updateMainHubSections==='function') await window.updateMainHubSections(); } catch(_) {} })()">Retry</button>
+                                <button style="background:#111827;color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;" onclick="(function(){ try { console.log('CONFIG', window.CONFIG); console.log('supabase lib?', !!window.supabase); console.log('client?', !!window.supabaseClient); if (window.supabaseClient) window.supabaseClient.from('sections').select('section_id,name').limit(5).then(r=>console.log('test query', r)); } catch(_) {} })()">Diagnose</button>
+                            </div>
+                        </div>`;
+                } catch(_) {}
+            };
+        }
+
         // Global, robust rebuild that forces card rebuild with minimal fallback
         if (!window.rebuildHubCardsNow) {
             window.rebuildHubCardsNow = async function() {
@@ -1101,7 +1149,13 @@
                     // If still no cards, attempt direct Supabase load fallback
                     const hasCards = !!(grid && grid.querySelector('.hub-card'));
                     if (!hasCards && typeof window.loadSectionsFromSupabase === 'function') {
-                        try { await window.loadSectionsFromSupabase(); } catch(_) {}
+                        try { await window.loadSectionsFromSupabase(); } catch(err) {
+                            try { if (typeof window.showSectionsLoadError === 'function') window.showSectionsLoadError(err); } catch(_) {}
+                        }
+                    }
+                    // If still nothing, show diagnostics
+                    if (grid && !grid.querySelector('.hub-card')) {
+                        try { if (typeof window.showSectionsLoadError === 'function') window.showSectionsLoadError(); } catch(_) {}
                     }
                 } catch (_) {}
             };
