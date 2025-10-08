@@ -1507,11 +1507,11 @@
             }
             if ((!rows || rows.length === 0) && window.supabaseClient) {
                 try {
-                    const { data: direct } = await window.supabaseClient
+                    const resp = await window.supabaseClient
                         .from('sections')
                         .select('*')
-                        .order('name', { ascending: true });
-                    rows = Array.isArray(direct) ? direct : [];
+                        .order('config->>order', { ascending: true, nullsFirst: true });
+                    rows = resp && Array.isArray(resp.data) ? resp.data : [];
                 } catch (e) {
                     console.warn('Error direct-loading sections for stats:', e);
                 }
