@@ -658,10 +658,10 @@
                 if (mainContent) mainContent.style.display = 'block';
             }
             
-            // Kick the advanced builder immediately if available
+            // Kick the advanced builder via readiness helper to avoid timing races
             const hubGrid = document.querySelector('.hub-grid');
             if (hubGrid) {
-                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
             }
             
             // The hub-script.js will handle all authentication and data loading
@@ -5202,7 +5202,7 @@ Permissions:
                 return;
             }
             // Advanced builder defined (also expose globally in case early callers run)
-            try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
+            try {  window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
