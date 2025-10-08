@@ -117,7 +117,22 @@ class InformationHub {
         this.setupHubSessionLogging();
         // Auto-refresh from Supabase database
         try { this.setupSupabaseAutoRefresh(); } catch (_) {}
-        
+        // Trigger hub cards build immediately after auth/UI ready
+        try {
+            if (typeof window.updateMainHubSections === 'function') {
+                window.updateMainHubSections();
+            } else if (typeof window.rebuildHubCardsNow === 'function') {
+                window.rebuildHubCardsNow();
+            }
+            // Short delayed retry to catch any late readiness (auth/profile/DB)
+            setTimeout(() => {
+                try {
+                    if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections();
+                    else if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow();
+                } catch(_) {}
+            }, 500);
+        } catch (_) {}
+
         console.log('InformationHub init completed');
     }
 
