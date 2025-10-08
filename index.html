@@ -131,7 +131,22 @@
                 if (window.supabaseClient && window.supabaseClient.auth) {
                     window.supabaseClient.auth.onAuthStateChange((event, session) => {
                         console.log('[AuthStateChange]', event, session && session.user ? session.user.email : null);
+                        try {
+                            if (session && session.user) {
+                                document.dispatchEvent(new Event('auth-ready'));
+                            }
+                        } catch(_) {}
                     });
+                    // Also detect existing session on first load
+                    try {
+                        window.supabaseClient.auth.getSession().then(({ data }) => {
+                            try {
+                                if (data && data.session && data.session.user) {
+                                    document.dispatchEvent(new Event('auth-ready'));
+                                }
+                            } catch(_) {}
+                        }).catch(()=>{});
+                    } catch(_) {}
                 }
             } catch (_) {}
             console.log('✅ Supabase client ready');
@@ -995,6 +1010,16 @@
                         if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
                         return;
                     }
+                    // Prefer to run only after auth is ready (if event is used)
+                    if (!(window.__authReady === true)) {
+                        // if we have a user in session, consider ready
+                        try {
+                            const raw = localStorage.getItem('currentUserSession');
+                            if (!raw) {
+                                if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                            }
+                        } catch(_) {}
+                    }
                     if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
                         if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
                     }
@@ -1047,8 +1072,18 @@
             } catch(_) {}
         }, { once: true });
 
-        // If database became ready earlier, trigger a build now as well
+        // Mark auth-ready when we get the custom event
+        try { document.addEventListener('auth-ready', () => { try { window.__authReady = true; } catch(_) {} callUpdateMainHubSectionsSoon(); }, { once: true }); } catch(_) {}
+
+        // If database or auth became ready earlier, trigger a build now as well
         try { if (window.hubDatabaseReady) callUpdateMainHubSectionsSoon(); } catch(_) {}
+        try {
+            if (window.supabaseClient) {
+                window.supabaseClient.auth.getSession().then(({ data }) => {
+                    try { if (data && data.session && data.session.user) { window.__authReady = true; callUpdateMainHubSectionsSoon(); } } catch(_) {}
+                }).catch(()=>{});
+            }
+        } catch(_) {}
 
         // Final window-load fallback to ensure UI becomes visible
         window.addEventListener('load', () => {
