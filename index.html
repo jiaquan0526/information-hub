@@ -688,8 +688,11 @@
                         try {
                             const grid = document.querySelector('.hub-grid');
                             if (grid && !grid.querySelector('.hub-card')) {
-                                if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow();
-                                else if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                                if (typeof window.rebuildHubCardsNow === 'function') {
+                                    window.rebuildHubCardsNow();
+                                } else if (typeof updateMainHubSections === 'function') {
+                                    updateMainHubSections();
+                                }
                             }
                         } catch(_) {}
                     }, 2500);
@@ -2437,8 +2440,12 @@
                 if (!cErr && !dErr) log('✅ Create/Delete');
 
                 log('<b>Done.</b>');
-                // After diagnostics, trigger a hub rebuild to reflect any newly-ready auth/session
-                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); else if (typeof rebuildHubCardsNow === 'function') rebuildHubCardsNow(); } catch(_) {}
+                // After diagnostics, trigger a hub rebuild only via advanced builder
+                try {
+                    if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon();
+                    else if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                    else if (typeof rebuildHubCardsNow === 'function') rebuildHubCardsNow();
+                } catch(_) {}
             } catch (e) {
                 log('❌ Exception: ' + (e?.message || e));
             }
