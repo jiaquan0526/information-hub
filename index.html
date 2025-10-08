@@ -3007,6 +3007,11 @@ Permissions:
         async function updateHubCardsAccess(user) {
             console.log('=== UPDATING HUB CARDS ACCESS ===');
             try {
+                // If no authenticated user yet, skip access filtering to avoid hiding all cards pre-auth
+                if (!user || typeof user !== 'object') {
+                    console.log('No session user yet; skipping access filter');
+                    return;
+                }
                 const role = String(user?.role || '').toLowerCase();
                 const perms = user?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
