@@ -661,7 +661,12 @@
             // Kick the advanced builder via readiness helper to avoid timing races
             const hubGrid = document.querySelector('.hub-grid');
             if (hubGrid) {
-                try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                // Ensure Supabase client is initialized first
+                try { if (typeof window.ensureSupabaseClient === 'function') await window.ensureSupabaseClient(); } catch(_) {}
+                // Invoke builder (waiting for readiness helper when available)
+                try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') await updateMainHubSections(); } catch(_) {}
+                // Safety: invoke builder again shortly after in case of late readiness
+                try { setTimeout(() => { try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
             }
             
             // The hub-script.js will handle all authentication and data loading
