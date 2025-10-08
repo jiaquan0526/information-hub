@@ -153,6 +153,21 @@
             // Kick the advanced builder immediately (in addition to later hooks)
             try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
 
+            // When auth session is confirmed later, rebuild hub cards reliably
+            try {
+                document.addEventListener('auth-ready', () => {
+                    try {
+                        if (typeof callUpdateMainHubSectionsSoon === 'function') {
+                            callUpdateMainHubSectionsSoon();
+                        } else if (typeof updateMainHubSections === 'function') {
+                            updateMainHubSections();
+                        } else {
+                            setTimeout(() => { try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 400);
+                        }
+                    } catch(_) {}
+                });
+            } catch(_) {}
+
             // Advanced cards only: skip minimal bootstrap; builder will be invoked by later hooks
         };
         
@@ -667,6 +682,18 @@
                 try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') await updateMainHubSections(); } catch(_) {}
                 // Safety: invoke builder again shortly after in case of late readiness
                 try { setTimeout(() => { try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
+                // Late fallback: if still no cards after a short delay, force a rebuild
+                try {
+                    setTimeout(() => {
+                        try {
+                            const grid = document.querySelector('.hub-grid');
+                            if (grid && !grid.querySelector('.hub-card')) {
+                                if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow();
+                                else if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                            }
+                        } catch(_) {}
+                    }, 2500);
+                } catch(_) {}
             }
             
             // The hub-script.js will handle all authentication and data loading
@@ -2410,6 +2437,8 @@
                 if (!cErr && !dErr) log('✅ Create/Delete');
 
                 log('<b>Done.</b>');
+                // After diagnostics, trigger a hub rebuild to reflect any newly-ready auth/session
+                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); else if (typeof rebuildHubCardsNow === 'function') rebuildHubCardsNow(); } catch(_) {}
             } catch (e) {
                 log('❌ Exception: ' + (e?.message || e));
             }
