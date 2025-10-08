@@ -1183,5 +1183,7 @@ const fallbackInterval = setInterval(() => {
     initializeDatabase();
 }, 2000);
 
-// Backward compatibility flag
-window.hubDatabaseReady = false;
+// Backward compatibility flag (do not force-reset to false if already true)
+if (typeof window.hubDatabaseReady === 'undefined') {
+    window.hubDatabaseReady = false;
+}

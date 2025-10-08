@@ -624,6 +624,9 @@
             // Show loading message while waiting for database
             const hubGrid = document.querySelector('.hub-grid');
             if (hubGrid && !window.DISABLE_FAILSAFES) {
+                // If cards are already present (e.g., another init path rendered them), skip spinner
+                const hasCards = !!hubGrid.querySelector('.hub-card');
+                if (!hasCards) {
                 hubGrid.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #666; max-width: 500px; margin: 0 auto;">
                         <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
@@ -657,6 +660,9 @@
                         </div>
                     </div>
                 `;
+                }
+                // Kick the advanced builder immediately if available
+                try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
             }
             
             // The hub-script.js will handle all authentication and data loading
