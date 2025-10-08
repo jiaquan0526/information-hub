@@ -845,24 +845,7 @@
         }
         // Expose for console debugging on the hub page
         try { window.loadSectionsFromSupabase = loadSectionsFromSupabase; } catch (_) {}
-        // Provide a safe fallback for updateMainHubSections if the advanced builder hasn't loaded
-        try {
-            if (typeof window.updateMainHubSections !== 'function') {
-                window.updateMainHubSections = async function() {
-                    try {
-                        const now = Date.now();
-                        if (window.__hubBuildInFlight) return;
-                        if (window.__hubBuildLastAt && (now - window.__hubBuildLastAt) < 2000) return;
-                        window.__hubBuildInFlight = true;
-                        await loadSectionsFromSupabase();
-                    } catch (_) {}
-                    finally {
-                        try { window.__hubBuildLastAt = Date.now(); } catch(_) {}
-                        try { window.__hubBuildInFlight = false; } catch(_) {}
-                    }
-                };
-            }
-        } catch (_) {}
+        // Removed minimal fallback: rely exclusively on the advanced builder
         
         // Function to update hub progress
         function updateHubProgress(message, percentage) {
@@ -1027,16 +1010,6 @@
                     if (!(typeof window.updateMainHubSections === 'function')) {
                         if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
                         return;
-                    }
-                    // Prefer to run only after auth is ready (if event is used)
-                    if (!(window.__authReady === true)) {
-                        // if we have a user in session, consider ready
-                        try {
-                            const raw = localStorage.getItem('currentUserSession');
-                            if (!raw) {
-                                if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
-                            }
-                        } catch(_) {}
                     }
                     if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
                         if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
