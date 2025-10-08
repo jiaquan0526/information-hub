@@ -248,12 +248,11 @@ class HubDatabase {
         try {
             const client = window.supabaseClient || this.supabase;
             if (!client) throw new Error('Supabase client not ready');
-            // Prefer explicit config.order, then name, fallback to section_id, then no ordering
+            // Order strictly by config.order only; fallback to no explicit ordering
             let resp = await client.from('sections').select('*')
-                .order('config->order', { ascending: true, nullsFirst: true })
-                .order('name', { ascending: true });
+                .order('config->order', { ascending: true, nullsFirst: true });
             if (resp.error) {
-                resp = await client.from('sections').select('*').order('section_id', { ascending: true });
+                resp = await client.from('sections').select('*');
             }
             if (resp.error) {
                 resp = await client.from('sections').select('*');

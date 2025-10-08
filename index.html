@@ -608,21 +608,24 @@
                         const hubGrid = document.querySelector('.hub-grid');
                         if (!hubGrid) { __inFlight=false; return; }
                         if (!(window.supabaseClient && window.supabaseClient.from)) { __inFlight=false; return; }
+                        // Ensure we have an authenticated session before querying (RLS)
+                        try {
+                            const s = await window.supabaseClient.auth.getSession();
+                            if (!(s && s.data && s.data.session && s.data.session.user)) { __inFlight=false; return; }
+                        } catch(_) { __inFlight=false; return; }
                         let sections = [];
                         try {
-                            let resp = await window.supabaseClient
-                                .from('sections')
-                                .select('section_id, name, icon, color, description, config')
-                                .order('config->order', { ascending: true, nullsFirst: true })
-                                .order('name', { ascending: true });
-                            if (resp.error) throw resp.error;
-                            sections = Array.isArray(resp.data) ? resp.data : [];
-                        } catch (e1) {
                             const resp2 = await window.supabaseClient
                                 .from('sections')
                                 .select('section_id, name, icon, color, description, config')
-                                .order('name', { ascending: true });
+                                .order('config->order', { ascending: true, nullsFirst: true });
                             if (!resp2.error) sections = Array.isArray(resp2.data) ? resp2.data : [];
+                            else throw resp2.error;
+                        } catch (e1) {
+                            const resp3 = await window.supabaseClient
+                                .from('sections')
+                                .select('section_id, name, icon, color, description, config');
+                            if (!resp3.error) sections = Array.isArray(resp3.data) ? resp3.data : [];
                         }
                         // Normalize and filter visibility
                         let rows = sections.map(s=>{ let cfg=s&&s.config; if (typeof cfg==='string'){ try{ cfg=JSON.parse(cfg);}catch(_){cfg={};} } cfg = (cfg&&typeof cfg==='object')?cfg:{}; return { id:s.section_id||s.id, name:s.name, icon:s.icon||'fas fa-th-large', color:s.color, description:s.description, intro:(cfg.intro||s.description||''), visible: !(cfg.visible===false), order: Number.isFinite(cfg.order)?cfg.order:0, config: cfg }; });
@@ -846,16 +849,14 @@
                     const resp = await window.supabaseClient
                         .from('sections')
                         .select('section_id, name, icon, color, config')
-                        .order('config->order', { ascending: true, nullsFirst: true })
-                        .order('name', { ascending: true });
+                        .order('config->order', { ascending: true, nullsFirst: true });
                     if (resp.error) throw resp.error;
                     sections = resp.data || [];
                 } catch (orderErr) {
                     console.warn('[Hub] Order by config->order failed; retrying by name only', orderErr);
                     const fallback = await window.supabaseClient
                         .from('sections')
-                        .select('section_id, name, icon, color, config')
-                        .order('name', { ascending: true });
+                        .select('section_id, name, icon, color, config');
                     if (fallback.error) {
                         console.error('[Hub] Error fetching sections (fallback):', fallback.error);
                         updateHubProgress('❌ Error loading sections: ' + fallback.error.message, 100);
@@ -2405,8 +2406,7 @@
                 const { data: secs, error: sErr } = await window.supabaseClient
                     .from('sections')
                     .select('section_id, name, config')
-                    .order('config->order', { ascending: true, nullsFirst: true })
-                    .order('name', { ascending: true });
+                    .order('config->order', { ascending: true, nullsFirst: true });
                 if (sErr) { log('❌ ' + sErr.message); } else { log('✅ ' + (secs?.length || 0) + ' rows'); }
 
                 // Variables snapshot for troubleshooting data flows
@@ -5266,16 +5266,14 @@ try { window.updateMainHubSections = updateMainHubSections; window.__advancedBui
                         const resp = await window.supabaseClient
                             .from('sections')
                             .select('*')
-                            .order('config->order', { ascending: true, nullsFirst: true })
-                            .order('name', { ascending: true });
+                            .order('config->order', { ascending: true, nullsFirst: true });
                         if (resp.error) throw resp.error;
                         sections = resp.data || [];
                     } catch (orderErr) {
-                        console.warn('Order by config->order failed; retry by name only', orderErr);
+                        console.warn('Order by config->order failed; retry without order', orderErr);
                         const resp2 = await window.supabaseClient
                             .from('sections')
-                            .select('*')
-                            .order('name', { ascending: true });
+                            .select('*');
                         if (resp2.error) throw resp2.error;
                         sections = resp2.data || [];
                     }
@@ -5508,10 +5506,10 @@ try { window.updateMainHubSections = updateMainHubSections; window.__advancedBui
             try {
                 let rows = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : [];
                 if ((!rows || rows.length === 0) && window.supabaseClient) {
-                    const { data: direct } = await window.supabaseClient
+                const { data: direct } = await window.supabaseClient
                         .from('sections')
                         .select('section_id')
-                        .order('section_id', { ascending: true });
+                        .order('config->order', { ascending: true, nullsFirst: true });
                     rows = Array.isArray(direct) ? direct : [];
                 }
                 allSections = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
@@ -5544,10 +5542,10 @@ try { window.updateMainHubSections = updateMainHubSections; window.__advancedBui
             try {
                 let rows = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : [];
                 if ((!rows || rows.length === 0) && window.supabaseClient) {
-                    const { data: direct } = await window.supabaseClient
-                        .from('sections')
-                        .select('section_id')
-                        .order('section_id', { ascending: true });
+                        const { data: direct } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id')
+                            .order('config->order', { ascending: true, nullsFirst: true });
                     rows = Array.isArray(direct) ? direct : [];
                 }
                 allSections = (Array.isArray(rows) ? rows : []).map(r => r.section_id || r.id).filter(Boolean);
