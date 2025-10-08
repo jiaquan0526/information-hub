@@ -1019,20 +1019,20 @@
         });
 
         // Helper to invoke advanced builder when ready (handles definition/ordering races)
-        function callUpdateMainHubSectionsSoon(maxWaitMs = 4000) {
+        function callUpdateMainHubSectionsSoon(maxWaitMs = 20000) {
             const start = Date.now();
             (function tick(){
                 try {
                     if (!(typeof updateMainHubSections === 'function')) {
-                        if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                        if (Date.now() - start < maxWaitMs) { try { console.log('[BuilderWait] updateMainHubSections not ready yet'); } catch(_) {} return setTimeout(tick, 100); }
                         return;
                     }
                     if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
-                        if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                        if (Date.now() - start < maxWaitMs) { try { console.log('[BuilderWait] Supabase client not ready yet'); } catch(_) {} return setTimeout(tick, 100); }
                     }
                     updateMainHubSections();
                 } catch (_) {
-                    if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                    if (Date.now() - start < maxWaitMs) { try { console.log('[BuilderWait] waiting and retrying...'); } catch(_) {} return setTimeout(tick, 100); }
                 }
             })();
         }
