@@ -2977,10 +2977,30 @@ Permissions:
                     console.log('No session user yet; skipping access filter');
                     return;
                 }
-                const role = String(user?.role || '').toLowerCase();
+                const role = String(user?.role || '').trim().toLowerCase();
                 const perms = user?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
-                const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
+                const canViewAll = !!perms.canViewAllSections || !!perms.canManageUsers || userSections.includes('*') || role === 'admin';
+
+                // Admins/managers: force-show all and exit early
+                if (canViewAll) {
+                    try {
+                        const hubCardsAll = document.querySelectorAll('.hub-card');
+                        hubCardsAll.forEach(card => { card.style.display = ''; });
+                    } catch (_) {}
+                    console.log('Admin/manager access: showing all cards');
+                    return;
+                }
+
+                // Align with builder: if user has no explicit section list and isn't admin, leave all visible
+                if (!canViewAll && userSections.length === 0) {
+                    try {
+                        const hubCardsAll = document.querySelectorAll('.hub-card');
+                        hubCardsAll.forEach(card => { card.style.display = ''; });
+                    } catch (_) {}
+                    console.log('No explicit section restrictions; showing all cards');
+                    return;
+                }
 
                 // Determine visible sections from database
                 let visibleSections = [];
@@ -5275,10 +5295,10 @@ Permissions:
                 let sessionUser = null;
                 try { const raw = localStorage.getItem('currentUserSession'); if (raw) sessionUser = JSON.parse(raw); } catch(_) {}
                 if (!sessionUser && window.informationHub && window.informationHub.currentUser) sessionUser = window.informationHub.currentUser;
-                const role = String(sessionUser?.role || '').toLowerCase();
+                const role = String(sessionUser?.role || '').trim().toLowerCase();
                 const perms = sessionUser?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
-                const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
+                const canViewAll = !!perms.canViewAllSections || !!perms.canManageUsers || userSections.includes('*') || role === 'admin';
                 if (!canViewAll && userSections.length > 0) {
                     const allowed = new Set(userSections);
                     visibleSections = visibleSections.filter(s => allowed.has(s.id));
