@@ -591,69 +591,7 @@
     <script src="excel-export.js" defer></script>
     <script src="auth-script.js" defer></script>
     <script src="hub-script.js" defer></script>
-    <script>
-        // Early advanced builder shim: defines updateMainHubSections if not yet defined
-        (function(){
-            try {
-                if (typeof window.updateMainHubSections === 'function') return;
-                let __inFlight = false; let __lastAt = 0;
-                function esc(t){ try { const d=document.createElement('div'); d.textContent=String(t||''); return d.innerHTML; } catch(_) { return String(t||''); } }
-                function trunc(t,n){ const s=String(t||''); return s.length>n?s.slice(0,n-1)+'…':s; }
-                window.updateMainHubSections = async function(){
-                    try {
-                        const now = Date.now();
-                        if (__inFlight) return;
-                        if (__lastAt && (now - __lastAt) < 800) return;
-                        __inFlight = true;
-                        const hubGrid = document.querySelector('.hub-grid');
-                        if (!hubGrid) { __inFlight=false; return; }
-                        if (!(window.supabaseClient && window.supabaseClient.from)) { __inFlight=false; return; }
-                        // Ensure we have an authenticated session before querying (RLS)
-                        try {
-                            const s = await window.supabaseClient.auth.getSession();
-                            if (!(s && s.data && s.data.session && s.data.session.user)) { __inFlight=false; return; }
-                        } catch(_) { __inFlight=false; return; }
-                        let sections = [];
-                        try {
-                            const resp2 = await window.supabaseClient
-                                .from('sections')
-                                .select('section_id, name, icon, color, config')
-                                .order('config->order', { ascending: true, nullsFirst: true });
-                            if (!resp2.error) sections = Array.isArray(resp2.data) ? resp2.data : [];
-                            else throw resp2.error;
-                        } catch (e1) {
-                            const resp3 = await window.supabaseClient
-                                .from('sections')
-                                .select('section_id, name, icon, color, config');
-                            if (!resp3.error) sections = Array.isArray(resp3.data) ? resp3.data : [];
-                        }
-                        // Normalize and filter visibility
-                        let rows = sections.map(s=>{ let cfg=s&&s.config; if (typeof cfg==='string'){ try{ cfg=JSON.parse(cfg);}catch(_){cfg={};} } cfg = (cfg&&typeof cfg==='object')?cfg:{}; return { id:s.section_id||s.id, name:s.name, icon:s.icon||'fas fa-th-large', color:s.color, intro:(cfg.intro||''), visible: !(cfg.visible===false), order: Number.isFinite(cfg.order)?cfg.order:0, config: cfg }; });
-                        rows = rows.filter(r=>r.visible);
-                        // Simple permission filter if session present
-                        try {
-                            const raw = localStorage.getItem('currentUserSession');
-                            const u = raw ? JSON.parse(raw) : (window.informationHub && window.informationHub.currentUser) || null;
-                            if (u && u.permissions && Array.isArray(u.permissions.sections) && u.permissions.sections.length>0 && !(u.permissions.canViewAllSections || String(u.role||'').toLowerCase()==='admin' || u.permissions.sections.includes('*'))){
-                                const allowed = new Set(u.permissions.sections);
-                                rows = rows.filter(r=>allowed.has(r.id));
-                            }
-                        } catch(_) {}
-                        if (rows.length===0){ hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>'; __lastAt=Date.now(); __inFlight=false; return; }
-                        // Removed minimal card rendering; rely on advanced builder below
-                        // Make UI visible
-                        try { const ls=document.getElementById('loadingScreen'); if (ls) ls.style.display='none'; } catch(_){}
-                        try { const mc=document.getElementById('mainContent'); if (mc) mc.style.display='block'; } catch(_){}
-                        // Optional hooks
-                        try { if (typeof updateSectionStats==='function') updateSectionStats(); } catch(_){}
-                        try { if (typeof updateBackgroundToggleButton==='function') updateBackgroundToggleButton(); } catch(_){}
-                        __lastAt = Date.now();
-                        __inFlight = false;
-                    } catch(_) { __inFlight=false; }
-                };
-            } catch(_) {}
-        })();
-    </script>
+    
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
