@@ -897,10 +897,7 @@
             const sortedSections = (sections || []).slice().sort((a, b) => {
                 const ao = (a && a.config && typeof a.config.order === 'number') ? a.config.order : 0;
                 const bo = (b && b.config && typeof b.config.order === 'number') ? b.config.order : 0;
-                if (ao !== bo) return ao - bo;
-                const an = (a && a.name) ? String(a.name) : '';
-                const bn = (b && b.name) ? String(b.name) : '';
-                return an.localeCompare(bn);
+                return ao - bo;
             });
             const sectionsHtml = sortedSections.map(section => {
                 let cfg = section && section.config ? section.config : null;
@@ -6503,8 +6500,7 @@ Permissions:
                     var q = window.supabaseClient
                         .from('sections')
                         .select('section_id,name,icon,color,config')
-                        .order('config->order', { ascending: true, nullsFirst: true })
-                        .order('name', { ascending: true });
+                        .order('config->order', { ascending: true, nullsFirst: true });
                     var res = await q;
                     if (res.error) throw res.error;
                     return res.data || [];
