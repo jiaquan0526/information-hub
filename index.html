@@ -5344,7 +5344,9 @@ Permissions:
             });
             
             // Normalize all sections
+            console.log('[Builder] Visible sections before normalize:', visibleSections.length);
             visibleSections = visibleSections.map(normalizeSection);
+            console.log('[Builder] Visible sections after normalize:', visibleSections.length, visibleSections.slice(0,3));
 
             // Filter visible sections by current user's permissions (admins see all)
             try {
@@ -5368,14 +5370,17 @@ Permissions:
                         }
                     } catch(_) {}
                 }
+                console.log('[Builder] Session user for permissions:', sessionUser);
                 const role = String(sessionUser?.role || '').trim().toLowerCase();
                 const perms = sessionUser?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
                 const canViewAll = !!perms.canViewAllSections || !!perms.canManageUsers || userSections.includes('*') || role === 'admin';
+                console.log('[Builder] Role:', role, 'canViewAll:', canViewAll, 'userSections(len):', userSections.length);
                 if (!canViewAll && userSections.length > 0) {
                     const allowed = new Set(userSections);
                     visibleSections = visibleSections.filter(s => allowed.has(s.id));
                 }
+                console.log('[Builder] Visible sections after permission filter:', visibleSections.length);
             } catch(_) {}
 
             // Build new content first

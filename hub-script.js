@@ -293,17 +293,18 @@ class InformationHub {
         try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch (_) {}
     }
 
-    updateHubCardsAccess() {
+    updateHubCardsAccess(userOverride) {
         const hubCards = document.querySelectorAll('.hub-card');
+        const user = userOverride || this.currentUser || {};
         hubCards.forEach(card => {
             const sectionId = card.onclick.toString().match(/navigateToSection\('([^']+)'\)/)[1];
             try {
-                const role = String(this.currentUser?.role || '').toLowerCase();
-                let perms = this.currentUser?.permissions;
+                const role = String(user?.role || '').toLowerCase();
+                let perms = user?.permissions;
                 if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(_) { perms = {}; } }
                 if (!perms || typeof perms !== 'object') perms = {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
-                const canViewAll = !!perms.canViewAllSections || userSections.includes('*') || role === 'admin';
+                const canViewAll = (!!perms.canViewAllSections || userSections.includes('*') || role === 'admin' || (Object.keys(perms).length === 0 && !role));
                 const allowed = canViewAll ? null : new Set(userSections);
                 if (!canViewAll && allowed && !allowed.has(sectionId)) {
                     card.style.display = 'none';
@@ -319,6 +320,8 @@ class InformationHub {
         window.showAllSections = () => this.showAllSections();
         window.searchAcrossHub = () => this.searchAcrossHub();
         window.showRecentActivity = () => this.showRecentActivity();
+        // Expose access updater for builders to call with a provided user
+        window.updateHubCardsAccess = (user) => this.updateHubCardsAccess(user);
         
         // Navigation
         window.navigateToSection = (sectionId) => this.navigateToSection(sectionId);
