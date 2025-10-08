@@ -986,6 +986,25 @@
             } catch (_) {}
         });
 
+        // Helper to invoke advanced builder when ready (handles definition/ordering races)
+        function callUpdateMainHubSectionsSoon(maxWaitMs = 4000) {
+            const start = Date.now();
+            (function tick(){
+                try {
+                    if (!(typeof window.updateMainHubSections === 'function')) {
+                        if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                        return;
+                    }
+                    if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
+                        if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                    }
+                    window.updateMainHubSections();
+                } catch (_) {
+                    if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
+                }
+            })();
+        }
+
         // Show hub as soon as database is ready, then build sections
         document.addEventListener('hubdb-ready', () => {
             try {
@@ -996,7 +1015,7 @@
                     try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
                     if (mainContent) mainContent.style.display = 'block';
                 }
-                if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                callUpdateMainHubSectionsSoon();
                 // Show/hide admin-only global backgrounds button
                 // Global button is always visible in quick actions
                 try { updateBackgroundToggleButton(); } catch(_) {}
@@ -1027,6 +1046,9 @@
                 } catch(_) {}
             } catch(_) {}
         }, { once: true });
+
+        // If database became ready earlier, trigger a build now as well
+        try { if (window.hubDatabaseReady) callUpdateMainHubSectionsSoon(); } catch(_) {}
 
         // Final window-load fallback to ensure UI becomes visible
         window.addEventListener('load', () => {
