@@ -686,7 +686,7 @@
         // Function to load sections from Supabase database
         let __sectionsLoadInProgress = false;
         async function loadSectionsFromSupabase() {
-            if (__sectionsLoadInProgress) { console.warn("Timer 'loadSectionsFromSupabase' already exists"); return; }
+            if (__sectionsLoadInProgress) { return; }
             __sectionsLoadInProgress = true;
             console.time('loadSectionsFromSupabase');
             console.log('[Hub] Loading sections from Supabase...');
