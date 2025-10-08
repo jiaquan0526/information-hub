@@ -618,58 +618,7 @@
                 }
             } catch (_) {}
             
-            // Watchdog: keep trying to render sections until cards appear or timeout
-            (async () => {
-                const hubGrid = document.querySelector('.hub-grid');
-                const updateStatus = (msg) => {
-                    try {
-                        const t = document.getElementById('hubProgressText'); if (t) t.textContent = msg;
-                    } catch (_) {}
-                };
-                const deadline = Date.now() + 15000; // 15s max
-                let tries = 0;
-                while (Date.now() < deadline) {
-                    // If cards rendered, remove spinner and stop
-                    if (hubGrid && hubGrid.querySelector('.hub-card')) {
-                        try {
-                            const progressContainer = hubGrid.querySelector(':scope > div');
-                            if (progressContainer) progressContainer.remove();
-                        } catch (_) {}
-                        break;
-                    }
-                    // Nudge Supabase client creation if still missing
-                    try {
-                        if (!window.supabaseClient && window.supabase && window.CONFIG) {
-                            window.supabaseClient = window.supabase.createClient(
-                                window.CONFIG.SUPABASE_URL,
-                                window.CONFIG.SUPABASE_ANON_KEY,
-                                { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
-                            );
-                            updateStatus('✅ Supabase connected! Authenticating...');
-                        }
-                    } catch (_) {}
-                    // Ask builder to render
-                    try { if (typeof window.updateMainHubSections === 'function') await window.updateMainHubSections(); } catch (_) {}
-                    tries++;
-                    await new Promise(r => setTimeout(r, 300));
-                }
-                // If still no cards, show a helpful message instead of spinner
-                if (hubGrid && !hubGrid.querySelector('.hub-card')) {
-                    try {
-                        if (typeof window.showSectionsLoadError === 'function') {
-                            window.showSectionsLoadError();
-                        } else {
-                            hubGrid.innerHTML = `
-                                <div style="text-align:center;padding:24px;color:#555;max-width:560px;margin:0 auto;">
-                                    <h3 style="margin:0 0 8px 0;color:#333;">Couldn't load sections</h3>
-                                    <p style="margin:0 0 16px 0;opacity:0.8;">Check your network or Supabase configuration, then try again.</p>
-                                    <button style="background:#3498db;color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer;" onclick="(async function(){ try { if (typeof window.rebuildHubCardsNow==='function') await window.rebuildHubCardsNow(); else if (typeof window.updateMainHubSections==='function') await window.updateMainHubSections(); } catch(_) {} })()">Retry</button>
-                                </div>
-                            `;
-                        }
-                    } catch (_) {}
-                }
-            })();
+            // Simplified init: rely on advanced builder and diagnostics (no watchdog loop)
             
             // Wait for hub-script.js to be ready
             let retries = 0;
@@ -709,47 +658,9 @@
                 if (mainContent) mainContent.style.display = 'block';
             }
             
-            // Show loading message while waiting for database
+            // Kick the advanced builder immediately if available
             const hubGrid = document.querySelector('.hub-grid');
-            if (hubGrid && !window.DISABLE_FAILSAFES) {
-                // If cards are already present (e.g., another init path rendered them), skip spinner
-                const hasCards = !!hubGrid.querySelector('.hub-card');
-                if (!hasCards) {
-                hubGrid.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #666; max-width: 500px; margin: 0 auto;">
-                        <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
-                        <h3 style="margin-bottom: 10px; color: #333;">Loading Information Hub</h3>
-                        <p style="margin-bottom: 20px; opacity: 0.8;">Connecting to Supabase and loading your sections...</p>
-                        
-                        <div style="background: #f8f9fa; border-radius: 15px; padding: 20px; margin: 20px 0; border: 1px solid #e9ecef;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <span style="font-size: 14px; font-weight: 500;">Progress</span>
-                                <span id="hubProgressPercent" style="font-size: 14px; font-weight: 600; color: #3498db;">0%</span>
-                            </div>
-                            <div style="background: #e9ecef; border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden;">
-                                <div id="hubProgressBar" style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px;"></div>
-                            </div>
-                            <p id="hubProgressText" style="font-size: 13px; margin: 10px 0 0 0; opacity: 0.8; min-height: 20px;">Initializing...</p>
-                        </div>
-                        
-                        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 20px; font-size: 12px; opacity: 0.6;">
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <div id="connectionStatus" style="width: 8px; height: 8px; border-radius: 50%; background: #ffc107;"></div>
-                                <span>Supabase</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <div id="authStatus" style="width: 8px; height: 8px; border-radius: 50%; background: #6c757d;"></div>
-                                <span>Auth</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <div id="dataStatus" style="width: 8px; height: 8px; border-radius: 50%; background: #6c757d;"></div>
-                                <span>Data</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                }
-                // Kick the advanced builder immediately if available
+            if (hubGrid) {
                 try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
             }
             
@@ -1033,7 +944,7 @@
             // On bfcache restore or fast back/forward, ensure hub is visible and refresh counts quickly
             window.addEventListener('pageshow', () => {
             try {
-                    if (window.DISABLE_FAILSAFES) return;
+                if (window.DISABLE_FAILSAFES) return;
                 const loadingScreen = document.getElementById('loadingScreen');
                 const mainContent = document.getElementById('mainContent');
                 if (loadingScreen) loadingScreen.style.display = 'none';
