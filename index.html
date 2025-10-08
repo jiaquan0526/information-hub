@@ -598,6 +598,14 @@
         // Wait for all scripts to load before initializing
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('=== DOMContentLoaded started ===');
+            // Immediately show UI to prevent loader from sticking if init takes long
+            try {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContent = document.getElementById('mainContent');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
+                if (mainContent) mainContent.style.display = 'block';
+            } catch (_) {}
             
             // Wait for hub-script.js to be ready
             let retries = 0;
