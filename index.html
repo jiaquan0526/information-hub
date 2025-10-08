@@ -617,18 +617,18 @@
                         try {
                             const resp2 = await window.supabaseClient
                                 .from('sections')
-                                .select('section_id, name, icon, color, description, config')
+                                .select('section_id, name, icon, color, config')
                                 .order('config->order', { ascending: true, nullsFirst: true });
                             if (!resp2.error) sections = Array.isArray(resp2.data) ? resp2.data : [];
                             else throw resp2.error;
                         } catch (e1) {
                             const resp3 = await window.supabaseClient
                                 .from('sections')
-                                .select('section_id, name, icon, color, description, config');
+                                .select('section_id, name, icon, color, config');
                             if (!resp3.error) sections = Array.isArray(resp3.data) ? resp3.data : [];
                         }
                         // Normalize and filter visibility
-                        let rows = sections.map(s=>{ let cfg=s&&s.config; if (typeof cfg==='string'){ try{ cfg=JSON.parse(cfg);}catch(_){cfg={};} } cfg = (cfg&&typeof cfg==='object')?cfg:{}; return { id:s.section_id||s.id, name:s.name, icon:s.icon||'fas fa-th-large', color:s.color, description:s.description, intro:(cfg.intro||s.description||''), visible: !(cfg.visible===false), order: Number.isFinite(cfg.order)?cfg.order:0, config: cfg }; });
+                        let rows = sections.map(s=>{ let cfg=s&&s.config; if (typeof cfg==='string'){ try{ cfg=JSON.parse(cfg);}catch(_){cfg={};} } cfg = (cfg&&typeof cfg==='object')?cfg:{}; return { id:s.section_id||s.id, name:s.name, icon:s.icon||'fas fa-th-large', color:s.color, intro:(cfg.intro||''), visible: !(cfg.visible===false), order: Number.isFinite(cfg.order)?cfg.order:0, config: cfg }; });
                         rows = rows.filter(r=>r.visible);
                         // Simple permission filter if session present
                         try {
@@ -982,7 +982,7 @@
                 if (typeof cfg === 'string') {
                     try { cfg = JSON.parse(cfg); } catch (_) { cfg = null; }
                 }
-                const introRaw = (cfg && typeof cfg.intro === 'string') ? cfg.intro : (section && section.description ? section.description : '');
+                const introRaw = (cfg && typeof cfg.intro === 'string') ? cfg.intro : '';
                 const intro = String(introRaw || '').trim();
                 return `
                 <div class="hub-card" data-section-id="${section.section_id}" onclick="navigateToSection('${section.section_id}')">
@@ -5317,8 +5317,7 @@ try { window.updateMainHubSections = updateMainHubSections; window.__advancedBui
             const normalizeSection = (section) => ({
                 id: section.section_id || section.id,
                 name: section.name,
-                description: section.description,
-                intro: (() => { try { const ci = section && section.config && section.config.intro; if (typeof ci === 'string' && ci.trim()) return ci; } catch(_) {} const d = section && section.description; return (typeof d === 'string') ? d : ''; })(),
+                intro: (() => { try { const ci = section && section.config && section.config.intro; if (typeof ci === 'string' && ci.trim()) return ci; } catch(_) {} return ''; })(),
                 icon: section.icon || 'fas fa-th-large',
                 image: section.image,
                 visible: !(section.config && section.config.visible === false),
