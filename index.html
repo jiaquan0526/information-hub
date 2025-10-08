@@ -151,7 +151,7 @@
             } catch (_) {}
             console.log('✅ Supabase client ready');
             // Kick the advanced builder immediately (in addition to later hooks)
-            try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+            try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
 
             // When auth session is confirmed later, rebuild hub cards reliably
             try {
@@ -690,10 +690,10 @@
                 try {
                     console.log('[Init] Triggering builder (immediate)');
                     if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon();
-                    else if (typeof updateMainHubSections === 'function') await updateMainHubSections();
+                    else if (typeof window.updateMainHubSections === 'function') await window.updateMainHubSections();
                 } catch(_) {}
                 // Safety: invoke builder again shortly after in case of late readiness
-                try { setTimeout(() => { try { console.log('[Init] Triggering builder (retry 600ms)'); if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
+                try { setTimeout(() => { try { console.log('[Init] Triggering builder (retry 600ms)'); if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
                 // Late fallback: if still no cards after a short delay, force a rebuild
                 try {
                     setTimeout(() => {
@@ -719,7 +719,7 @@
                             const hasCards = !!(document.querySelector('.hub-grid')?.querySelector('.hub-card'));
                             console.log(`[Init] Check #${attempts} hasCards=`, hasCards);
                             if (hasCards || attempts >= max) { clearInterval(t); return; }
-                            if (typeof updateMainHubSections === 'function') updateMainHubSections();
+                            if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections();
                         } catch(_) {}
                     }, 1000);
                 } catch(_) {}
