@@ -1021,35 +1021,7 @@
             showEmptyState();
         }
 
-        // Hard failsafe: if still loading after 6s, force-build cards and reveal UI
-        setTimeout(() => {
-            try {
-                const grid = document.querySelector('.hub-grid');
-                const loadingOverlay = document.getElementById('loadingScreen');
-                const main = document.getElementById('mainContent');
-                const stuck = grid && grid.innerHTML && grid.innerHTML.includes('Loading Information Hub');
-                if (stuck) {
-                    console.warn('Failsafe: rebuilding hub cards');
-                    try { if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
-                    if (loadingOverlay) loadingOverlay.style.display = 'none';
-                    if (main) main.style.display = 'block';
-                }
-            } catch (_) {}
-        }, 6000);
-
-        // Early failsafe: after 2.5s, ensure UI is visible and try to build cards
-        setTimeout(() => {
-            try {
-                const loadingOverlay = document.getElementById('loadingScreen');
-                const main = document.getElementById('mainContent');
-                if (loadingOverlay && getComputedStyle(loadingOverlay).display !== 'none') {
-                    console.warn('Early failsafe: revealing UI and attempting card build');
-                    loadingOverlay.style.display = 'none';
-                    if (main) main.style.display = 'block';
-                    try { if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
-                }
-            } catch(_) {}
-        }, 2500);
+        
             
             // Initialize basic functions
             try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
