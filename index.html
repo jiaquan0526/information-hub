@@ -5462,8 +5462,8 @@ Permissions:
             isUpdatingSections = false;
         }
         // Ensure the builder is globally accessible for console/manual calls
-        // Expose builder globally for early callers
-        try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
+// Expose builder globally for early callers
+try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
         try { window.__advancedBuilderLoaded = true; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
