@@ -2987,6 +2987,15 @@ Permissions:
         async function updateHubCardsAccess(user) {
             console.log('=== UPDATING HUB CARDS ACCESS ===');
             try {
+                // Ensure cards exist before any early return
+                try {
+                    let hubCards = document.querySelectorAll('.hub-card');
+                    if (!hubCards || hubCards.length === 0) {
+                        if (typeof updateMainHubSections === 'function') await updateMainHubSections();
+                        hubCards = document.querySelectorAll('.hub-card');
+                    }
+                } catch(_) {}
+
                 // If no authenticated user yet, skip access filtering to avoid hiding all cards pre-auth
                 if (!user || typeof user !== 'object') {
                     console.log('No session user yet; skipping access filter');
@@ -3048,10 +3057,6 @@ Permissions:
                 const blockedSections = new Set(visibleSections.filter(id => !allowedSections.includes(id)));
 
                 let hubCards = document.querySelectorAll('.hub-card');
-                if (!hubCards || hubCards.length === 0) {
-                    try { if (typeof updateMainHubSections === 'function') await updateMainHubSections(); } catch(_) {}
-                    hubCards = document.querySelectorAll('.hub-card');
-                }
 
                 hubCards.forEach(card => {
                     try {
