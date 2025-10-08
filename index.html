@@ -640,12 +640,7 @@
                             }
                         } catch(_) {}
                         if (rows.length===0){ hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>'; __lastAt=Date.now(); __inFlight=false; return; }
-                        // Build advanced-style cards (header + intro + stats placeholder)
-                        let html='';
-                        for (const r of rows){
-                            html += `\n                <div class="hub-card" id="card-${esc(r.id)}" data-section-id="${esc(r.id)}" onclick="navigateToSection('${esc(r.id)}')">\n                    <div class="card-header">\n                        <div class="card-icon"><i class="${esc(r.icon)}"></i></div>\n                        <div class="card-title">\n                            <h3>${esc(r.name||r.id)}</h3>\n                            <p class="card-intro">${esc(trunc(r.intro||'', 120))}</p>\n                        </div>\n                    </div>\n                    <div class="card-stats" id="${esc(r.id)}-stats"></div>\n                </div>`;
-                        }
-                        hubGrid.innerHTML = html;
+                        // Removed minimal card rendering; rely on advanced builder below
                         // Make UI visible
                         try { const ls=document.getElementById('loadingScreen'); if (ls) ls.style.display='none'; } catch(_){}
                         try { const mc=document.getElementById('mainContent'); if (mc) mc.style.display='block'; } catch(_){}
