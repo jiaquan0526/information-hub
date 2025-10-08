@@ -5290,8 +5290,25 @@ Permissions:
             // Filter visible sections by current user's permissions (admins see all)
             try {
                 let sessionUser = null;
-                try { const raw = localStorage.getItem('currentUserSession'); if (raw) sessionUser = JSON.parse(raw); } catch(_) {}
-                if (!sessionUser && window.informationHub && window.informationHub.currentUser) sessionUser = window.informationHub.currentUser;
+                // Prefer runtime user from InformationHub (derived from Supabase)
+                if (window.informationHub && window.informationHub.currentUser) {
+                    sessionUser = window.informationHub.currentUser;
+                } else if (window.supabaseClient && window.supabaseClient.auth) {
+                    // Pure Supabase fallback
+                    try {
+                        const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                        if (me) {
+                            try {
+                                const { data: prof } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('role, permissions')
+                                    .eq('id', me.id)
+                                    .single();
+                                sessionUser = { id: me.id, role: prof?.role, permissions: prof?.permissions || {} };
+                            } catch(_) { sessionUser = { id: me.id, role: undefined, permissions: {} }; }
+                        }
+                    } catch(_) {}
+                }
                 const role = String(sessionUser?.role || '').trim().toLowerCase();
                 const perms = sessionUser?.permissions || {};
                 const userSections = Array.isArray(perms.sections) ? perms.sections : [];
@@ -5439,10 +5456,24 @@ Permissions:
             
             // Stats for currently built sections (non-blocking)
             try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
-            // Enforce access restrictions on freshly rendered cards
+            // Enforce access restrictions on freshly rendered cards (pure Supabase sources)
             try {
-                const raw = localStorage.getItem('currentUserSession');
-                const sessionUser = raw ? JSON.parse(raw) : window.informationHub?.currentUser || null;
+                let sessionUser = window.informationHub?.currentUser || null;
+                if (!sessionUser && window.supabaseClient && window.supabaseClient.auth) {
+                    try {
+                        const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                        if (me) {
+                            try {
+                                const { data: prof } = await window.supabaseClient
+                                    .from('profiles')
+                                    .select('role, permissions')
+                                    .eq('id', me.id)
+                                    .single();
+                                sessionUser = { id: me.id, role: prof?.role, permissions: prof?.permissions || {} };
+                            } catch(_) { sessionUser = { id: me.id, role: undefined, permissions: {} }; }
+                        }
+                    } catch(_) {}
+                }
                 if (sessionUser && typeof updateHubCardsAccess === 'function') await updateHubCardsAccess(sessionUser);
             } catch (_) {}
             // Initialize lazy loading for backgrounds (skip when disabled)
