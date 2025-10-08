@@ -5427,10 +5427,8 @@ try { window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builde
             isUpdatingSections = false;
         }
         // Ensure the builder is globally accessible for console/manual calls
-        // No global exposure; rely on local references and direct calls
-        try {
-            window.addEventListener('hub:refresh-sections', function(){ try { updateMainHubSections(); } catch(_) {} });
-        } catch(_) {}
+        // Expose builder globally for early callers
+        try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
         try { window.__advancedBuilderLoaded = true; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {

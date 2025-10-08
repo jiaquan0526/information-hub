@@ -275,7 +275,7 @@ class InformationHub {
 
         // Update hub cards with access restrictions immediately
         this.updateHubCardsAccess();
-        try { window.dispatchEvent(new Event('hub:refresh-sections')); } catch (_) {}
+        try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch (_) {}
     }
 
     updateHubCardsAccess() {
@@ -325,9 +325,9 @@ class InformationHub {
                 // If admin panel export tab is open, refresh the dropdowns
                 try { if (document.getElementById('adminPanelModal')?.style.display === 'block') await this.loadExportOptions(); } catch(_) {}
                 // Optionally refresh visible hub cards if they depend on sectionOrder names (left local/local)
-                try { window.dispatchEvent(new Event('hub:refresh-sections')); } catch(_) {}
-                try { window.dispatchEvent(new Event('hub:refresh-sections')); } catch(_) {}
-                try { window.dispatchEvent(new Event('hub:refresh-sections')); } catch(_) {}
+                try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
+                try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
+                try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
                 // Data is automatically synced to Supabase database
                 // No manual sync needed
             } catch (_) {}
