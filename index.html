@@ -845,6 +845,16 @@
         }
         // Expose for console debugging on the hub page
         try { window.loadSectionsFromSupabase = loadSectionsFromSupabase; } catch (_) {}
+        // Provide a safe fallback for updateMainHubSections if the advanced builder hasn't loaded
+        try {
+            if (typeof window.updateMainHubSections !== 'function') {
+                window.updateMainHubSections = async function() {
+                    try {
+                        await loadSectionsFromSupabase();
+                    } catch (_) {}
+                };
+            }
+        } catch (_) {}
         
         // Function to update hub progress
         function updateHubProgress(message, percentage) {
