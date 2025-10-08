@@ -5182,6 +5182,8 @@ Permissions:
                 return types;
             } catch (_) { return []; }
         }
+        // Marker: entering advanced builder segment
+        try { window.__builderSegmentStart = Date.now(); console.log('[Hub] Advanced builder segment parsing...'); } catch(_) {}
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
@@ -5195,7 +5197,7 @@ Permissions:
                 return;
             }
 // Expose builder globally for early callers
-try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
+try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
@@ -5459,6 +5461,7 @@ try { window.updateMainHubSections = updateMainHubSections; } catch(_) {}
         }
         // Ensure the builder is globally accessible for console/manual calls
         try { if (typeof window.updateMainHubSections !== 'function') window.updateMainHubSections = updateMainHubSections; } catch(_) {}
+        try { window.__advancedBuilderLoaded = true; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
