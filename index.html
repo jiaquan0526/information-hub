@@ -678,7 +678,7 @@
                 `;
                 }
                 // Kick the advanced builder immediately if available
-                try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
+                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
             }
             
             // The hub-script.js will handle all authentication and data loading
@@ -1005,14 +1005,14 @@
             const start = Date.now();
             (function tick(){
                 try {
-                    if (!(typeof window.updateMainHubSections === 'function')) {
+                    if (!(typeof updateMainHubSections === 'function')) {
                         if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
                         return;
                     }
                     if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
                         if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
                     }
-                    window.updateMainHubSections();
+                    updateMainHubSections();
                 } catch (_) {
                     if (Date.now() - start < maxWaitMs) return setTimeout(tick, 100);
                 }
@@ -5166,8 +5166,8 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
-// Expose builder globally for early callers
-try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
+// Advanced builder defined (no global exposure)
+try { window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
@@ -5427,7 +5427,10 @@ try { window.updateMainHubSections = updateMainHubSections; window.__advancedBui
             isUpdatingSections = false;
         }
         // Ensure the builder is globally accessible for console/manual calls
-        try { if (typeof window.updateMainHubSections !== 'function') window.updateMainHubSections = updateMainHubSections; } catch(_) {}
+        // No global exposure; rely on local references and direct calls
+        try {
+            window.addEventListener('hub:refresh-sections', function(){ try { updateMainHubSections(); } catch(_) {} });
+        } catch(_) {}
         try { window.__advancedBuilderLoaded = true; } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
