@@ -884,7 +884,6 @@
                     setTimeout(() => {
                         updateHubProgress('Finalizing layout...', 95);
                         setTimeout(() => {
-                            renderSections(sections);
                             try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                             updateHubProgress('✅ Hub loaded successfully!', 100);
                             try {
