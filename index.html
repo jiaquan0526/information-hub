@@ -1064,7 +1064,25 @@
         }, { once: true });
 
         // Mark auth-ready when we get the custom event
-        try { document.addEventListener('auth-ready', () => { try { window.__authReady = true; } catch(_) {} callUpdateMainHubSectionsSoon(); }, { once: true }); } catch(_) {}
+        try {
+            document.addEventListener('auth-ready', () => {
+                try { window.__authReady = true; } catch(_) {}
+                callUpdateMainHubSectionsSoon();
+                // Extra safety: retry a few times until cards appear (handles late auth/profile readiness)
+                try {
+                    let __tries = 0;
+                    (function __pump(){
+                        try {
+                            const hasCards = !!document.querySelector('.hub-card');
+                            if (hasCards || __tries >= 5) return;
+                            __tries++;
+                            if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow();
+                        } catch(_) {}
+                        setTimeout(__pump, 400);
+                    })();
+                } catch(_) {}
+            }, { once: true });
+        } catch(_) {}
 
         // If database or auth became ready earlier, trigger a build now as well
         try { if (window.hubDatabaseReady) callUpdateMainHubSectionsSoon(); } catch(_) {}
