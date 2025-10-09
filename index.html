@@ -5274,7 +5274,7 @@ Permissions:
         };
         
         // Helpers for dynamic card tab rendering (mirror section page)
-            function normalizeTypeId(raw) {
+        function normalizeTypeId(raw) {
             try {
                 return String(raw || '').toLowerCase().trim();
             } catch (_) { return String(raw || '').toLowerCase(); }
@@ -5305,6 +5305,10 @@ Permissions:
                 return types;
             } catch (_) { return []; }
         }
+    </script>
+    
+    <script>
+        // BUILDER SEGMENT - Split into separate script tag for faster parsing
         // Marker: entering advanced builder segment
         try { 
             window.__builderSegmentStart = Date.now(); 
