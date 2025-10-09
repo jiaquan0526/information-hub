@@ -1172,7 +1172,7 @@
         // Mark auth-ready when we get the custom event
         try {
             document.addEventListener('auth-ready', () => {
-                try { window.__authReady = true; } catch(_) {}
+                try { window.__authReady = true; window.currentUserLoaded = true; } catch(_) {}
                 callUpdateMainHubSectionsSoon();
                 // Extra safety: retry a few times until cards appear (handles late auth/profile readiness)
                 try {
@@ -5329,7 +5329,13 @@ Permissions:
                 return;
             }
             // Advanced builder defined (also expose globally in case early callers run)
-            try {  window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
+            try {
+                window.__advancedBuilderDefined = true;
+                window.templates = window.templates || {};
+                window.templates.advancedCardReady = true;
+                window.updateMainHubSections = updateMainHubSections;
+                console.log('[Hub] Advanced builder defined');
+            } catch(_) {}
             
             // Prevent too frequent updates (debounce)
             if (now - lastUpdateTime < 1000) {
@@ -5400,6 +5406,8 @@ Permissions:
                     if (loadingScreen) loadingScreen.style.display = 'none';
                     if (mainContent) mainContent.style.display = 'block';
                 } catch (_) {}
+                // Mark sections load state globally (even if empty)
+                try { window.hubSections = []; window.hubSectionsLoaded = true; } catch(_) {}
                 isUpdatingSections = false;
                 return;
             }
@@ -5457,6 +5465,7 @@ Permissions:
                     visibleSections = visibleSections.filter(s => allowed.has(s.id));
                 }
                 console.log('[Builder] Visible sections after permission filter:', visibleSections.length);
+                try { window.hubSections = visibleSections.slice(); window.hubSectionsLoaded = true; } catch(_) {}
             } catch(_) {}
 
             // Build new content first
