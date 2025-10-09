@@ -5305,6 +5305,7 @@ Permissions:
                 return types;
             } catch (_) { return []; }
         }
+    }  // Close the block opened earlier in the first script
     </script>
     
     <script>
@@ -5783,7 +5784,6 @@ Permissions:
         }
         function isLowDataConnection() { return false; }
         function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
-    }
     </script>
     <style>
         @keyframes spin {
