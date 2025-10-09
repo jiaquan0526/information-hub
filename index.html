@@ -1039,19 +1039,30 @@
             })();
         }
 
+        // Define a stub function early to satisfy the wait condition immediately
+        if (!window.updateMainHubSections) {
+            window.updateMainHubSections = async function() {
+                console.log('[Hub] Stub updateMainHubSections invoked - real builder will replace this');
+                // Stub: will be replaced by the real implementation later in the script
+            };
+        }
+
         // Helper to invoke advanced builder when ready (handles definition/ordering races)
         function callUpdateMainHubSectionsSoon(maxWaitMs = 20000) {
+            // Wait for builder to be defined (it's defined later in the HTML parse)
             __builderWait(
                 'updateMainHubSections',
                 () => {
                     const hasFunc = (typeof window.updateMainHubSections === 'function');
                     const isStub = (hasFunc && /Stub updateMainHubSections invoked/.test(String(window.updateMainHubSections)));
                     const supaOk = (window.supabaseClient && typeof window.supabaseClient.from === 'function');
-                    return (!isStub && hasFunc) && supaOk;
+                    // Return true when builder exists and is not a stub
+                    return (hasFunc && !isStub && supaOk);
                 },
-                () => { try { window.updateMainHubSections(); } catch(_) {} },
+                () => { try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {} },
                 {
-                    timeoutMs: Math.max(3000, Math.min(maxWaitMs, 20000)),
+                    timeoutMs: Math.max(5000, Math.min(maxWaitMs, 30000)),
+                    intervalMs: 150,
                     inspect: () => ({
                         hasBuilder: (typeof window.updateMainHubSections === 'function'),
                         isStubBuilder: (typeof window.updateMainHubSections === 'function') ? /Stub updateMainHubSections invoked/.test(String(window.updateMainHubSections)) : false,
@@ -5294,7 +5305,7 @@ Permissions:
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
-        async function updateMainHubSections() {
+        window.updateMainHubSections = async function updateMainHubSections() {
             console.log('Loading sections from Supabase...');
             
             const now = Date.now();
@@ -5303,13 +5314,12 @@ Permissions:
                 try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
                 return;
             }
-            // Advanced builder defined (also expose globally in case early callers run)
+            // Mark builder as defined
             try {
                 window.__advancedBuilderDefined = true;
                 window.templates = window.templates || {};
                 window.templates.advancedCardReady = true;
-                window.updateMainHubSections = updateMainHubSections;
-                console.log('[Hub] Advanced builder defined');
+                console.log('[Hub] Advanced builder running');
             } catch(_) {}
             
             // Prevent too frequent updates (debounce)
@@ -5608,10 +5618,8 @@ Permissions:
             // Reset the flag
             isUpdatingSections = false;
         }
-        // Ensure the builder is globally accessible for console/manual calls
-        // Expose builder globally for early callers
-        try { window.updateMainHubSections = updateMainHubSections; window.__advancedBuilderDefined = true; console.log('[Hub] Advanced builder defined'); } catch(_) {}
-        try { window.__advancedBuilderLoaded = true; } catch(_) {}
+        // Mark builder as loaded (already assigned at function definition)
+        try { window.__advancedBuilderDefined = true; window.__advancedBuilderLoaded = true; console.log('[Hub] Advanced builder loaded'); } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
