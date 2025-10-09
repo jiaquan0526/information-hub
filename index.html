@@ -1054,14 +1054,14 @@
             __builderWait(
                 'updateMainHubSections',
                 () => Boolean(
-                    (typeof updateMainHubSections === 'function') &&
+                    (typeof window.updateMainHubSections === 'function') &&
                     (window.supabaseClient && typeof window.supabaseClient.from === 'function')
                 ),
-                () => { try { updateMainHubSections(); } catch(_) {} },
+                () => { try { window.updateMainHubSections(); } catch(_) {} },
                 {
                     timeoutMs: Math.max(3000, Math.min(maxWaitMs, 20000)),
                     inspect: () => ({
-                        hasBuilder: (typeof updateMainHubSections === 'function'),
+                        hasBuilder: (typeof window.updateMainHubSections === 'function'),
                         supabaseReady: !!(window.supabaseClient && typeof window.supabaseClient.from === 'function'),
                         userLoaded: !!window.currentUserLoaded,
                         sectionsLoaded: !!window.hubSections,
