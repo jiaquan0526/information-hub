@@ -4,8 +4,43 @@ async function ensureSupabaseClient() {
 	try {
 		// Reuse existing client
 		if (window.supabaseClient && typeof window.supabaseClient.from === 'function') return window.supabaseClient;
-		// Library must be available
-		if (!window.supabase || typeof window.supabase.createClient !== 'function') return null;
+		// Ensure library is available (auto-load UMD if needed)
+		if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+			try {
+				let ready = !!(window.supabase && typeof window.supabase.createClient === 'function');
+				if (!ready) {
+					const existing = document.querySelector('script[data-supabase-cdn]');
+					if (!existing) {
+						const s = document.createElement('script');
+						s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+						s.async = true;
+						s.setAttribute('data-supabase-cdn', '1');
+						s.onerror = () => {
+							try {
+								const s2 = document.createElement('script');
+								s2.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+								s2.async = true;
+								s2.onerror = () => {
+									const m = document.createElement('script');
+									m.type = 'module';
+									m.textContent = "import{createClient}from 'https://esm.sh/@supabase/supabase-js@2'; window.supabase={createClient};";
+									document.head.appendChild(m);
+								};
+								document.head.appendChild(s2);
+							} catch(_) {}
+						};
+						document.head.appendChild(s);
+					}
+					// Wait briefly for library
+					let tries = 0;
+					while (!(window.supabase && typeof window.supabase.createClient === 'function') && tries < 50) {
+						await new Promise(r => setTimeout(r, 100));
+						tries++;
+					}
+				}
+			} catch(_) { return null; }
+			if (!(window.supabase && typeof window.supabase.createClient === 'function')) return null;
+		}
 		// Resolve config (prefer config.js)
 		const url = (window.CONFIG && window.CONFIG.SUPABASE_URL) || window.SUPABASE_URL || '';
 		const key = (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY) || window.SUPABASE_ANON_KEY || '';

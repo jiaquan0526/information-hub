@@ -1065,15 +1065,18 @@
         function callUpdateMainHubSectionsSoon(maxWaitMs = 20000) {
             __builderWait(
                 'updateMainHubSections',
-                () => Boolean(
-                    (typeof window.updateMainHubSections === 'function') &&
-                    (window.supabaseClient && typeof window.supabaseClient.from === 'function')
-                ),
+                () => {
+                    const hasFunc = (typeof window.updateMainHubSections === 'function');
+                    const isStub = (hasFunc && /Stub updateMainHubSections invoked/.test(String(window.updateMainHubSections)));
+                    const supaOk = (window.supabaseClient && typeof window.supabaseClient.from === 'function');
+                    return (!isStub && hasFunc) && supaOk;
+                },
                 () => { try { window.updateMainHubSections(); } catch(_) {} },
                 {
                     timeoutMs: Math.max(3000, Math.min(maxWaitMs, 20000)),
                     inspect: () => ({
                         hasBuilder: (typeof window.updateMainHubSections === 'function'),
+                        isStubBuilder: (typeof window.updateMainHubSections === 'function') ? /Stub updateMainHubSections invoked/.test(String(window.updateMainHubSections)) : false,
                         supabaseReady: !!(window.supabaseClient && typeof window.supabaseClient.from === 'function'),
                         userLoaded: !!window.currentUserLoaded,
                         sectionsLoaded: !!window.hubSections,
