@@ -673,6 +673,18 @@
                 if (mainContent) mainContent.style.display = 'block';
             }
             
+            // Ensure a callable stub exists even before the real builder attaches
+            try {
+                if (typeof window.updateMainHubSections !== 'function') {
+                    window.updateMainHubSections = function(){
+                        try {
+                            console.log('[Init] Stub updateMainHubSections invoked; deferring to callUpdateMainHubSectionsSoon');
+                            if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(20000);
+                        } catch(_) {}
+                    };
+                }
+            } catch(_) {}
+
             // Kick the advanced builder via readiness helper to avoid timing races
             const hubGrid = document.querySelector('.hub-grid');
             console.log('[Init] hubGrid exists:', !!hubGrid);
@@ -1018,23 +1030,46 @@
             } catch (_) {}
         });
 
-        // Helper to invoke advanced builder when ready (handles definition/ordering races)
-        function callUpdateMainHubSectionsSoon(maxWaitMs = 20000) {
+        // Builder wait helper with introspection and timeout fallback
+        function __builderWait(name, isReady, run, opts = {}) {
+            const { intervalMs = 150, timeoutMs = 7000, inspect } = opts;
             const start = Date.now();
             (function tick(){
-                try {
-                    if (!(typeof updateMainHubSections === 'function')) {
-                        if (Date.now() - start < maxWaitMs) { try { console.log('[BuilderWait] updateMainHubSections not ready yet'); } catch(_) {} return setTimeout(tick, 100); }
-                        return;
-                    }
-                    if (!(window.supabaseClient && typeof window.supabaseClient.from === 'function')) {
-                        if (Date.now() - start < maxWaitMs) { try { console.log('[BuilderWait] Supabase client not ready yet'); } catch(_) {} return setTimeout(tick, 100); }
-                    }
-                    updateMainHubSections();
-                } catch (_) {
-                    if (Date.now() - start < maxWaitMs) { try { console.log('[BuilderWait] waiting and retrying...'); } catch(_) {} return setTimeout(tick, 100); }
+                let ready = false;
+                try { ready = !!(isReady && isReady()); } catch { ready = false; }
+                if (ready) {
+                    try { return run && run(); } catch(_) { return; }
                 }
+                if (Date.now() - start >= timeoutMs) {
+                    try { console.warn(`[BuilderWait] ${name} timed out; forcing run`, (inspect && inspect()) || {}); } catch(_) {}
+                    try { return run && run(); } catch(_) { return; }
+                }
+                try { console.log(`[BuilderWait] ${name} not ready yet`, (inspect && inspect()) || {}); } catch(_) {}
+                setTimeout(tick, intervalMs);
             })();
+        }
+
+        // Helper to invoke advanced builder when ready (handles definition/ordering races)
+        function callUpdateMainHubSectionsSoon(maxWaitMs = 20000) {
+            __builderWait(
+                'updateMainHubSections',
+                () => Boolean(
+                    (typeof updateMainHubSections === 'function') &&
+                    (window.supabaseClient && typeof window.supabaseClient.from === 'function')
+                ),
+                () => { try { updateMainHubSections(); } catch(_) {} },
+                {
+                    timeoutMs: Math.max(3000, Math.min(maxWaitMs, 20000)),
+                    inspect: () => ({
+                        hasBuilder: (typeof updateMainHubSections === 'function'),
+                        supabaseReady: !!(window.supabaseClient && typeof window.supabaseClient.from === 'function'),
+                        userLoaded: !!window.currentUserLoaded,
+                        sectionsLoaded: !!window.hubSections,
+                        sectionCount: (window.hubSections && window.hubSections.length) || 0,
+                        advancedTemplate: !!(window.templates && window.templates.advancedCardReady)
+                    })
+                }
+            );
         }
 
         // (removed) Inline diagnostics for section loading failures
