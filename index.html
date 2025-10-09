@@ -677,22 +677,7 @@
             try {
                 if (typeof window.updateMainHubSections !== 'function') {
                     window.updateMainHubSections = function(){
-                        try {
-                            console.log('[Init] Stub updateMainHubSections invoked; deferring to callUpdateMainHubSectionsSoon');
-                            const start = Date.now();
-                            (function wait(){
-                                try {
-                                    if (typeof callUpdateMainHubSectionsSoon === 'function') {
-                                        return callUpdateMainHubSectionsSoon(20000);
-                                    }
-                                    if (Date.now() - start >= 7000) {
-                                        try { if (typeof window.updateMainHubSections === 'function' && window.updateMainHubSections !== arguments.callee) window.updateMainHubSections(); } catch(_) {}
-                                        return;
-                                    }
-                                } catch(_) {}
-                                setTimeout(wait, 120);
-                            })();
-                        } catch(_) {}
+                        try { return updateMainHubSections(); } catch(_) {}
                     };
                 }
             } catch(_) {}
@@ -5319,6 +5304,14 @@ Permissions:
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
+        // Expose real builder globally at parse time and mark template readiness
+        try {
+            window.updateMainHubSections = updateMainHubSections;
+            window.templates = window.templates || {};
+            window.templates.advancedCardReady = true;
+            window.__advancedBuilderDefined = true;
+        } catch(_) {}
+
         async function updateMainHubSections() {
             console.log('Loading sections from Supabase...');
             
