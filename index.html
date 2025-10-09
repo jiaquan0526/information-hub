@@ -5294,14 +5294,6 @@ Permissions:
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
-        // Expose real builder globally at parse time and mark template readiness
-        try {
-            window.updateMainHubSections = updateMainHubSections;
-            window.templates = window.templates || {};
-            window.templates.advancedCardReady = true;
-            window.__advancedBuilderDefined = true;
-        } catch(_) {}
-
         async function updateMainHubSections() {
             console.log('Loading sections from Supabase...');
             
