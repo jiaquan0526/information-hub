@@ -150,9 +150,8 @@
                 }
             } catch (_) {}
             console.log('✅ Supabase client ready');
-            // Kick the advanced builder immediately (in addition to later hooks)
-            try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {}
-
+            // Don't kick builder here - wait for proper initialization hooks
+            
             // When auth session is confirmed later, rebuild hub cards reliably
             try {
                 document.addEventListener('auth-ready', () => {
@@ -695,8 +694,7 @@
                     if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon();
                     else if (typeof window.updateMainHubSections === 'function') await window.updateMainHubSections();
                 } catch(_) {}
-                // Safety: invoke builder again shortly after in case of late readiness
-                try { setTimeout(() => { try { console.log('[Init] Triggering builder (retry 600ms)'); if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {} }, 600); } catch(_) {}
+                // Removed duplicate retry - wait function handles retries
                 // Late fallback: if still no cards after a short delay, force a rebuild
                 try {
                     setTimeout(() => {
@@ -1138,12 +1136,14 @@
                     }
                 } catch(_) {}
                 // Fallback: periodic refresh if Realtime is unavailable or misses events
+                // Increased to 5 minutes to reduce unnecessary refreshes
                 try {
                     if (!window.__hubSectionsPoller) {
                         window.__hubSectionsPoller = setInterval(() => {
-                            try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                            console.log('[Hub] Periodic refresh (5 min)');
                             try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
-                        }, 60000);
+                            // Don't rebuild sections periodically - only on actual changes
+                        }, 300000); // 5 minutes instead of 1 minute
                         window.addEventListener('beforeunload', () => { try { clearInterval(window.__hubSectionsPoller); } catch(_) {} }, { once: true });
                     }
                 } catch(_) {}
@@ -5338,11 +5338,10 @@ Permissions:
                 console.log('[Hub] Advanced builder running');
             } catch(_) {}
             
-            // Prevent too frequent updates (debounce)
-            if (now - lastUpdateTime < 1000) {
-                const waitMs = Math.max(75, 1000 - (now - lastUpdateTime));
-                console.log('Update called too frequently, retrying in', waitMs, 'ms');
-                try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, waitMs); } catch(_) {}
+            // Prevent too frequent updates (debounce) - just cancel, don't retry
+            if (now - lastUpdateTime < 2000) {
+                console.log('Update called too frequently (last update:', (now - lastUpdateTime), 'ms ago), skipping');
+                isUpdatingSections = false;
                 return;
             }
             
