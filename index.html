@@ -1016,8 +1016,8 @@
                 const mainContent = document.getElementById('mainContent');
                 if (loadingScreen) loadingScreen.style.display = 'none';
                 if (mainContent) mainContent.style.display = 'block';
-                // Ensure hub cards reflect latest section config (tabs) on return
-                try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
+                // Removed: Don't rebuild sections on tab switch - only update stats
+                console.log('[PageShow] Page shown, updating stats only (no rebuild)');
                 if (typeof updateSectionStats === 'function') updateSectionStats();
             } catch (_) {}
         });
@@ -1189,11 +1189,11 @@
             } catch (_) {}
         });
         
-        // Also update interface when page becomes visible
+        // Also update interface when page becomes visible (lightweight only)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                console.log('Page became visible, updating user interface...');
-                updateUserInterface(); 
+                console.log('[VisibilityChange] Page visible, lightweight UI update only');
+                // Removed updateUserInterface() to prevent rebuilds on tab switch
                 try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
                 try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
                 try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
@@ -1201,10 +1201,11 @@
             }
         });
         
-        // Update interface when window gains focus
+        // Update interface when window gains focus (lightweight only)
         window.addEventListener('focus', () => {
-            console.log('Window gained focus, updating user interface...');
-            updateUserInterface(); 
+            console.log('[Focus] Window focused, lightweight update only');
+            // Removed updateUserInterface() to prevent rebuilds on window focus
+            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {} 
             try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
             try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
         });
