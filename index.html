@@ -1155,19 +1155,7 @@
             document.addEventListener('auth-ready', () => {
                 try { window.__authReady = true; window.currentUserLoaded = true; } catch(_) {}
                 callUpdateMainHubSectionsSoon();
-                // Extra safety: retry a few times until cards appear (handles late auth/profile readiness)
-                try {
-                    let __tries = 0;
-                    (function __pump(){
-                        try {
-                            const hasCards = !!document.querySelector('.hub-card');
-                            if (hasCards || __tries >= 5) return;
-                            __tries++;
-                            if (typeof window.rebuildHubCardsNow === 'function') window.rebuildHubCardsNow();
-                        } catch(_) {}
-                        setTimeout(__pump, 400);
-                    })();
-                } catch(_) {}
+                // Removed aggressive retry loop - wait function handles readiness
             }, { once: true });
         } catch(_) {}
 
@@ -5326,8 +5314,7 @@ Permissions:
             
             const now = Date.now();
             if (isUpdatingSections) {
-                console.log('Update already in progress, scheduling retry...');
-                try { setTimeout(() => { try { updateMainHubSections(); } catch(_) {} }, 400); } catch(_) {}
+                console.log('Update already in progress, skipping duplicate call');
                 return;
             }
             // Mark builder as defined
