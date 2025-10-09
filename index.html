@@ -157,13 +157,13 @@
             try {
                 document.addEventListener('auth-ready', () => {
                     try {
+                        console.log('[Auth] Auth-ready event fired (one-time)');
                         if (typeof callUpdateMainHubSectionsSoon === 'function') {
                             callUpdateMainHubSectionsSoon();
                         } else if (typeof updateMainHubSections === 'function') {
                             updateMainHubSections();
-                        } else {
-                            setTimeout(() => { try { if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(); else if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {} }, 400);
                         }
+                        // Removed 400ms retry fallback
                     } catch(_) {}
                 });
             } catch(_) {}
@@ -1122,14 +1122,18 @@
                 // Global button is always visible in quick actions
                 try { updateBackgroundToggleButton(); } catch(_) {}
                 // Realtime sync: rebuild hub cards and stats when sections/resources change in Supabase
+                // TEMPORARILY DISABLED TO DEBUG INFINITE LOOP
                 try {
-                    if (window.supabaseClient && !window.__hubSectionsRt) {
+                    if (window.supabaseClient && !window.__hubSectionsRt && false) { // disabled with && false
+                        console.log('[Realtime] Setting up postgres_changes subscription');
                         window.__hubSectionsRt = window.supabaseClient
                             .channel('hub-sections')
                             .on('postgres_changes', { event: '*', schema: 'public', table: 'sections' }, () => {
+                                console.log('[Realtime] Sections table changed, rebuilding...');
                                 try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                             })
                             .on('postgres_changes', { event: '*', schema: 'public', table: 'resources' }, () => {
+                                console.log('[Realtime] Resources table changed, updating stats...');
                                 try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
                             })
                             .subscribe();
