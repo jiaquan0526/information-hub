@@ -30,8 +30,9 @@
     <script src="config.js"></script>
     
     <script>
+    // VERSION: 2024-10-09-FIXED-v2 - Cache buster for infinite loop fix
     // Track script parsing start time
-    try { window.__scriptStartTime = Date.now(); console.log('[Hub] Main script parsing started'); } catch(_) {}
+    try { window.__scriptStartTime = Date.now(); console.log('[Hub] Main script parsing started - VERSION 2'); } catch(_) {}
     
     // Initialize Supabase client immediately after config loads
     document.addEventListener('DOMContentLoaded', () => {
@@ -5314,7 +5315,7 @@ Permissions:
             
             const now = Date.now();
             if (isUpdatingSections) {
-                console.log('Update already in progress, skipping duplicate call');
+                console.log('[FIXED] Update already in progress, skipping duplicate call (no retry!)');
                 return;
             }
             // Mark builder as defined
