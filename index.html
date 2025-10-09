@@ -101,20 +101,17 @@
                     return;
                 }
             } else {
-                // Patch CONFIG if it contains placeholders; prefer meta/localStorage values
+                // Patch CONFIG if it contains placeholders; prefer meta tag values only
                 try {
                     const isPlaceholder = (v) => { try { return !v || /YOUR[-_]/i.test(String(v)); } catch(_) { return true; } };
                     const metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
                     const metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
-                    let lsUrl = ''; let lsKey = '';
-                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
-                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
                     if (isPlaceholder(window.CONFIG.SUPABASE_URL)) {
-                        const pickedUrl = metaUrl || lsUrl || window.SUPABASE_URL || '';
+                        const pickedUrl = metaUrl || window.SUPABASE_URL || '';
                         if (pickedUrl) { window.CONFIG.SUPABASE_URL = pickedUrl; }
                     }
                     if (isPlaceholder(window.CONFIG.SUPABASE_ANON_KEY)) {
-                        const pickedKey = metaKey || lsKey || window.SUPABASE_ANON_KEY || '';
+                        const pickedKey = metaKey || window.SUPABASE_ANON_KEY || '';
                         if (pickedKey) { window.CONFIG.SUPABASE_ANON_KEY = pickedKey; }
                     }
                 } catch(_) {}
@@ -674,13 +671,7 @@
             }
             
             // Ensure a callable stub exists even before the real builder attaches
-            try {
-                if (typeof window.updateMainHubSections !== 'function') {
-                    window.updateMainHubSections = function(){
-                        try { return updateMainHubSections(); } catch(_) {}
-                    };
-                }
-            } catch(_) {}
+            // Advanced-only: do not override builder with any stub; rely on advanced builder export below
 
             // Kick the advanced builder via readiness helper to avoid timing races
             const hubGrid = document.querySelector('.hub-grid');
@@ -984,6 +975,8 @@
             hubGrid.innerHTML = sectionsHtml;
         }
         
+        // Advanced-only mode: no minimal/fallback renderer
+
         // Function to show empty state when no sections exist
         function showEmptyState() {
             console.log('Showing empty state - leaving grid blank');
@@ -1078,25 +1071,12 @@
         if (!window.rebuildHubCardsNow) {
             window.rebuildHubCardsNow = async function() {
                 try {
-                    const grid = document.querySelector('.hub-grid');
                     const loadingOverlay = document.getElementById('loadingScreen');
                     const main = document.getElementById('mainContent');
                     if (loadingOverlay) loadingOverlay.style.display = 'none';
                     if (main) main.style.display = 'block';
-                    // Prefer advanced builder
                     if (typeof window.updateMainHubSections === 'function') {
                         await window.updateMainHubSections();
-                    }
-                    // If still no cards, attempt direct Supabase load fallback
-                    const hasCards = !!(grid && grid.querySelector('.hub-card'));
-                    if (!hasCards && typeof window.loadSectionsFromSupabase === 'function') {
-                        try { await window.loadSectionsFromSupabase(); } catch(err) {
-                            try { if (typeof window.showSectionsLoadError === 'function') window.showSectionsLoadError(err); } catch(_) {}
-                        }
-                    }
-                    // If still nothing, show diagnostics
-                    if (grid && !grid.querySelector('.hub-card')) {
-                        try { if (typeof window.showSectionsLoadError === 'function') window.showSectionsLoadError(); } catch(_) {}
                     }
                 } catch (_) {}
             };
@@ -1430,6 +1410,14 @@
                 await loadSectionBackgroundsFromDb();
                 await ensureBackgroundImagesLoaded();
                 await window.refreshGlobalBackgrounds();
+                // Fallback: if site_settings not available, enable local backgrounds when images exist
+                try {
+                    if (!(window.globalBackgroundsEnabled === true)) {
+                        if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
+                            window.globalBackgroundsEnabled = true;
+                        }
+                    }
+                } catch(_) {}
                 await updateMainHubSections();
                 await window.refreshBackgroundToggleUI();
             } catch(_) {}
@@ -3530,10 +3518,10 @@ Permissions:
                         <div class="sections">Access: ${user.permissions.sections.length} · Edit: ${user.permissions.editableSections.length}</div>
                     </div>
                     <div class="user-item-actions">
-                        <button class="btn btn-secondary" onclick="editUser(${user.id})" title="Edit">
+                        <button class="btn btn-secondary" onclick="editUser('${user.id}')" title="Edit">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger" onclick="deleteUser(${user.id})" title="Delete">
+                        <button class="btn btn-danger" onclick="deleteUser('${user.id}')" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -3558,8 +3546,20 @@ Permissions:
             console.log('Editing user:', userId);
             
             // Get current user session
-            const session = localStorage.getItem('hubSession');
-            const currentUser = session ? JSON.parse(session) : null;
+            let currentUser = null;
+            try {
+                if (window.supabaseClient && window.supabaseClient.auth) {
+                    const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                    if (me) {
+                        const { data: prof } = await window.supabaseClient
+                            .from('profiles')
+                            .select('id, username, name, email, role, permissions')
+                            .eq('id', me.id)
+                            .single();
+                        currentUser = prof ? { id: prof.id, username: prof.username, name: prof.name, email: prof.email, role: prof.role, permissions: prof.permissions||{} } : null;
+                    }
+                }
+            } catch(_) { currentUser = null; }
             
             if (!currentUser) {
                 alert('Please log in to edit users');
@@ -3619,9 +3619,7 @@ Permissions:
             if (!currentRole || currentRole === 'viewer') {
                 try { currentRole = String(window.informationHub?.currentUser?.role || '').toLowerCase() || currentRole; } catch(_) {}
             }
-            if (!currentRole || currentRole === 'viewer') {
-                try { const sess = JSON.parse(localStorage.getItem('hubSession') || 'null'); if (sess && sess.role) currentRole = String(sess.role).toLowerCase(); } catch(_) {}
-            }
+            // no localStorage fallback
 
             // Determine role options based on current role
             let roleOptions = '';
@@ -3759,8 +3757,7 @@ Permissions:
             // Get current user session (fallback to Supabase auth if missing)
             let currentUser = null;
             try {
-                const currentSession = localStorage.getItem('hubSession');
-                currentUser = currentSession ? JSON.parse(currentSession) : null;
+                currentUser = null;
             } catch(_) { currentUser = null; }
             if (!currentUser) {
                 try {
@@ -3933,21 +3930,7 @@ Permissions:
             console.log('User updated in localStorage:', users[userIndex]);
             
             // Update current session if it's the same user
-            const updatedSession = localStorage.getItem('hubSession');
-            if (updatedSession) {
-                const sessionData = JSON.parse(updatedSession);
-                if (sessionData.userId === userId) {
-                    sessionData.permissions = users[userIndex].permissions;
-                    sessionData.name = users[userIndex].name;
-                    sessionData.email = users[userIndex].email;
-                    sessionData.role = users[userIndex].role;
-                    localStorage.setItem('hubSession', JSON.stringify(sessionData));
-                    console.log('Updated current session:', sessionData);
-                    
-                    // Update UI for current user
-                    updateUserInterface();
-                }
-            }
+            // no local session sync
             
             // Close modal
             closeModal('editUserModal');
@@ -3963,8 +3946,20 @@ Permissions:
         
         window.deleteUser = async function(userId) {
             // Get current user session
-            const session = localStorage.getItem('hubSession');
-            const currentUser = session ? JSON.parse(session) : null;
+            let currentUser = null;
+            try {
+                if (window.supabaseClient && window.supabaseClient.auth) {
+                    const { data: { user: me } } = await window.supabaseClient.auth.getUser();
+                    if (me) {
+                        const { data: prof } = await window.supabaseClient
+                            .from('profiles')
+                            .select('id, username, role, permissions')
+                            .eq('id', me.id)
+                            .single();
+                        currentUser = prof ? { id: prof.id, username: prof.username, role: prof.role, permissions: prof.permissions||{} } : null;
+                    }
+                }
+            } catch(_) { currentUser = null; }
             
             if (!currentUser) {
                 alert('Please log in to delete users');
@@ -4078,8 +4073,7 @@ Permissions:
             if (!container) return;
             let user = null;
             try {
-                const session = localStorage.getItem('hubSession');
-                user = session ? JSON.parse(session) : null;
+                user = null;
             } catch (_) {}
             if (!user) { container.innerHTML = ''; return; }
             const roleLabel = (user.role || '').toUpperCase();
@@ -5031,13 +5025,12 @@ Permissions:
         function getOptimizedMapping() {
             try {
                 const v = computeManifestVersion();
-                const raw = localStorage.getItem('bgOptimizedMap') || '{}';
-                const ver = localStorage.getItem('bgOptimizedVersion') || '';
+                const raw = '{}';
+                const ver = '';
                 let map = {};
                 try { map = JSON.parse(raw); } catch(_) { map = {}; }
                 if (ver !== v) {
-                    localStorage.removeItem('bgOptimizedMap');
-                    localStorage.setItem('bgOptimizedVersion', v);
+                    // no localStorage persistence
                     return {};
                 }
                 return map;
@@ -5045,10 +5038,7 @@ Permissions:
         }
         function setOptimizedMapping(map) {
             try {
-                localStorage.setItem('bgOptimizedMap', JSON.stringify(map));
-                if (!localStorage.getItem('bgOptimizedVersion')) {
-                    localStorage.setItem('bgOptimizedVersion', computeManifestVersion());
-                }
+                // no localStorage persistence
             } catch (_) {}
         }
         async function getOptimizedImageUrl(src, width = 1400, height = 0, quality = 0.74) {
@@ -6534,11 +6524,7 @@ Permissions:
         (function(){
             function isAdmin() {
                 try {
-                    var s = localStorage.getItem('hubSession');
-                    if (!s) return false;
-                    var u = JSON.parse(s);
-                    var role = String(u.role || '').toLowerCase();
-                    return role === 'admin' || !!(u.permissions && u.permissions.canManageUsers === true);
+                    return false;
                 } catch(_) { return false; }
             }
         })();
@@ -6575,13 +6561,9 @@ Permissions:
                     if (!window.CONFIG) { window.CONFIG = {}; }
                     var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
                     var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
-                    var lsUrl = '';
-                    var lsKey = '';
-                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
-                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
-                    function pick(v1,v2,v3){ return (v1 && v1.trim()) || (v2 && v2.trim()) || (v3 && v3.trim()) || ''; }
-                    var url = pick(window.SUPABASE_URL || (window.CONFIG && window.CONFIG.SUPABASE_URL) || '', metaUrl, lsUrl);
-                    var key = pick(window.SUPABASE_ANON_KEY || (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY) || '', metaKey, lsKey);
+                    function pick(v1,v2){ return (v1 && v1.trim()) || (v2 && v2.trim()) || ''; }
+                    var url = pick(window.SUPABASE_URL || (window.CONFIG && window.CONFIG.SUPABASE_URL) || '', metaUrl);
+                    var key = pick(window.SUPABASE_ANON_KEY || (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY) || '', metaKey);
                     if (url) { window.SUPABASE_URL = url; if (!window.CONFIG.SUPABASE_URL) window.CONFIG.SUPABASE_URL = url; }
                     if (key) { window.SUPABASE_ANON_KEY = key; if (!window.CONFIG.SUPABASE_ANON_KEY) window.CONFIG.SUPABASE_ANON_KEY = key; }
                 } catch(_) {}

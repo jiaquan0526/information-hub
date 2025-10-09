@@ -1,11 +1,9 @@
 // Environment Configuration for Information Hub
 // This file should be added to .gitignore in production
 
-// Resolve Supabase config with safe precedence (window -> meta -> localStorage), ignoring placeholders
+// Resolve Supabase config with safe precedence (window -> meta), ignoring placeholders
 const META_SUPABASE_URL = document.querySelector('meta[name="supabase-url"]')?.content || '';
 const META_SUPABASE_ANON_KEY = document.querySelector('meta[name="supabase-anon-key"]')?.content || '';
-const LS_SUPABASE_URL = (typeof localStorage !== 'undefined' ? localStorage.getItem('SUPABASE_URL') : '') || '';
-const LS_SUPABASE_ANON_KEY = (typeof localStorage !== 'undefined' ? localStorage.getItem('SUPABASE_ANON_KEY') : '') || '';
 
 function isPlaceholder(value) {
     if (!value) return true;
@@ -17,14 +15,12 @@ function isPlaceholder(value) {
 function pickSupabaseUrl() {
     if (!isPlaceholder(window.SUPABASE_URL)) return window.SUPABASE_URL;
     if (!isPlaceholder(META_SUPABASE_URL)) return META_SUPABASE_URL;
-    if (!isPlaceholder(LS_SUPABASE_URL)) return LS_SUPABASE_URL;
     return 'https://pioubcszuayewepdawzt.supabase.co';
 }
 
 function pickSupabaseAnonKey() {
     if (!isPlaceholder(window.SUPABASE_ANON_KEY)) return window.SUPABASE_ANON_KEY;
     if (!isPlaceholder(META_SUPABASE_ANON_KEY)) return META_SUPABASE_ANON_KEY;
-    if (!isPlaceholder(LS_SUPABASE_ANON_KEY)) return LS_SUPABASE_ANON_KEY;
     return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k';
 }
 

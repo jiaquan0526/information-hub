@@ -90,12 +90,11 @@
         (function(){
             function ensureKeys(){
                 try {
-                    if (!window.SUPABASE_URL) window.SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || document.querySelector('meta[name="supabase-url"]').content;
-                    if (!window.SUPABASE_ANON_KEY) window.SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || document.querySelector('meta[name="supabase-anon-key"]').content;
+                    if (!window.SUPABASE_URL) window.SUPABASE_URL = document.querySelector('meta[name="supabase-url"]').content;
+                    if (!window.SUPABASE_ANON_KEY) window.SUPABASE_ANON_KEY = document.querySelector('meta[name="supabase-anon-key"]').content;
                 } catch(_) {}
             }
             ensureKeys();
-            // Use singleton initializer exposed by database-supabase.js
             window.addEventListener('load', async () => {
                 try { await (window.ensureSupabaseClient && window.ensureSupabaseClient()); } catch(_) {}
             });

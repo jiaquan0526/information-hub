@@ -68,16 +68,13 @@
     <!-- <script src="githubData.js" defer></script> -->
     <script src="auth-script.js" defer></script>
     <script>
-        // Bootstrap Supabase keys from meta/localStorage if globals are empty
+        // Bootstrap Supabase keys from meta if globals are empty
         (function(){
             try {
                 var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
                 var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
-                var lsUrl = ''; var lsKey = '';
-                try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
-                try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
-                window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || lsUrl || '';
-                window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || lsKey || '';
+                window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || '';
+                window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || '';
             } catch(_) {}
         })();
     </script>
@@ -88,11 +85,8 @@
                 try {
                     var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
                     var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
-                    var lsUrl = ''; var lsKey = '';
-                    try { lsUrl = localStorage.getItem('SUPABASE_URL') || ''; } catch(_) {}
-                    try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY') || ''; } catch(_) {}
-                    window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || lsUrl || '';
-                    window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || lsKey || '';
+                    window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || '';
+                    window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || '';
                 } catch(_) {}
             }
             function initClient(){
