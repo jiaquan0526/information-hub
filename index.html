@@ -1039,11 +1039,26 @@
             })();
         }
 
-        // Define a stub function early to satisfy the wait condition immediately
+        // Define a placeholder that will be replaced by the real implementation
+        // This satisfies the wait condition while the browser continues parsing
         if (!window.updateMainHubSections) {
             window.updateMainHubSections = async function() {
-                console.log('[Hub] Stub updateMainHubSections invoked - real builder will replace this');
-                // Stub: will be replaced by the real implementation later in the script
+                console.log('[Hub] Waiting for real builder to be defined...');
+                // Wait for the real implementation to be defined (defined at ~line 5308)
+                return new Promise((resolve) => {
+                    const checkInterval = setInterval(() => {
+                        if (window.__realUpdateMainHubSections && typeof window.__realUpdateMainHubSections === 'function') {
+                            clearInterval(checkInterval);
+                            window.__realUpdateMainHubSections().then(resolve).catch(resolve);
+                        }
+                    }, 100);
+                    // Timeout after 30 seconds
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                        console.error('[Hub] Real builder never loaded');
+                        resolve();
+                    }, 30000);
+                });
             };
         }
 
@@ -1054,10 +1069,13 @@
                 'updateMainHubSections',
                 () => {
                     const hasFunc = (typeof window.updateMainHubSections === 'function');
-                    const isStub = (hasFunc && /Stub updateMainHubSections invoked/.test(String(window.updateMainHubSections)));
+                    const hasReal = (typeof window.__realUpdateMainHubSections === 'function');
                     const supaOk = (window.supabaseClient && typeof window.supabaseClient.from === 'function');
-                    // Return true when builder exists and is not a stub
-                    return (hasFunc && !isStub && supaOk);
+                    // Return true when both builder and Supabase are ready
+                    // If real builder is loaded, we're definitely ready
+                    if (hasReal && supaOk) return true;
+                    // Otherwise check if we have the placeholder and Supabase (good enough to start)
+                    return (hasFunc && supaOk);
                 },
                 () => { try { if (typeof window.updateMainHubSections === 'function') window.updateMainHubSections(); } catch(_) {} },
                 {
@@ -1065,7 +1083,7 @@
                     intervalMs: 150,
                     inspect: () => ({
                         hasBuilder: (typeof window.updateMainHubSections === 'function'),
-                        isStubBuilder: (typeof window.updateMainHubSections === 'function') ? /Stub updateMainHubSections invoked/.test(String(window.updateMainHubSections)) : false,
+                        hasRealBuilder: (typeof window.__realUpdateMainHubSections === 'function'),
                         supabaseReady: !!(window.supabaseClient && typeof window.supabaseClient.from === 'function'),
                         userLoaded: !!window.currentUserLoaded,
                         sectionsLoaded: !!window.hubSections,
@@ -5305,7 +5323,8 @@ Permissions:
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
         
-        window.updateMainHubSections = async function updateMainHubSections() {
+        // Define the real implementation and store it separately
+        window.__realUpdateMainHubSections = async function updateMainHubSections() {
             console.log('Loading sections from Supabase...');
             
             const now = Date.now();
@@ -5618,8 +5637,10 @@ Permissions:
             // Reset the flag
             isUpdatingSections = false;
         }
-        // Mark builder as loaded (already assigned at function definition)
-        try { window.__advancedBuilderDefined = true; window.__advancedBuilderLoaded = true; console.log('[Hub] Advanced builder loaded'); } catch(_) {}
+        // Replace the stub with the real implementation
+        window.updateMainHubSections = window.__realUpdateMainHubSections;
+        // Mark builder as loaded
+        try { window.__advancedBuilderDefined = true; window.__advancedBuilderLoaded = true; console.log('[Hub] Advanced builder loaded and activated'); } catch(_) {}
         // Select all sections for a user
         window.selectAllSections = async function(userId) {
             window.__assignmentsBatchActive = true;
