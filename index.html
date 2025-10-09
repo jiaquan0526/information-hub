@@ -679,7 +679,19 @@
                     window.updateMainHubSections = function(){
                         try {
                             console.log('[Init] Stub updateMainHubSections invoked; deferring to callUpdateMainHubSectionsSoon');
-                            if (typeof callUpdateMainHubSectionsSoon === 'function') callUpdateMainHubSectionsSoon(20000);
+                            const start = Date.now();
+                            (function wait(){
+                                try {
+                                    if (typeof callUpdateMainHubSectionsSoon === 'function') {
+                                        return callUpdateMainHubSectionsSoon(20000);
+                                    }
+                                    if (Date.now() - start >= 7000) {
+                                        try { if (typeof window.updateMainHubSections === 'function' && window.updateMainHubSections !== arguments.callee) window.updateMainHubSections(); } catch(_) {}
+                                        return;
+                                    }
+                                } catch(_) {}
+                                setTimeout(wait, 120);
+                            })();
                         } catch(_) {}
                     };
                 }
