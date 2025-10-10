@@ -1199,8 +1199,19 @@ class InformationHub {
                 if (myRole === 'admin') return true;
                 return String(u.id) === String(me?.userId || me?.id);
             });
+            
+            // Deduplicate users by id
+            const uniqueUsers = [];
+            const seenIds = new Set();
+            filtered.forEach(user => {
+                if (!seenIds.has(user.id)) {
+                    seenIds.add(user.id);
+                    uniqueUsers.push(user);
+                }
+            });
+            
             if (userSelect) {
-                filtered.forEach(user => {
+                uniqueUsers.forEach(user => {
                     const option = document.createElement('option');
                     option.value = user.id;
                     option.textContent = `${user.username || user.id} (${user.role || ''})`;

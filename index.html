@@ -5556,8 +5556,6 @@ Permissions:
         };
         
         window.saveSectionOrder = async function() {
-            updateSectionOrder();
-            
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
                     // Update each section's order in Supabase via wrapper; fallback to direct Supabase batch update if wrapper fails
