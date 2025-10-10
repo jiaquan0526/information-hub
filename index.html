@@ -1366,7 +1366,34 @@
                 // Locally reflect immediately
                 try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
                 updateBackgroundToggleButton();
+                try { await loadSectionBackgroundsFromDb(); } catch(_) {}
                 try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                
+                // If enabling backgrounds and map is empty, auto-generate mappings
+                if (next && Object.keys(SECTION_BG_MAP || {}).length === 0 && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
+                    try {
+                        // Generate mapping for all sections
+                        const { data: sections } = await window.supabaseClient.from('sections').select('id');
+                        if (sections && sections.length > 0) {
+                            const imgs = BACKGROUND_IMAGES.slice();
+                            for (let i = imgs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [imgs[i], imgs[j]] = [imgs[j], imgs[i]]; }
+                            const newMap = {};
+                            sections.forEach((s, idx) => {
+                                if (s && s.id) newMap[s.id] = imgs[idx % imgs.length];
+                            });
+                            const rows = Object.keys(newMap).map(section_id => ({ section_id, image_url: newMap[section_id] }));
+                            const chunkSize = 100;
+                            for (let start = 0; start < rows.length; start += chunkSize) {
+                                const chunk = rows.slice(start, start + chunkSize);
+                                await window.supabaseClient.from('section_backgrounds').upsert(chunk, { onConflict: 'section_id' });
+                            }
+                            SECTION_BG_MAP = newMap;
+                        }
+                    } catch(autoGenErr) {
+                        console.warn('Auto-generate background mappings failed:', autoGenErr);
+                    }
+                }
+                
                 try { await updateMainHubSections(); } catch(_) {}
                 try { informationHub && informationHub.showMessage && informationHub.showMessage(`Global backgrounds ${next ? 'enabled' : 'disabled'}`, 'success'); } catch(_) {}
             } catch (e) {
@@ -5096,7 +5123,10 @@ Permissions:
 
         async function applyCardBackground(sectionCfg) {
             try {
-                const card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionCfg.id}')"]`);
+                const sectionId = sectionCfg.id || sectionCfg.section_id;
+                let card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionId}')"]`);
+                // Fallback: try finding by data-section-id attribute
+                if (!card) card = document.querySelector(`.hub-card[data-section-id="${sectionId}"]`);
                 if (!card) return;
                 // Respect global/user setting: default disabled
                 try {
@@ -5118,7 +5148,7 @@ Permissions:
                 // Next prefer pre-assigned unique map if available
                 if (!img) {
                     try {
-                        const mapped = SECTION_BG_MAP && SECTION_BG_MAP[sectionCfg.id];
+                        const mapped = SECTION_BG_MAP && SECTION_BG_MAP[sectionId];
                         if (mapped) img = mapped;
                     } catch(_) {}
                 }
@@ -5767,7 +5797,7 @@ Permissions:
         }
         function scheduleCardBackground(section) {
             try {
-                const sid = section && section.id ? String(section.id) : '';
+                const sid = section && (section.id || section.section_id) ? String(section.id || section.section_id) : '';
                 if (!sid) return;
                 if (_bgScheduled.has(sid) || _bgActiveSet.has(sid)) return;
                 _bgScheduled.add(sid);
