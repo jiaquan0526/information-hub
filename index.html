@@ -1276,6 +1276,12 @@
             }
         } catch (_) {}
 
+        // Backgrounds: global variables (must be declared early)
+        let BACKGROUND_IMAGES = [];
+        let BG_SESSION_SEED = String(Date.now()) + ':' + Math.random();
+        let SECTION_BG_MAP = {};
+        let SECTION_BG_READY = false;
+
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
             try {
@@ -1358,9 +1364,11 @@
                 const nextValue = Object.assign({}, current || {}, { forceEnabled: next });
 
                 // Persist to site settings so all clients pick it up (Supabase only)
+                // Stringify value to match database TEXT format
+                const valueToSave = JSON.stringify(nextValue);
                 const { error: upErr } = await window.supabaseClient
                     .from('site_settings')
-                    .upsert({ key: 'backgrounds', value: nextValue }, { onConflict: 'key' });
+                    .upsert({ key: 'backgrounds', value: valueToSave }, { onConflict: 'key' });
                 if (upErr) throw upErr;
 
                 // Locally reflect immediately
@@ -4961,13 +4969,7 @@ Permissions:
             if (t.length <= maxLen) return t;
             return t.slice(0, Math.max(0, maxLen - 1)) + '…';
         }
-        // Background image support for sections (random, session-only)
-        let BACKGROUND_IMAGES = [];
-        // Session-only seed and map for background assignment (not persisted)
-        let BG_SESSION_SEED = String(Date.now()) + ':' + Math.random();
-        let SECTION_BG_MAP = {};
-        let SECTION_BG_READY = false;
-
+        
         // Load persistent section->image mapping from database (consistent across users)
         async function loadSectionBackgroundsFromDb() {
             try {
@@ -5288,9 +5290,10 @@ Permissions:
                         .single();
                     let current = data && data.value; try { if (typeof current === 'string') current = JSON.parse(current); } catch(_) {}
                     const next = Object.assign({}, current || {}, { shuffleAt: new Date().toISOString() });
+                    const valueToSave = JSON.stringify(next);
                     await window.supabaseClient
                         .from('site_settings')
-                        .upsert({ key: 'backgrounds', value: next }, { onConflict: 'key' });
+                        .upsert({ key: 'backgrounds', value: valueToSave }, { onConflict: 'key' });
                 } catch(_) {}
                 alert('Backgrounds reshuffled');
             } catch (e) {
