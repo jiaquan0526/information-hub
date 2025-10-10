@@ -2977,12 +2977,7 @@ Permissions:
                     alert('Please fill in email, password, and role.');
                     return false;
                 }
-                // Determine visible sections to seed viewer permissions
-                let sectionIds = [];
-                try {
-                    const rows = window.hubDatabase && window.hubDatabaseReady ? await hubDatabase.getAllSections() : [];
-                    sectionIds = (rows || []).filter(s => !s.config || s.config.visible !== false).map(s => s.section_id || s.sectionId || s.id).filter(Boolean);
-                } catch(_) { sectionIds = []; }
+                // Use wildcard for sections since canViewAllSections: true
                 if (!window.supabaseClient) { alert('Supabase not initialized'); return false; }
 
                 // If a profile with this email already exists, just update role/permissions
@@ -3016,7 +3011,7 @@ Permissions:
                     name: name || username || email.split('@')[0],
                     email,
                     permissions: {
-                        sections: sectionIds.length > 0 ? sectionIds : ['*'],
+                        sections: ['*'],  // Wildcard since canViewAllSections is true
                         editableSections: [],
                         canViewAllSections: true,
                         canEditAllSections: false,
