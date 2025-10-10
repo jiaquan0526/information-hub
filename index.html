@@ -4224,34 +4224,31 @@ Permissions:
             
             const html = sectionOrder.map((section, index) => `
                 <div class="section-item" data-section-id="${section.id}" data-index="${index}" draggable="true" 
-                     style="padding:12px;margin:8px 0;background:#fff;border:1px solid #e0e0e0;border-radius:8px;display:flex;align-items:center;gap:12px;transition:all 0.2s;">
-                    <div class="drag-handle" style="cursor:move;padding:0 10px;color:#999;font-size:18px;">
+                     style="padding:10px;margin:6px 0;background:#fff;border:1px solid #e0e0e0;border-radius:8px;display:flex;align-items:center;gap:8px;transition:all 0.2s;">
+                    <div class="drag-handle" style="cursor:move;padding:0 6px;color:#999;font-size:16px;">
                         <i class="fas fa-grip-vertical"></i>
                     </div>
-                    <div class="section-icon" style="color:${section.color || '#3498db'};font-size:24px;width:40px;text-align:center;">
+                    <div class="section-icon" style="color:${section.color || '#3498db'};font-size:20px;width:30px;text-align:center;">
                         <i class="${section.icon || 'fas fa-folder'}"></i>
                     </div>
-                    <div class="section-info" style="flex:1;min-width:0;">
-                        <h4 style="margin:0;font-size:16px;font-weight:600;">${section.name || section.id}</h4>
-                        <span style="color:#999;font-size:0.85em;">Order: ${section.order || index + 1}</span>
+                    <div class="section-info" style="flex:1;min-width:120px;overflow:hidden;">
+                        <h4 style="margin:0;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${section.name || section.id}</h4>
+                        <span style="color:#999;font-size:0.8em;">Order: ${section.order || index + 1}</span>
                     </div>
-                    <div class="section-visible" style="display:flex;align-items:center;gap:8px;padding:0 12px;">
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;color:#555;user-select:none;">
+                    <div class="section-visible" style="display:flex;align-items:center;gap:4px;padding:0 8px;">
+                        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;color:#555;user-select:none;">
                             <input type="checkbox" 
                                    ${section.visible !== false ? 'checked' : ''} 
                                    onchange="toggleSectionVisibility('${section.id}', this.checked)"
-                                   style="cursor:pointer;width:16px;height:16px;">
-                            <span style="white-space:nowrap;">
-                                <i class="fas ${section.visible !== false ? 'fa-eye' : 'fa-eye-slash'}" style="color:${section.visible !== false ? '#27ae60' : '#95a5a6'};"></i>
-                                Visible
-                            </span>
+                                   style="cursor:pointer;width:14px;height:14px;">
+                            <i class="fas ${section.visible !== false ? 'fa-eye' : 'fa-eye-slash'}" style="color:${section.visible !== false ? '#27ae60' : '#95a5a6'};font-size:14px;"></i>
                         </label>
                     </div>
-                    <div class="section-actions" style="display:flex;gap:8px;">
-                        <button class="btn btn-sm btn-secondary" onclick="editSection('${section.id}')" style="padding:6px 12px;">
+                    <div class="section-actions" style="display:flex;gap:6px;flex-shrink:0;">
+                        <button class="btn btn-sm btn-secondary" onclick="editSection('${section.id}')" style="padding:5px 10px;font-size:13px;">
                             <i class="fas fa-edit"></i> Edit
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteSection('${section.id}')" style="padding:6px 12px;">
+                        <button class="btn btn-sm btn-danger" onclick="deleteSection('${section.id}')" style="padding:5px 10px;font-size:13px;">
                             <i class="fas fa-trash"></i> Delete
                         </button>
                     </div>
