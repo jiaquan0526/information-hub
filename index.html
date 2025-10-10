@@ -2445,56 +2445,7 @@
         };
         // Backward-compatible alias
         window.showAdminPanel = window.openAdminPanel;
-        // Ensure tab switching works and triggers data loading
-        if (typeof window.switchAdminTab !== 'function') {
-            window.switchAdminTab = function(tabName) {
-                console.log('Switching to tab:', tabName);
-                
-                // Update tab appearance
-                document.querySelectorAll('.admin-tab').forEach(tab => {
-                    tab.classList.remove('active');
-                });
-                try {
-                    const selectedNav = document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`);
-                    if (selectedNav) selectedNav.classList.add('active');
-                } catch(_) {}
-
-                // Show/hide content sections
-                document.querySelectorAll('.admin-tab-content').forEach(content => {
-                    content.classList.remove('active');
-                    try { content.style.display = 'none'; } catch(_) {}
-                });
-                
-                const targetTab = document.getElementById(`${tabName}-tab`);
-                if (targetTab) {
-                    targetTab.classList.add('active');
-                    try { targetTab.style.display = 'block'; } catch(_) {}
-                    console.log('Tab content activated:', tabName);
-                } else {
-                    console.error('Tab content not found:', `${tabName}-tab`);
-                }
-
-                // Load specific tab content
-                if (tabName === 'users') {
-                    try { renderCurrentUserSummary(); } catch (e) { console.warn('renderCurrentUserSummary error', e); }
-                    loadUsersList();
-                } else if (tabName === 'permissions') {
-                    loadPermissionUserList();
-                } else if (tabName === 'audit') {
-                    loadAuditLog();
-                } else if (tabName === 'sections') {
-                    console.log('Loading sections list...');
-                    loadSectionsList();
-                } else if (tabName === 'assignments') {
-                    console.log('Loading section assignments...');
-                    try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-                    // Always render immediately (auto-loads if cache is empty)
-                    try { if (typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); } } catch(_) {}
-                    // Then ensure data load kicks off
-                    try { if (typeof loadSectionAssignments === 'function' && !window.__assignmentsLoading) { loadSectionAssignments(); } } catch(_) {}
-                }
-            };
-        }
+        // switchAdminTab is defined later after helper functions are loaded (line ~4096)
 
         // Admin diagnostics runner
         window.runAdminDiagnostics = async function() {
@@ -4093,55 +4044,6 @@ Permissions:
             }
         };
         
-        window.switchAdminTab = function(tabName) {
-            console.log('Switching to tab:', tabName);
-            
-            // Update tab appearance
-            document.querySelectorAll('.admin-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            try {
-                const selectedNav = document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`);
-                if (selectedNav) selectedNav.classList.add('active');
-            } catch(_) {}
-
-            // Show/hide content sections
-            document.querySelectorAll('.admin-tab-content').forEach(content => {
-                content.classList.remove('active');
-                try { content.style.display = 'none'; } catch(_) {}
-            });
-            
-            const targetTab = document.getElementById(`${tabName}-tab`);
-            if (targetTab) {
-                targetTab.classList.add('active');
-                try { targetTab.style.display = 'block'; } catch(_) {}
-                console.log('Tab content activated:', tabName);
-            } else {
-                console.error('Tab content not found:', `${tabName}-tab`);
-            }
-
-            // Load specific tab content
-            if (tabName === 'users') {
-                try { renderCurrentUserSummary(); } catch (e) { console.warn('renderCurrentUserSummary error', e); }
-                loadUsersList();
-            } else if (tabName === 'permissions') {
-                loadPermissionUserList();
-            } else if (tabName === 'audit') {
-                loadAuditLog();
-            } else if (tabName === 'sections') {
-                console.log('Loading sections list...');
-                loadSectionsList();
-            } else if (tabName === 'assignments') {
-                console.log('Loading section assignments...');
-                try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-                try {
-                    const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
-                    if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); }
-                    else { loadSectionAssignments(); }
-                } catch(_) { loadSectionAssignments(); }
-            }
-        };
-
         // Load sections list for Manage Sections tab
         window.loadSectionsList = async function() {
             console.log('loadSectionsList called');
@@ -4487,6 +4389,55 @@ Permissions:
                 console.error('Error in deselectAllSections:', e);
             }
         };
+        
+        window.switchAdminTab = function(tabName) {
+            console.log('Switching to tab:', tabName);
+            
+            // Update tab appearance
+            document.querySelectorAll('.admin-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            try {
+                const selectedNav = document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`);
+                if (selectedNav) selectedNav.classList.add('active');
+            } catch(_) {}
+
+            // Show/hide content sections
+            document.querySelectorAll('.admin-tab-content').forEach(content => {
+                content.classList.remove('active');
+                try { content.style.display = 'none'; } catch(_) {}
+            });
+            
+            const targetTab = document.getElementById(`${tabName}-tab`);
+            if (targetTab) {
+                targetTab.classList.add('active');
+                try { targetTab.style.display = 'block'; } catch(_) {}
+                console.log('Tab content activated:', tabName);
+            } else {
+                console.error('Tab content not found:', `${tabName}-tab`);
+            }
+
+            // Load specific tab content
+            if (tabName === 'users') {
+                try { renderCurrentUserSummary(); } catch (e) { console.warn('renderCurrentUserSummary error', e); }
+                loadUsersList();
+            } else if (tabName === 'permissions') {
+                loadPermissionUserList();
+            } else if (tabName === 'audit') {
+                loadAuditLog();
+            } else if (tabName === 'sections') {
+                console.log('Loading sections list...');
+                loadSectionsList();
+            } else if (tabName === 'assignments') {
+                console.log('Loading section assignments...');
+                try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
+                try {
+                    const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
+                    if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); }
+                    else { loadSectionAssignments(); }
+                } catch(_) { loadSectionAssignments(); }
+            }
+        };
 
         // Toggle compact admin UI
         window.toggleCompactAdmin = function() {
@@ -4534,9 +4485,7 @@ Permissions:
             }
         };
         
-        // Section Management Functions
-        let sectionOrder = [];
-        
+        // Section Management Functions (sectionOrder already initialized above)
         // NO localStorage sync - use Supabase only
         
         // Function to get all available sections dynamically - Supabase ONLY (no fallbacks)
@@ -6062,6 +6011,9 @@ Permissions:
             }
             updateBackgroundToggleButton();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
+            
+            // Populate info bar with recent activities
+            try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
             
             // Reset the flag
             isUpdatingSections = false;
