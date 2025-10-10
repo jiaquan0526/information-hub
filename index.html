@@ -4235,6 +4235,18 @@ Permissions:
                         <h4 style="margin:0;font-size:16px;font-weight:600;">${section.name || section.id}</h4>
                         <span style="color:#999;font-size:0.85em;">Order: ${section.order || index + 1}</span>
                     </div>
+                    <div class="section-visible" style="display:flex;align-items:center;gap:8px;padding:0 12px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;color:#555;user-select:none;">
+                            <input type="checkbox" 
+                                   ${section.visible !== false ? 'checked' : ''} 
+                                   onchange="toggleSectionVisibility('${section.id}', this.checked)"
+                                   style="cursor:pointer;width:16px;height:16px;">
+                            <span style="white-space:nowrap;">
+                                <i class="fas ${section.visible !== false ? 'fa-eye' : 'fa-eye-slash'}" style="color:${section.visible !== false ? '#27ae60' : '#95a5a6'};"></i>
+                                Visible
+                            </span>
+                        </label>
+                    </div>
                     <div class="section-actions" style="display:flex;gap:8px;">
                         <button class="btn btn-sm btn-secondary" onclick="editSection('${section.id}')" style="padding:6px 12px;">
                             <i class="fas fa-edit"></i> Edit
@@ -5580,6 +5592,74 @@ Permissions:
         
         window.addNewSection = function() {
             openSectionModal('add');
+        };
+        
+        // Toggle section visibility
+        window.toggleSectionVisibility = async function(sectionId, isVisible) {
+            console.log(`[toggleSectionVisibility] Toggling section ${sectionId} to ${isVisible}`);
+            
+            try {
+                if (!window.supabaseClient) {
+                    alert('Database not ready. Please try again.');
+                    return;
+                }
+                
+                // Find the section in local array
+                const section = sectionOrder.find(s => s.id === sectionId);
+                if (!section) {
+                    console.error('[toggleSectionVisibility] Section not found:', sectionId);
+                    return;
+                }
+                
+                // Update the section's config with new visibility
+                const updatedConfig = { ...(section.config || {}), visible: isVisible };
+                
+                // Update in Supabase
+                const { error } = await window.supabaseClient
+                    .from('sections')
+                    .update({ config: updatedConfig })
+                    .eq('section_id', sectionId);
+                
+                if (error) {
+                    console.error('[toggleSectionVisibility] Error updating section:', error);
+                    alert('Failed to update section visibility: ' + error.message);
+                    // Revert the checkbox by re-rendering
+                    renderSectionsList();
+                    return;
+                }
+                
+                // Update local sectionOrder array
+                section.visible = isVisible;
+                section.config = updatedConfig;
+                
+                console.log(`[toggleSectionVisibility] Section ${sectionId} visibility updated to ${isVisible}`);
+                
+                // Log the activity
+                try {
+                    if (window.hubDatabase && window.hubDatabaseReady) {
+                        hubDatabase.saveActivity({ 
+                            action: 'UPDATE_SECTION_VISIBILITY', 
+                            sectionId, 
+                            metadata: { name: section.name, visible: isVisible }
+                        });
+                    }
+                } catch(_) {}
+                
+                // Re-render the list to update the icon
+                renderSectionsList();
+                
+                // Update the main hub page to reflect visibility change
+                await updateMainHubSections();
+                
+                // Show success message (optional, can be subtle)
+                console.log(`Section "${section.name}" is now ${isVisible ? 'visible' : 'hidden'}`);
+                
+            } catch (error) {
+                console.error('[toggleSectionVisibility] Exception:', error);
+                alert('Failed to update section visibility: ' + (error.message || 'Unknown error'));
+                // Revert the checkbox by re-rendering
+                renderSectionsList();
+            }
         };
         
         window.saveSectionOrder = async function() {
