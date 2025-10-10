@@ -1456,7 +1456,8 @@
                         try { await loadSectionBackgroundsFromDb(); } catch(_) {}
                         try { await ensureBackgroundImagesLoaded(); } catch(_) {}
                         try { await window.refreshGlobalBackgrounds(); } catch(_) {}
-                        try { await updateMainHubSections(); } catch(_) {}
+                        // Removed updateMainHubSections() - causing unwanted rebuilds on tab switch
+                        // Stats are already updated by the first visibilitychange listener at line ~1193
                         try { await window.refreshBackgroundToggleUI(); } catch(_) {}
                     })();
                 }
