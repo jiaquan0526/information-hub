@@ -1192,23 +1192,19 @@
         // Also update interface when page becomes visible (lightweight only)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                console.log('[VisibilityChange] Page visible, lightweight UI update only');
-                // Removed updateUserInterface() to prevent rebuilds on tab switch
-                try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
-                try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
-                try { if (typeof startHeaderObserver === 'function') startHeaderObserver(); } catch(_) {}
+                console.log('[VisibilityChange] Page visible, minimal UI update');
+                // Only update stats counts, nothing else
                 try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
             }
         });
         
         // Update interface when window gains focus (lightweight only)
-        window.addEventListener('focus', () => {
-            console.log('[Focus] Window focused, lightweight update only');
-            // Removed updateUserInterface() to prevent rebuilds on window focus
-            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {} 
-            try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
-            try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
-        });
+        // DISABLED: Reduced aggressiveness to prevent any rebuild triggers
+        // Stats are already updated by visibilitychange listener
+        // window.addEventListener('focus', () => {
+        //     console.log('[Focus] Window focused, lightweight update only');
+        //     try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
+        // });
 
         // Ensure global navigation helper exists
         if (typeof window.navigateToSection !== 'function') {
@@ -1374,14 +1370,22 @@
                 // Locally reflect immediately
                 try { window.globalBackgroundsEnabled = !!next; } catch(_) {}
                 updateBackgroundToggleButton();
-                try { await loadSectionBackgroundsFromDb(); } catch(_) {}
-                try { await ensureBackgroundImagesLoaded(); } catch(_) {}
+                
+                console.log('[Background Toggle] Starting background setup, enabled:', next);
+                
+                try { await ensureBackgroundImagesLoaded(); } catch(e) { console.error('[Background Toggle] ensureBackgroundImagesLoaded failed:', e); }
+                console.log('[Background Toggle] BACKGROUND_IMAGES loaded:', BACKGROUND_IMAGES.length, 'images');
+                
+                try { await loadSectionBackgroundsFromDb(); } catch(e) { console.error('[Background Toggle] loadSectionBackgroundsFromDb failed:', e); }
+                console.log('[Background Toggle] SECTION_BG_MAP loaded:', Object.keys(SECTION_BG_MAP || {}).length, 'mappings');
                 
                 // If enabling backgrounds and map is empty, auto-generate mappings
                 if (next && Object.keys(SECTION_BG_MAP || {}).length === 0 && Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
+                    console.log('[Background Toggle] Auto-generating background mappings...');
                     try {
                         // Generate mapping for all sections
                         const { data: sections } = await window.supabaseClient.from('sections').select('id');
+                        console.log('[Background Toggle] Found sections:', sections?.length || 0);
                         if (sections && sections.length > 0) {
                             const imgs = BACKGROUND_IMAGES.slice();
                             for (let i = imgs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [imgs[i], imgs[j]] = [imgs[j], imgs[i]]; }
@@ -1396,13 +1400,15 @@
                                 await window.supabaseClient.from('section_backgrounds').upsert(chunk, { onConflict: 'section_id' });
                             }
                             SECTION_BG_MAP = newMap;
+                            console.log('[Background Toggle] Auto-generated mappings:', Object.keys(newMap).length);
                         }
                     } catch(autoGenErr) {
-                        console.warn('Auto-generate background mappings failed:', autoGenErr);
+                        console.error('[Background Toggle] Auto-generate background mappings failed:', autoGenErr);
                     }
                 }
                 
-                try { await updateMainHubSections(); } catch(_) {}
+                console.log('[Background Toggle] Rebuilding sections with backgrounds...');
+                try { await updateMainHubSections(); } catch(e) { console.error('[Background Toggle] updateMainHubSections failed:', e); }
                 try { informationHub && informationHub.showMessage && informationHub.showMessage(`Global backgrounds ${next ? 'enabled' : 'disabled'}`, 'success'); } catch(_) {}
             } catch (e) {
                 console.error('Global background toggle failed:', e);
@@ -1483,20 +1489,14 @@
         } catch(_) {}
 
         // Keep the label in sync when tab regains focus
+        // DISABLED: This was causing unwanted page rebuilds on tab switch
+        // Background data is loaded on initial page load and when user clicks toggle
         try {
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) {
-                    (async () => {
-                        try { await _waitForSupabaseReady(1000); } catch(_) {}
-                        try { await loadSectionBackgroundsFromDb(); } catch(_) {}
-                        try { await ensureBackgroundImagesLoaded(); } catch(_) {}
-                        try { await window.refreshGlobalBackgrounds(); } catch(_) {}
-                        // Removed updateMainHubSections() - causing unwanted rebuilds on tab switch
-                        // Stats are already updated by the first visibilitychange listener at line ~1193
-                        try { await window.refreshBackgroundToggleUI(); } catch(_) {}
-                    })();
-                }
-            });
+            // document.addEventListener('visibilitychange', () => {
+            //     if (!document.hidden) {
+            //         // Background sync code disabled to prevent rebuilds
+            //     }
+            // });
         } catch(_) {}
 
         // Admin: Get current user from Supabase
@@ -5126,19 +5126,27 @@ Permissions:
         async function applyCardBackground(sectionCfg) {
             try {
                 const sectionId = sectionCfg.id || sectionCfg.section_id;
+                console.log('[applyCardBackground] Processing section:', sectionId);
+                
                 let card = document.querySelector(`.hub-card[onclick="navigateToSection('${sectionId}')"]`);
                 // Fallback: try finding by data-section-id attribute
                 if (!card) card = document.querySelector(`.hub-card[data-section-id="${sectionId}"]`);
-                if (!card) return;
+                if (!card) {
+                    console.warn('[applyCardBackground] Card not found for section:', sectionId);
+                    return;
+                }
+                
                 // Respect global/user setting: default disabled
                 try {
                     if (typeof backgroundsDisabled === 'function' && backgroundsDisabled()) {
+                        console.log('[applyCardBackground] Backgrounds disabled, clearing for section:', sectionId);
                         try { card.style.removeProperty('background-image'); } catch(_) {}
                         try { card.classList.remove('bg-ready'); } catch(_) {}
                         try { card.removeAttribute('data-bg-url'); } catch(_) {}
                         return;
                     }
                 } catch(_) {}
+                
                 // Prefer per-section provided image if available
                 let img = null;
                 try {
@@ -5147,6 +5155,7 @@ Permissions:
                         img = String(explicit).trim();
                     }
                 } catch (_) {}
+                
                 // Next prefer pre-assigned unique map if available
                 if (!img) {
                     try {
@@ -5154,8 +5163,14 @@ Permissions:
                         if (mapped) img = mapped;
                     } catch(_) {}
                 }
+                
                 // Do not fallback to random; wait for DB mapping for consistency
-                if (!img) return;
+                if (!img) {
+                    console.warn('[applyCardBackground] No image found for section:', sectionId, 'SECTION_BG_MAP has', Object.keys(SECTION_BG_MAP || {}).length, 'entries');
+                    return;
+                }
+                
+                console.log('[applyCardBackground] Applying image to section:', sectionId, 'image:', img);
                 if (!img) return;
                 // Resize/convert via online proxy before applying (with fallback)
                 try {
@@ -5653,7 +5668,15 @@ Permissions:
                 if (sessionUser && typeof updateHubCardsAccess === 'function') await updateHubCardsAccess(sessionUser);
             } catch (_) {}
             // Initialize lazy loading for backgrounds (skip when disabled)
-            try { if (typeof backgroundsDisabled === 'function' && !backgroundsDisabled()) initBackgroundLazyLoad(visibleSections); } catch(_) {}
+            try { 
+                const bgDisabled = typeof backgroundsDisabled === 'function' && backgroundsDisabled();
+                console.log('[Background Init] backgroundsDisabled:', bgDisabled, 'visibleSections:', visibleSections.length);
+                if (!bgDisabled) {
+                    initBackgroundLazyLoad(visibleSections);
+                }
+            } catch(e) { 
+                console.error('[Background Init] Failed:', e);
+            }
             updateBackgroundToggleButton();
             console.log('=== UPDATE MAIN HUB SECTIONS COMPLETE ===');
             
@@ -5809,7 +5832,10 @@ Permissions:
             } catch(_) {}
         }
         function isLowDataConnection() { return false; }
-        function initBackgroundLazyLoad(sections) { (sections || []).forEach(s => scheduleCardBackground(s)); }
+        function initBackgroundLazyLoad(sections) {
+            console.log('[initBackgroundLazyLoad] Starting with', (sections || []).length, 'sections');
+            (sections || []).forEach(s => scheduleCardBackground(s));
+        }
     </script>
     <style>
         @keyframes spin {
