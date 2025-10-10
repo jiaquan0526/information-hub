@@ -4046,9 +4046,19 @@ Permissions:
         
         // Load sections list for Manage Sections tab
         window.loadSectionsList = async function() {
-            console.log('loadSectionsList called');
+            console.log('[loadSectionsList] Function called');
+            
+            // Check if container exists
+            const container = document.getElementById('sectionsList');
+            console.log('[loadSectionsList] Container found:', !!container);
+            if (!container) {
+                console.error('[loadSectionsList] sectionsList container not found in DOM!');
+                return;
+            }
+            
             try {
                 // Wait for database to be ready
+                console.log('[loadSectionsList] Waiting for supabaseClient...');
                 let retries = 0;
                 while (retries < 20 && !window.supabaseClient) {
                     await new Promise(resolve => setTimeout(resolve, 100));
@@ -4056,9 +4066,12 @@ Permissions:
                 }
                 
                 if (!window.supabaseClient) {
-                    console.error('Supabase client not available');
+                    console.error('[loadSectionsList] Supabase client not available after waiting');
+                    container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error: Supabase client not available</div>';
                     return;
                 }
+                
+                console.log('[loadSectionsList] Supabase client ready, fetching sections...');
                 
                 // Fetch sections from Supabase
                 const { data: sections, error } = await window.supabaseClient
@@ -4067,11 +4080,12 @@ Permissions:
                     .order('config->order', { ascending: true, nullsFirst: true });
                 
                 if (error) {
-                    console.error('Error loading sections:', error);
+                    console.error('[loadSectionsList] Error loading sections:', error);
+                    container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error loading sections: ' + error.message + '</div>';
                     return;
                 }
                 
-                console.log('Sections loaded for Manage Sections tab:', sections);
+                console.log('[loadSectionsList] Sections loaded:', sections?.length || 0, 'sections');
                 
                 // Update sectionOrder array
                 sectionOrder = (sections || []).map(s => ({
@@ -4085,24 +4099,43 @@ Permissions:
                     config: s.config || {}
                 }));
                 
+                console.log('[loadSectionsList] sectionOrder updated, calling renderSectionsList...');
+                
                 // Render the sections list
                 renderSectionsList();
+                
+                console.log('[loadSectionsList] Rendering complete');
             } catch (e) {
-                console.error('Error in loadSectionsList:', e);
+                console.error('[loadSectionsList] Exception:', e);
+                if (container) {
+                    container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error: ' + e.message + '</div>';
+                }
             }
         };
 
         // Render sections list in Manage Sections tab
         window.renderSectionsList = function() {
+            console.log('[renderSectionsList] Function called');
+            
             const container = document.getElementById('sectionsList');
-            if (!container) return;
+            console.log('[renderSectionsList] Container found:', !!container);
+            
+            if (!container) {
+                console.error('[renderSectionsList] sectionsList container not found!');
+                return;
+            }
+            
+            console.log('[renderSectionsList] sectionOrder:', sectionOrder?.length || 0, 'sections');
             
             if (!sectionOrder || sectionOrder.length === 0) {
+                console.log('[renderSectionsList] No sections to display');
                 container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No sections found. Click "Add New Section" to create one.</div>';
                 return;
             }
             
-            container.innerHTML = sectionOrder.map(section => `
+            console.log('[renderSectionsList] Generating HTML for', sectionOrder.length, 'sections...');
+            
+            const html = sectionOrder.map(section => `
                 <div class="section-item" data-section-id="${section.id}">
                     <div class="section-header">
                         <div class="section-icon" style="color: ${section.color || '#3498db'};">
@@ -4123,15 +4156,26 @@ Permissions:
                     </div>
                 </div>
             `).join('');
+            
+            container.innerHTML = html;
+            console.log('[renderSectionsList] HTML rendered, length:', html.length, 'characters');
         };
 
         // Load section assignments for Section Assignments tab
         window.loadSectionAssignments = async function() {
-            if (window.__assignmentsLoading) return;
+            console.log('[loadSectionAssignments] Function called');
+            
+            if (window.__assignmentsLoading) {
+                console.log('[loadSectionAssignments] Already loading, returning');
+                return;
+            }
             window.__assignmentsLoading = true;
             
+            const container = document.getElementById('assignmentsList');
+            console.log('[loadSectionAssignments] Container found:', !!container);
+            
             try {
-                console.log('Loading section assignments...');
+                console.log('[loadSectionAssignments] Waiting for supabaseClient...');
                 
                 // Wait for database to be ready
                 let retries = 0;
@@ -4141,10 +4185,13 @@ Permissions:
                 }
                 
                 if (!window.supabaseClient) {
-                    console.error('Supabase client not available');
+                    console.error('[loadSectionAssignments] Supabase client not available');
+                    if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error: Supabase client not available</div>';
                     window.__assignmentsLoading = false;
                     return;
                 }
+                
+                console.log('[loadSectionAssignments] Fetching users...');
                 
                 // Fetch all users
                 const { data: users, error: usersError } = await window.supabaseClient
@@ -4153,10 +4200,14 @@ Permissions:
                     .order('username', { ascending: true });
                 
                 if (usersError) {
-                    console.error('Error loading users:', usersError);
+                    console.error('[loadSectionAssignments] Error loading users:', usersError);
+                    if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error loading users: ' + usersError.message + '</div>';
                     window.__assignmentsLoading = false;
                     return;
                 }
+                
+                console.log('[loadSectionAssignments] Fetched', users?.length || 0, 'users');
+                console.log('[loadSectionAssignments] Fetching sections...');
                 
                 // Fetch all sections
                 const { data: sections, error: sectionsError } = await window.supabaseClient
@@ -4165,10 +4216,13 @@ Permissions:
                     .order('config->order', { ascending: true, nullsFirst: true });
                 
                 if (sectionsError) {
-                    console.error('Error loading sections:', sectionsError);
+                    console.error('[loadSectionAssignments] Error loading sections:', sectionsError);
+                    if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error loading sections: ' + sectionsError.message + '</div>';
                     window.__assignmentsLoading = false;
                     return;
                 }
+                
+                console.log('[loadSectionAssignments] Fetched', sections?.length || 0, 'sections');
                 
                 // Cache the data
                 window.__assignmentsCache = {
@@ -4177,15 +4231,15 @@ Permissions:
                     sectionIds: (sections || []).map(s => s.section_id)
                 };
                 
-                console.log('Section assignments loaded:', {
-                    users: users?.length || 0,
-                    sections: sections?.length || 0
-                });
+                console.log('[loadSectionAssignments] Cache updated, calling renderAssignmentsList...');
                 
                 // Render the assignments list
                 renderAssignmentsList();
+                
+                console.log('[loadSectionAssignments] Complete');
             } catch (e) {
-                console.error('Error in loadSectionAssignments:', e);
+                console.error('[loadSectionAssignments] Exception:', e);
+                if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:#ff0000;">Error: ' + e.message + '</div>';
             } finally {
                 window.__assignmentsLoading = false;
             }
@@ -4193,28 +4247,48 @@ Permissions:
 
         // Render section assignments list
         window.renderAssignmentsList = function() {
+            console.log('[renderAssignmentsList] Function called');
+            
             const container = document.getElementById('assignmentsList');
             const statsContainer = document.getElementById('assignmentsStats');
             
-            if (!container) return;
+            console.log('[renderAssignmentsList] Container found:', !!container);
+            console.log('[renderAssignmentsList] Stats container found:', !!statsContainer);
+            
+            if (!container) {
+                console.error('[renderAssignmentsList] assignmentsList container not found!');
+                return;
+            }
+            
+            console.log('[renderAssignmentsList] Cache exists:', !!window.__assignmentsCache);
+            console.log('[renderAssignmentsList] Cache users:', window.__assignmentsCache?.users?.length || 0);
+            console.log('[renderAssignmentsList] Cache sections:', window.__assignmentsCache?.sections?.length || 0);
             
             if (!window.__assignmentsCache || !window.__assignmentsCache.users || !window.__assignmentsCache.sections) {
+                console.log('[renderAssignmentsList] No cache, showing loading message');
                 container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Loading assignments...</div>';
-                if (!window.__assignmentsLoading) loadSectionAssignments();
+                if (!window.__assignmentsLoading) {
+                    console.log('[renderAssignmentsList] Triggering loadSectionAssignments');
+                    loadSectionAssignments();
+                }
                 return;
             }
             
             const { users, sections } = window.__assignmentsCache;
             
             if (users.length === 0) {
+                console.log('[renderAssignmentsList] No users found');
                 container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No users found.</div>';
                 return;
             }
             
             if (sections.length === 0) {
+                console.log('[renderAssignmentsList] No sections found');
                 container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No sections found.</div>';
                 return;
             }
+            
+            console.log('[renderAssignmentsList] Rendering', users.length, 'users and', sections.length, 'sections');
             
             // Filter users based on search input
             const searchInput = document.getElementById('assignmentUserSearchInput');
@@ -4272,6 +4346,8 @@ Permissions:
                     </div>
                 `;
             }).join('');
+            
+            console.log('[renderAssignmentsList] HTML generated, length:', container.innerHTML.length, 'characters');
         };
 
         // Filter assignments list based on search
@@ -4390,8 +4466,9 @@ Permissions:
             }
         };
         
+        console.log('[INIT] Defining switchAdminTab function at line 4469');
         window.switchAdminTab = function(tabName) {
-            console.log('Switching to tab:', tabName);
+            console.log('[switchAdminTab] Switching to tab:', tabName);
             
             // Update tab appearance
             document.querySelectorAll('.admin-tab').forEach(tab => {
@@ -4402,40 +4479,64 @@ Permissions:
                 if (selectedNav) selectedNav.classList.add('active');
             } catch(_) {}
 
-            // Show/hide content sections
+            // Show/hide content sections - use classes only, not inline styles
             document.querySelectorAll('.admin-tab-content').forEach(content => {
                 content.classList.remove('active');
-                try { content.style.display = 'none'; } catch(_) {}
             });
             
             const targetTab = document.getElementById(`${tabName}-tab`);
             if (targetTab) {
                 targetTab.classList.add('active');
-                try { targetTab.style.display = 'block'; } catch(_) {}
-                console.log('Tab content activated:', tabName);
+                console.log('[switchAdminTab] Tab content activated:', tabName);
             } else {
-                console.error('Tab content not found:', `${tabName}-tab`);
+                console.error('[switchAdminTab] Tab content not found:', `${tabName}-tab`);
             }
 
-            // Load specific tab content
+            // Load specific tab content with debugging
             if (tabName === 'users') {
+                console.log('[switchAdminTab] Loading users...');
                 try { renderCurrentUserSummary(); } catch (e) { console.warn('renderCurrentUserSummary error', e); }
                 loadUsersList();
             } else if (tabName === 'permissions') {
+                console.log('[switchAdminTab] Loading permissions...');
                 loadPermissionUserList();
             } else if (tabName === 'audit') {
+                console.log('[switchAdminTab] Loading audit...');
                 loadAuditLog();
             } else if (tabName === 'sections') {
-                console.log('Loading sections list...');
-                loadSectionsList();
+                console.log('[switchAdminTab] Loading sections list...');
+                setTimeout(() => {
+                    console.log('[switchAdminTab] Calling loadSectionsList');
+                    if (typeof loadSectionsList === 'function') {
+                        loadSectionsList();
+                    } else {
+                        console.error('[switchAdminTab] loadSectionsList is not a function!');
+                    }
+                }, 0);
             } else if (tabName === 'assignments') {
-                console.log('Loading section assignments...');
+                console.log('[switchAdminTab] Loading section assignments...');
                 try { const si = document.getElementById('assignmentUserSearchInput'); if (si) si.value = ''; } catch(_) {}
-                try {
-                    const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
-                    if (hasCache && typeof renderAssignmentsList === 'function') { renderAssignmentsList(); setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); }
-                    else { loadSectionAssignments(); }
-                } catch(_) { loadSectionAssignments(); }
+                setTimeout(() => {
+                    console.log('[switchAdminTab] Calling loadSectionAssignments');
+                    try {
+                        const hasCache = Array.isArray((window.__assignmentsCache||{}).users) && (window.__assignmentsCache.users.length > 0) && Array.isArray(window.__assignmentsCache.sectionIds) && (window.__assignmentsCache.sectionIds.length > 0);
+                        if (hasCache && typeof renderAssignmentsList === 'function') { 
+                            console.log('[switchAdminTab] Using cached assignments');
+                            renderAssignmentsList(); 
+                            setTimeout(() => { try { renderAssignmentsList(); } catch(_) {} }, 0); 
+                        } else { 
+                            console.log('[switchAdminTab] Loading fresh assignments');
+                            if (typeof loadSectionAssignments === 'function') {
+                                loadSectionAssignments(); 
+                            } else {
+                                console.error('[switchAdminTab] loadSectionAssignments is not a function!');
+                            }
+                        }
+                    } catch(e) { 
+                        console.error('[switchAdminTab] Error in assignments:', e);
+                        loadSectionAssignments(); 
+                    }
+                }, 0);
             }
         };
 
@@ -7113,8 +7214,10 @@ Permissions:
                 };
 
                 // Realtime: refresh hub stats on any resource or section change
+                // DISABLED: This was causing automatic updates when switching tabs
+                // Stats are updated by periodic poller (every 5 min) and manual actions
                 try {
-                    if (!window.supabaseHubChannel) {
+                    if (!window.supabaseHubChannel && false) { // disabled with && false
                         var ch = window.supabaseClient
                             .channel('hub-realtime')
                             .on('postgres_changes', { event: '*', schema: 'public', table: 'resources' }, function(){ try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {} })
@@ -7144,9 +7247,4 @@ Permissions:
                         }
                         if (++tries > 200) clearInterval(iv);
                     } catch(_) { if (++tries > 200) clearInterval(iv); }
-                }, 50);
-            } catch(_) {}
-        })();
-    </script>
-</body>
-</html>
+                
