@@ -4469,6 +4469,7 @@ Permissions:
         console.log('[INIT] Defining switchAdminTab function at line 4469');
         window.switchAdminTab = function(tabName) {
             console.log('[switchAdminTab] Switching to tab:', tabName);
+            console.log('[switchAdminTab] Function type:', typeof window.switchAdminTab);
             
             // Update tab appearance
             document.querySelectorAll('.admin-tab').forEach(tab => {
@@ -4539,6 +4540,37 @@ Permissions:
                 }, 0);
             }
         };
+        console.log('[INIT] switchAdminTab function defined. Type:', typeof window.switchAdminTab);
+        console.log('[INIT] Testing switchAdminTab access:', window.switchAdminTab ? 'accessible' : 'NOT accessible');
+        
+        // Verify function is accessible on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('[DOMContentLoaded] Checking switchAdminTab:', typeof window.switchAdminTab);
+            if (typeof window.switchAdminTab !== 'function') {
+                console.error('[DOMContentLoaded] switchAdminTab is NOT a function!');
+            } else {
+                console.log('[DOMContentLoaded] switchAdminTab is ready');
+            }
+        });
+        
+        // Also check on full load
+        window.addEventListener('load', () => {
+            console.log('[window.load] Checking switchAdminTab:', typeof window.switchAdminTab);
+            if (typeof window.switchAdminTab !== 'function') {
+                console.error('[window.load] switchAdminTab is NOT a function!');
+            } else {
+                console.log('[window.load] switchAdminTab is ready');
+            }
+            
+            // Add click listener to all admin tabs for debugging
+            document.querySelectorAll('.admin-tab').forEach((tab, index) => {
+                const originalOnclick = tab.onclick;
+                console.log('[window.load] Admin tab', index, 'onclick:', tab.getAttribute('onclick'));
+                tab.addEventListener('click', (e) => {
+                    console.log('[CLICK] Admin tab clicked:', index, 'onclick attribute:', tab.getAttribute('onclick'));
+                });
+            });
+        });
 
         // Toggle compact admin UI
         window.toggleCompactAdmin = function() {
@@ -7247,4 +7279,9 @@ Permissions:
                         }
                         if (++tries > 200) clearInterval(iv);
                     } catch(_) { if (++tries > 200) clearInterval(iv); }
-                
+                }, 50);
+            } catch(_) {}
+        })();
+    </script>
+</body>
+</html>
