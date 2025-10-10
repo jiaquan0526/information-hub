@@ -2355,6 +2355,30 @@
                 adminModal.style.display = 'block';
                 adminModal.style.zIndex = '9999';
                 
+                // Attach event listeners to admin tabs when modal opens
+                console.log('[openAdminPanel] Attaching tab event listeners...');
+                document.querySelectorAll('.admin-tab').forEach((tab, index) => {
+                    const onclickAttr = tab.getAttribute('onclick');
+                    const match = onclickAttr ? onclickAttr.match(/switchAdminTab\('([^']+)'\)/) : null;
+                    if (match && match[1]) {
+                        const tabName = match[1];
+                        // Remove any existing listeners and add new one
+                        tab.onclick = null;
+                        tab.addEventListener('click', (e) => {
+                            console.log('[openAdminPanel-CLICK] Tab clicked:', tabName);
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (typeof window.switchAdminTab === 'function') {
+                                window.switchAdminTab(tabName);
+                            } else {
+                                console.error('[openAdminPanel-CLICK] switchAdminTab not available!');
+                            }
+                        });
+                        console.log('[openAdminPanel] Listener attached for:', tabName);
+                    }
+                });
+                console.log('[openAdminPanel] All tab listeners attached');
+                
                 // Defer data loading to avoid blocking UI and reduce errors
                 setTimeout(() => {
                     try { if (typeof renderCurrentUserSummary === 'function') renderCurrentUserSummary(); } catch (e) { console.error('renderCurrentUserSummary error', e); }
@@ -4553,7 +4577,7 @@ Permissions:
             }
         });
         
-        // Also check on full load
+        // Also check on full load and attach event listeners
         window.addEventListener('load', () => {
             console.log('[window.load] Checking switchAdminTab:', typeof window.switchAdminTab);
             if (typeof window.switchAdminTab !== 'function') {
@@ -4562,14 +4586,32 @@ Permissions:
                 console.log('[window.load] switchAdminTab is ready');
             }
             
-            // Add click listener to all admin tabs for debugging
+            // Attach proper event listeners to all admin tabs
             document.querySelectorAll('.admin-tab').forEach((tab, index) => {
-                const originalOnclick = tab.onclick;
-                console.log('[window.load] Admin tab', index, 'onclick:', tab.getAttribute('onclick'));
-                tab.addEventListener('click', (e) => {
-                    console.log('[CLICK] Admin tab clicked:', index, 'onclick attribute:', tab.getAttribute('onclick'));
-                });
+                const onclickAttr = tab.getAttribute('onclick');
+                console.log('[window.load] Admin tab', index, 'onclick:', onclickAttr);
+                
+                // Extract tab name from onclick attribute
+                const match = onclickAttr ? onclickAttr.match(/switchAdminTab\('([^']+)'\)/) : null;
+                if (match && match[1]) {
+                    const tabName = match[1];
+                    console.log('[window.load] Attaching listener for tab:', tabName);
+                    
+                    // Add event listener that actually calls the function
+                    tab.addEventListener('click', (e) => {
+                        console.log('[CLICK] Admin tab clicked:', tabName);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.switchAdminTab === 'function') {
+                            window.switchAdminTab(tabName);
+                        } else {
+                            console.error('[CLICK] switchAdminTab is not available!');
+                        }
+                    });
+                }
             });
+            
+            console.log('[window.load] Event listeners attached to admin tabs');
         });
 
         // Toggle compact admin UI
