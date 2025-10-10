@@ -327,11 +327,11 @@ class AuthSystem {
                     sectionIds = [];
                 }
                 
-                // Default viewer with view access to visible sections; no edit
+                // Default viewer with view access to all sections; no edit
                 const permissions = {
-                    sections: sectionIds,
+                    sections: sectionIds.length > 0 ? sectionIds : ['*'],
                     editableSections: [],
-                    canViewAllSections: false,
+                    canViewAllSections: true,
                     canEditAllSections: false,
                     canManageUsers: false,
                     canDeleteResources: false,
@@ -432,11 +432,11 @@ class AuthSystem {
                     console.warn('Could not fetch sections for default profile:', sectionsError);
                     visibleSectionIds = [];
                 }
-                // Create a default viewer profile with view-only access
+                // Create a default viewer profile with view-only access to all sections
                 const defaultPermissions = {
-                    sections: visibleSectionIds,
+                    sections: visibleSectionIds.length > 0 ? visibleSectionIds : ['*'],
                     editableSections: [],
-                    canViewAllSections: false,
+                    canViewAllSections: true,
                     canEditAllSections: false,
                     canManageUsers: false,
                     canDeleteResources: false,
