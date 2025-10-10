@@ -1277,6 +1277,9 @@
         let BG_SESSION_SEED = String(Date.now()) + ':' + Math.random();
         let SECTION_BG_MAP = {};
         let SECTION_BG_READY = false;
+        
+        // Initialize backgrounds as disabled by default until settings are loaded
+        window.globalBackgroundsEnabled = false;
 
         // Load persistent section->image mapping from database (consistent across users)
         async function loadSectionBackgroundsFromDb() {
@@ -1494,23 +1497,48 @@
 
         // On load, read global site setting and apply local override
         (async function(){
-            // First pass: try immediately
+            // First pass: try immediately to load settings BEFORE anything renders
             try { await window.refreshGlobalBackgrounds(); } catch(_) {}
             try { await window.refreshBackgroundToggleUI(); } catch(_) {}
+            
+            // Immediately clear any background styles if disabled
+            if (window.globalBackgroundsEnabled !== true) {
+                console.log('[Background Init] Backgrounds disabled, clearing any existing styles');
+                document.querySelectorAll('.hub-card').forEach(card => {
+                    try {
+                        card.style.removeProperty('background-image');
+                        card.style.removeProperty('background-size');
+                        card.style.removeProperty('background-position');
+                        card.style.removeProperty('background-repeat');
+                        card.classList.remove('bg-ready');
+                        card.removeAttribute('data-bg-url');
+                    } catch(_) {}
+                });
+            }
             // Second pass: wait for Supabase and images to be ready, then re-apply
             try {
                 await _waitForSupabaseReady(2500);
-                await loadSectionBackgroundsFromDb();
                 await ensureBackgroundImagesLoaded();
+                await loadSectionBackgroundsFromDb();
                 await window.refreshGlobalBackgrounds();
-                // Fallback: if site_settings not available, enable local backgrounds when images exist
-                try {
-                    if (!(window.globalBackgroundsEnabled === true)) {
-                        if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) {
-                            window.globalBackgroundsEnabled = true;
-                        }
-                    }
-                } catch(_) {}
+                // DO NOT auto-enable backgrounds - respect site_settings only
+                // Backgrounds are controlled by admin via the toggle button
+                
+                // Clear backgrounds again if settings say they're disabled
+                if (window.globalBackgroundsEnabled !== true) {
+                    console.log('[Background Init] After settings load - backgrounds disabled, clearing styles');
+                    document.querySelectorAll('.hub-card').forEach(card => {
+                        try {
+                            card.style.removeProperty('background-image');
+                            card.style.removeProperty('background-size');
+                            card.style.removeProperty('background-position');
+                            card.style.removeProperty('background-repeat');
+                            card.classList.remove('bg-ready');
+                            card.removeAttribute('data-bg-url');
+                        } catch(_) {}
+                    });
+                }
+                
                 await updateMainHubSections();
                 await window.refreshBackgroundToggleUI();
             } catch(_) {}
@@ -2368,10 +2396,18 @@
                             console.log('[openAdminPanel-CLICK] Tab clicked:', tabName);
                             e.preventDefault();
                             e.stopPropagation();
-                            if (typeof window.switchAdminTab === 'function') {
-                                window.switchAdminTab(tabName);
-                            } else {
-                                console.error('[openAdminPanel-CLICK] switchAdminTab not available!');
+                            
+                            try {
+                                console.log('[openAdminPanel-CLICK] Checking switchAdminTab type:', typeof window.switchAdminTab);
+                                if (typeof window.switchAdminTab === 'function') {
+                                    console.log('[openAdminPanel-CLICK] Calling switchAdminTab with:', tabName);
+                                    window.switchAdminTab(tabName);
+                                    console.log('[openAdminPanel-CLICK] switchAdminTab call completed');
+                                } else {
+                                    console.error('[openAdminPanel-CLICK] switchAdminTab not available! Type:', typeof window.switchAdminTab);
+                                }
+                            } catch (err) {
+                                console.error('[openAdminPanel-CLICK] Error calling switchAdminTab:', err);
                             }
                         });
                         console.log('[openAdminPanel] Listener attached for:', tabName);
@@ -4566,6 +4602,52 @@ Permissions:
         };
         console.log('[INIT] switchAdminTab function defined. Type:', typeof window.switchAdminTab);
         console.log('[INIT] Testing switchAdminTab access:', window.switchAdminTab ? 'accessible' : 'NOT accessible');
+        
+        // MutationObserver to auto-reload sections when tab becomes active
+        try {
+            const sectionsTab = document.getElementById('sections-tab');
+            const assignmentsTab = document.getElementById('assignments-tab');
+            
+            if (sectionsTab) {
+                const sectionsObserver = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                            if (sectionsTab.classList.contains('active')) {
+                                console.log('[MutationObserver] sections-tab became active, triggering load');
+                                setTimeout(() => {
+                                    if (typeof window.loadSectionsList === 'function') {
+                                        window.loadSectionsList();
+                                    }
+                                }, 100);
+                            }
+                        }
+                    });
+                });
+                sectionsObserver.observe(sectionsTab, { attributes: true, attributeFilter: ['class'] });
+                console.log('[INIT] MutationObserver attached to sections-tab');
+            }
+            
+            if (assignmentsTab) {
+                const assignmentsObserver = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                            if (assignmentsTab.classList.contains('active')) {
+                                console.log('[MutationObserver] assignments-tab became active, triggering load');
+                                setTimeout(() => {
+                                    if (typeof window.loadSectionAssignments === 'function') {
+                                        window.loadSectionAssignments();
+                                    }
+                                }, 100);
+                            }
+                        }
+                    });
+                });
+                assignmentsObserver.observe(assignmentsTab, { attributes: true, attributeFilter: ['class'] });
+                console.log('[INIT] MutationObserver attached to assignments-tab');
+            }
+        } catch (e) {
+            console.error('[INIT] Error setting up MutationObserver:', e);
+        }
         
         // Verify function is accessible on page load
         window.addEventListener('DOMContentLoaded', () => {
