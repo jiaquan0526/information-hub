@@ -1183,42 +1183,59 @@ class InformationHub {
 
     // Export Functions
     async loadExportOptions() {
-        // Load users for export dropdown (Supabase profiles)
-        const userSelect = document.getElementById('userExportSelect');
-        if (userSelect) userSelect.innerHTML = '<option value="">Select User</option>';
+        // Prevent concurrent calls (use global flag to prevent issues with multiple instances)
+        if (window._loadingExportOptions) return;
+        window._loadingExportOptions = true;
+        
         try {
-            if (!window.supabaseClient) return;
-            const { data, error } = await window.supabaseClient
-                .from('profiles')
-                .select('id, username, role');
-            if (error) throw error;
-            const users = Array.isArray(data) ? data : [];
-            const me = this.currentUser;
-            const myRole = String(me?.role || '').toLowerCase();
-            const filtered = users.filter(u => {
-                if (myRole === 'admin') return true;
-                return String(u.id) === String(me?.userId || me?.id);
-            });
-            
-            // Deduplicate users by id
-            const uniqueUsers = [];
-            const seenIds = new Set();
-            filtered.forEach(user => {
-                if (!seenIds.has(user.id)) {
-                    seenIds.add(user.id);
-                    uniqueUsers.push(user);
-                }
-            });
-            
-            if (userSelect) {
-                uniqueUsers.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id;
-                    option.textContent = `${user.username || user.id} (${user.role || ''})`;
-                    userSelect.appendChild(option);
+            // Load users for export dropdown (Supabase profiles)
+            const userSelect = document.getElementById('userExportSelect');
+            if (userSelect) userSelect.innerHTML = '<option value="">Select User</option>';
+            try {
+                if (!window.supabaseClient) return;
+                const { data, error } = await window.supabaseClient
+                    .from('profiles')
+                    .select('id, username, role');
+                if (error) throw error;
+                const users = Array.isArray(data) ? data : [];
+                const me = this.currentUser;
+                const myRole = String(me?.role || '').toLowerCase();
+                const filtered = users.filter(u => {
+                    if (myRole === 'admin') return true;
+                    return String(u.id) === String(me?.userId || me?.id);
                 });
-            }
-        } catch (_) {}
+                
+                // Deduplicate users by id
+                const uniqueUsers = [];
+                const seenIds = new Set();
+                filtered.forEach(user => {
+                    if (!seenIds.has(user.id)) {
+                        seenIds.add(user.id);
+                        uniqueUsers.push(user);
+                    }
+                });
+                
+                if (userSelect) {
+                    // Get existing option values to avoid duplicates
+                    const existingValues = new Set();
+                    Array.from(userSelect.options).forEach(opt => {
+                        if (opt.value) existingValues.add(opt.value);
+                    });
+                    
+                    uniqueUsers.forEach(user => {
+                        // Only add if not already in dropdown
+                        if (!existingValues.has(user.id)) {
+                            const option = document.createElement('option');
+                            option.value = user.id;
+                            option.textContent = `${user.username || user.id} (${user.role || ''})`;
+                            userSelect.appendChild(option);
+                        }
+                    });
+                }
+            } catch (_) {}
+        } finally {
+            window._loadingExportOptions = false;
+        }
 
         // Load sections for export dropdown (still using GitHub config for names)
         try {
