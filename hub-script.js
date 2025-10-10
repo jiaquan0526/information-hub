@@ -1184,13 +1184,29 @@ class InformationHub {
     // Export Functions
     async loadExportOptions() {
         // Prevent concurrent calls (use global flag to prevent issues with multiple instances)
-        if (window._loadingExportOptions) return;
+        if (window._loadingExportOptions) {
+            console.log('[loadExportOptions] Already loading, skipping...');
+            return;
+        }
         window._loadingExportOptions = true;
+        console.log('[loadExportOptions] Starting...');
         
         try {
             // Load users for export dropdown (Supabase profiles)
             const userSelect = document.getElementById('userExportSelect');
-            if (userSelect) userSelect.innerHTML = '<option value="">Select User</option>';
+            if (!userSelect) {
+                console.log('[loadExportOptions] userExportSelect not found');
+                return;
+            }
+            
+            // Completely clear and rebuild the dropdown
+            console.log('[loadExportOptions] Clearing dropdown, current options:', userSelect.options.length);
+            userSelect.innerHTML = '';
+            const placeholderOption = document.createElement('option');
+            placeholderOption.value = '';
+            placeholderOption.textContent = 'Select User';
+            userSelect.appendChild(placeholderOption);
+            
             try {
                 if (!window.supabaseClient) return;
                 const { data, error } = await window.supabaseClient
@@ -1198,12 +1214,15 @@ class InformationHub {
                     .select('id, username, role');
                 if (error) throw error;
                 const users = Array.isArray(data) ? data : [];
+                console.log('[loadExportOptions] Fetched users:', users.length);
+                
                 const me = this.currentUser;
                 const myRole = String(me?.role || '').toLowerCase();
                 const filtered = users.filter(u => {
                     if (myRole === 'admin') return true;
                     return String(u.id) === String(me?.userId || me?.id);
                 });
+                console.log('[loadExportOptions] Filtered users:', filtered.length);
                 
                 // Deduplicate users by id
                 const uniqueUsers = [];
@@ -1214,27 +1233,23 @@ class InformationHub {
                         uniqueUsers.push(user);
                     }
                 });
+                console.log('[loadExportOptions] Unique users:', uniqueUsers.length);
                 
-                if (userSelect) {
-                    // Get existing option values to avoid duplicates
-                    const existingValues = new Set();
-                    Array.from(userSelect.options).forEach(opt => {
-                        if (opt.value) existingValues.add(opt.value);
-                    });
-                    
-                    uniqueUsers.forEach(user => {
-                        // Only add if not already in dropdown
-                        if (!existingValues.has(user.id)) {
-                            const option = document.createElement('option');
-                            option.value = user.id;
-                            option.textContent = `${user.username || user.id} (${user.role || ''})`;
-                            userSelect.appendChild(option);
-                        }
-                    });
-                }
-            } catch (_) {}
+                // Add unique users to dropdown
+                uniqueUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.username || user.id} (${user.role || ''})`;
+                    userSelect.appendChild(option);
+                });
+                
+                console.log('[loadExportOptions] Final dropdown options:', userSelect.options.length);
+            } catch (e) {
+                console.error('[loadExportOptions] Error:', e);
+            }
         } finally {
             window._loadingExportOptions = false;
+            console.log('[loadExportOptions] Complete');
         }
 
         // Load sections for export dropdown (still using GitHub config for names)
