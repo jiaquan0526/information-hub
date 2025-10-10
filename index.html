@@ -1278,6 +1278,48 @@
         let SECTION_BG_MAP = {};
         let SECTION_BG_READY = false;
 
+        // Load persistent section->image mapping from database (consistent across users)
+        async function loadSectionBackgroundsFromDb() {
+            try {
+                if (!(window.supabaseClient && window.supabaseClient.from)) return;
+                const { data, error } = await window.supabaseClient
+                    .from('section_backgrounds')
+                    .select('section_id, image_url');
+                if (error) return;
+                const map = {};
+                (Array.isArray(data) ? data : []).forEach(r => { if (r && r.section_id && r.image_url) map[r.section_id] = r.image_url; });
+                SECTION_BG_MAP = map;
+                SECTION_BG_READY = true;
+            } catch(_) {}
+        }
+        
+        async function ensureBackgroundImagesLoaded() {
+            try {
+                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
+                try {
+                    const bust = Date.now();
+                    let resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                    if (!resp || !resp.ok) {
+                        // Retry without query param for hosts that reject it (406 Not Acceptable)
+                        resp = await fetch('background-pic/manifest.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                    }
+                    if (resp && resp.ok) {
+                        const data = await resp.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`).sort();
+                            return;
+                        }
+                    }
+                } catch (_) {}
+                // Fallback baked-in list (works even if manifest.json is empty)
+                BACKGROUND_IMAGES = [
+                    'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
+                    'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
+                    'background-pic/537082_K.png','background-pic/560846_L.png'
+                ].sort();
+            } catch (_) { /* keep defaults */ }
+        }
+
         // Backgrounds: toggle + detection helpers
         function backgroundsDisabled() {
             try {
@@ -4100,6 +4142,352 @@ Permissions:
             }
         };
 
+        // Load sections list for Manage Sections tab
+        window.loadSectionsList = async function() {
+            console.log('loadSectionsList called');
+            try {
+                // Wait for database to be ready
+                let retries = 0;
+                while (retries < 20 && !window.supabaseClient) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries++;
+                }
+                
+                if (!window.supabaseClient) {
+                    console.error('Supabase client not available');
+                    return;
+                }
+                
+                // Fetch sections from Supabase
+                const { data: sections, error } = await window.supabaseClient
+                    .from('sections')
+                    .select('*')
+                    .order('config->order', { ascending: true, nullsFirst: true });
+                
+                if (error) {
+                    console.error('Error loading sections:', error);
+                    return;
+                }
+                
+                console.log('Sections loaded for Manage Sections tab:', sections);
+                
+                // Update sectionOrder array
+                sectionOrder = (sections || []).map(s => ({
+                    id: s.section_id,
+                    name: s.name,
+                    icon: s.icon,
+                    color: s.color,
+                    visible: s.config?.visible !== false,
+                    order: s.config?.order || 0,
+                    intro: s.config?.intro || '',
+                    config: s.config || {}
+                }));
+                
+                // Render the sections list
+                renderSectionsList();
+            } catch (e) {
+                console.error('Error in loadSectionsList:', e);
+            }
+        };
+
+        // Render sections list in Manage Sections tab
+        window.renderSectionsList = function() {
+            const container = document.getElementById('sectionsList');
+            if (!container) return;
+            
+            if (!sectionOrder || sectionOrder.length === 0) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No sections found. Click "Add New Section" to create one.</div>';
+                return;
+            }
+            
+            container.innerHTML = sectionOrder.map(section => `
+                <div class="section-item" data-section-id="${section.id}">
+                    <div class="section-header">
+                        <div class="section-icon" style="color: ${section.color || '#3498db'};">
+                            <i class="${section.icon || 'fas fa-folder'}"></i>
+                        </div>
+                        <div class="section-info">
+                            <h4>${section.name || section.id}</h4>
+                            <p>${section.intro || 'No description'}</p>
+                        </div>
+                        <div class="section-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="editSection('${section.id}')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSection('${section.id}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Load section assignments for Section Assignments tab
+        window.loadSectionAssignments = async function() {
+            if (window.__assignmentsLoading) return;
+            window.__assignmentsLoading = true;
+            
+            try {
+                console.log('Loading section assignments...');
+                
+                // Wait for database to be ready
+                let retries = 0;
+                while (retries < 20 && !window.supabaseClient) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries++;
+                }
+                
+                if (!window.supabaseClient) {
+                    console.error('Supabase client not available');
+                    window.__assignmentsLoading = false;
+                    return;
+                }
+                
+                // Fetch all users
+                const { data: users, error: usersError } = await window.supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .order('username', { ascending: true });
+                
+                if (usersError) {
+                    console.error('Error loading users:', usersError);
+                    window.__assignmentsLoading = false;
+                    return;
+                }
+                
+                // Fetch all sections
+                const { data: sections, error: sectionsError } = await window.supabaseClient
+                    .from('sections')
+                    .select('section_id, name, config')
+                    .order('config->order', { ascending: true, nullsFirst: true });
+                
+                if (sectionsError) {
+                    console.error('Error loading sections:', sectionsError);
+                    window.__assignmentsLoading = false;
+                    return;
+                }
+                
+                // Cache the data
+                window.__assignmentsCache = {
+                    users: users || [],
+                    sections: sections || [],
+                    sectionIds: (sections || []).map(s => s.section_id)
+                };
+                
+                console.log('Section assignments loaded:', {
+                    users: users?.length || 0,
+                    sections: sections?.length || 0
+                });
+                
+                // Render the assignments list
+                renderAssignmentsList();
+            } catch (e) {
+                console.error('Error in loadSectionAssignments:', e);
+            } finally {
+                window.__assignmentsLoading = false;
+            }
+        };
+
+        // Render section assignments list
+        window.renderAssignmentsList = function() {
+            const container = document.getElementById('assignmentsList');
+            const statsContainer = document.getElementById('assignmentsStats');
+            
+            if (!container) return;
+            
+            if (!window.__assignmentsCache || !window.__assignmentsCache.users || !window.__assignmentsCache.sections) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Loading assignments...</div>';
+                if (!window.__assignmentsLoading) loadSectionAssignments();
+                return;
+            }
+            
+            const { users, sections } = window.__assignmentsCache;
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No users found.</div>';
+                return;
+            }
+            
+            if (sections.length === 0) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No sections found.</div>';
+                return;
+            }
+            
+            // Filter users based on search input
+            const searchInput = document.getElementById('assignmentUserSearchInput');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+            
+            const filteredUsers = searchTerm ? users.filter(user => {
+                const username = (user.username || '').toLowerCase();
+                const email = (user.email || '').toLowerCase();
+                const role = (user.role || '').toLowerCase();
+                return username.includes(searchTerm) || email.includes(searchTerm) || role.includes(searchTerm);
+            }) : users;
+            
+            // Update stats
+            if (statsContainer) {
+                statsContainer.textContent = `Showing ${filteredUsers.length} of ${users.length} users`;
+            }
+            
+            // Render user cards with section checkboxes
+            container.innerHTML = filteredUsers.map(user => {
+                const permissions = user.permissions || {};
+                const userSections = Array.isArray(permissions.sections) ? permissions.sections : [];
+                
+                const sectionsHtml = sections.map(section => {
+                    const isAssigned = userSections.includes(section.section_id);
+                    return `
+                        <label style="display:flex;align-items:center;gap:6px;padding:4px 0;">
+                            <input type="checkbox" 
+                                   value="${section.section_id}"
+                                   ${isAssigned ? 'checked' : ''} 
+                                   onchange="updateUserSectionAccess('${user.id}', '${section.section_id}', this.checked)">
+                            <span>${section.name || section.section_id}</span>
+                        </label>
+                    `;
+                }).join('');
+                
+                return `
+                    <div class="assignment-card" data-user-id="${user.id}">
+                        <div class="assignment-header">
+                            <div>
+                                <h4>${user.username || user.email || user.id}</h4>
+                                <span class="user-role">${(user.role || 'user').toUpperCase()}</span>
+                            </div>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn btn-sm btn-secondary" onclick="selectAllSections('${user.id}')">
+                                    <i class="fas fa-check-square"></i> All
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="deselectAllSections('${user.id}')">
+                                    <i class="fas fa-square"></i> None
+                                </button>
+                            </div>
+                        </div>
+                        <div class="assignment-sections">
+                            ${sectionsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // Filter assignments list based on search
+        window.filterAssignmentsList = function() {
+            renderAssignmentsList();
+        };
+
+        // Update user section access
+        window.updateUserSectionAccess = async function(userId, sectionId, checked) {
+            try {
+                // Get current user profile
+                const { data: profile, error: fetchError } = await window.supabaseClient
+                    .from('profiles')
+                    .select('permissions')
+                    .eq('id', userId)
+                    .single();
+                
+                if (fetchError) {
+                    console.error('Error fetching user profile:', fetchError);
+                    alert('Failed to update section access');
+                    return;
+                }
+                
+                const permissions = profile.permissions || {};
+                let sections = Array.isArray(permissions.sections) ? permissions.sections : [];
+                
+                // Update sections array
+                if (checked) {
+                    if (!sections.includes(sectionId)) {
+                        sections.push(sectionId);
+                    }
+                } else {
+                    sections = sections.filter(id => id !== sectionId);
+                }
+                
+                // Update permissions in database
+                const { error: updateError } = await window.supabaseClient
+                    .from('profiles')
+                    .update({ 
+                        permissions: { 
+                            ...permissions, 
+                            sections 
+                        } 
+                    })
+                    .eq('id', userId);
+                
+                if (updateError) {
+                    console.error('Error updating user permissions:', updateError);
+                    alert('Failed to update section access');
+                    return;
+                }
+                
+                console.log('Section access updated for user', userId, ':', sectionId, checked);
+                
+                // Update cache
+                if (window.__assignmentsCache && window.__assignmentsCache.users) {
+                    const user = window.__assignmentsCache.users.find(u => u.id === userId);
+                    if (user) {
+                        if (!user.permissions) user.permissions = {};
+                        user.permissions.sections = sections;
+                    }
+                }
+            } catch (e) {
+                console.error('Error in updateUserSectionAccess:', e);
+                alert('Failed to update section access');
+            }
+        };
+
+        // Deselect all sections for a user
+        window.deselectAllSections = async function(userId) {
+            try {
+                // Get current user profile
+                const { data: profile, error: fetchError } = await window.supabaseClient
+                    .from('profiles')
+                    .select('permissions')
+                    .eq('id', userId)
+                    .single();
+                
+                if (fetchError) {
+                    console.error('Error fetching user profile:', fetchError);
+                    return;
+                }
+                
+                const permissions = profile.permissions || {};
+                
+                // Clear sections array
+                const { error: updateError } = await window.supabaseClient
+                    .from('profiles')
+                    .update({ 
+                        permissions: { 
+                            ...permissions, 
+                            sections: [] 
+                        } 
+                    })
+                    .eq('id', userId);
+                
+                if (updateError) {
+                    console.error('Error updating user permissions:', updateError);
+                    return;
+                }
+                
+                console.log('All sections deselected for user', userId);
+                
+                // Update cache and re-render
+                if (window.__assignmentsCache && window.__assignmentsCache.users) {
+                    const user = window.__assignmentsCache.users.find(u => u.id === userId);
+                    if (user) {
+                        if (!user.permissions) user.permissions = {};
+                        user.permissions.sections = [];
+                    }
+                }
+                
+                renderAssignmentsList();
+            } catch (e) {
+                console.error('Error in deselectAllSections:', e);
+            }
+        };
+
         // Toggle compact admin UI
         window.toggleCompactAdmin = function() {
             const modal = document.getElementById('adminPanelModal');
@@ -4341,6 +4729,42 @@ Permissions:
 				}
 			}
 		} catch(_) {}
+            
+            // Generate HTML for section checkboxes
+            if (filteredSections.length === 0) {
+                sectionCheckboxes.innerHTML = '<div style="padding:10px;color:#666;text-align:center;">No sections available to assign</div>';
+                console.log('No sections to display');
+                return;
+            }
+            
+            const checkboxesHtml = filteredSections.map(sectionId => {
+                const sectionName = sectionNames[sectionId] || sectionId;
+                return `
+                    <div class="section-permission-row" style="display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;">
+                        <div style="flex:1;">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                <input type="checkbox" id="section-${sectionId}" value="${sectionId}" 
+                                       onchange="updateSectionPermission('${sectionId}')" 
+                                       style="width:18px;height:18px;">
+                                <span style="font-weight:500;">${sectionName}</span>
+                            </label>
+                        </div>
+                        <div style="min-width:120px;">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#666;font-size:0.9rem;">
+                                <input type="checkbox" id="edit-${sectionId}" value="${sectionId}" 
+                                       onchange="updateEditPermission('${sectionId}')" 
+                                       style="width:16px;height:16px;">
+                                <span>Can Edit</span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            sectionCheckboxes.innerHTML = checkboxesHtml;
+            console.log('Section checkboxes HTML generated for', filteredSections.length, 'sections');
+        }
+        
         function openSectionModal(mode, section) {
             const isEdit = mode === 'edit';
             const modal = document.createElement('div');
@@ -4970,46 +5394,6 @@ Permissions:
             return t.slice(0, Math.max(0, maxLen - 1)) + '…';
         }
         
-        // Load persistent section->image mapping from database (consistent across users)
-        async function loadSectionBackgroundsFromDb() {
-            try {
-                if (!(window.supabaseClient && window.supabaseClient.from)) return;
-                const { data, error } = await window.supabaseClient
-                    .from('section_backgrounds')
-                    .select('section_id, image_url');
-                if (error) return;
-                const map = {};
-                (Array.isArray(data) ? data : []).forEach(r => { if (r && r.section_id && r.image_url) map[r.section_id] = r.image_url; });
-                SECTION_BG_MAP = map;
-                SECTION_BG_READY = true;
-            } catch(_) {}
-        }
-        async function ensureBackgroundImagesLoaded() {
-            try {
-                if (Array.isArray(BACKGROUND_IMAGES) && BACKGROUND_IMAGES.length > 0) return;
-                try {
-                    const bust = Date.now();
-                    let resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
-                    if (!resp || !resp.ok) {
-                        // Retry without query param for hosts that reject it (406 Not Acceptable)
-                        resp = await fetch('background-pic/manifest.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } });
-                    }
-                    if (resp && resp.ok) {
-                        const data = await resp.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            BACKGROUND_IMAGES = data.map(p => `background-pic/${p}`).sort();
-                            return;
-                        }
-                    }
-                } catch (_) {}
-                // Fallback baked-in list (works even if manifest.json is empty)
-                BACKGROUND_IMAGES = [
-                    'background-pic/159484_L.png','background-pic/162053_L.png','background-pic/162054_L.png','background-pic/162058_L.png',
-                    'background-pic/162062_L.png','background-pic/168817_L.png','background-pic/171327_Y.png','background-pic/537081_L.png',
-                    'background-pic/537082_K.png','background-pic/560846_L.png'
-                ].sort();
-            } catch (_) { /* keep defaults */ }
-        }
         // Optimize background images client-side and cache results
         function computeManifestVersion() {
             try {
@@ -5348,7 +5732,6 @@ Permissions:
                 return types;
             } catch (_) { return []; }
         }
-    }  // Close the block opened earlier in the first script
     </script>
     
     <script>
