@@ -150,7 +150,7 @@ class SectionManager {
 		try { await this.ensureSectionConfigLoaded(); } catch (_) {}
 		// Do not auto-infer tabs from resources; show blank until configured in Supabase
         this.bindEvents();
-        this.renderDynamicUI();
+        await this.renderDynamicUI();
         // One-time fetch on init only; further updates are manual via Refresh
         try { this._refreshSectionConfigFromDb(); } catch (_) {}
         // Ensure filters are cleared on entry to avoid stale search/category narrowing results
@@ -302,7 +302,7 @@ class SectionManager {
                         if (cfgObj) {
                             this.sectionConfig = cfgObj;
                             // Render immediately without waiting for later refreshes
-                            try { this.renderDynamicUI(); } catch (_) {}
+                            try { await this.renderDynamicUI(); } catch (_) {}
                             try { this.renderCurrentTab(); } catch (_) {}
                         }
                     } catch (_) {}
@@ -709,6 +709,21 @@ class SectionManager {
         } catch (_) { return []; }
     }
 
+    async getResourceCount(type) {
+        const uiType = this.mapToStorageType(type);
+        const dbType = this._mapUiTypeToDbType(uiType);
+        if (!window.supabaseClient) return 0;
+        try {
+            const { count, error } = await window.supabaseClient
+                .from('resources')
+                .select('*', { count: 'exact', head: true })
+                .eq('section_id', this.currentSection)
+                .eq('type', dbType);
+            if (error) throw error;
+            return count || 0;
+        } catch (_) { return 0; }
+    }
+
     // Local-only fast resource fetch (no DB calls)
     async getResourcesLocalOnly(type) { return this.getResources(type); }
 
@@ -994,6 +1009,7 @@ class SectionManager {
         }
         // Log content creation
         try { this.logContentActivity('created', this.mapToStorageType(type), resource.title); } catch(_) {}
+        await this.renderDynamicUI(); // Update tab counts
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} added successfully!`, 'success');
         return true;
@@ -1259,6 +1275,7 @@ class SectionManager {
         if (!ok) return;
         // Log content deletion (use original resource title if available)
         try { this.logContentActivity('deleted', this.mapToStorageType(type), resource?.title || ''); } catch(_) {}
+        await this.renderDynamicUI(); // Update tab counts
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} deleted successfully!`, 'success');
     }
@@ -1580,12 +1597,12 @@ class SectionManager {
                 }
             } catch (_) {}
             // Re-render UI with any config changes
-            this.renderDynamicUI();
+            await this.renderDynamicUI();
             this.renderCurrentTab();
         } catch (_) {}
     }
 
-		renderDynamicUI() {
+		async renderDynamicUI() {
         // Customize button visibility
         const customizeBtn = document.getElementById('customizeBtn');
         if (customizeBtn) {
@@ -1632,11 +1649,16 @@ class SectionManager {
 					tabs.innerHTML = '';
 					this.currentTab = '';
 				} else {
+					// Fetch counts for all visible types in parallel
+					const countsPromises = visibleTypes.map(t => this.getResourceCount(t.id).catch(() => 0));
+					const counts = await Promise.all(countsPromises);
+					
 					tabs.innerHTML = visibleTypes.map((t, idx) => {
 						const active = (idx === 0 ? 'active' : '');
 						const iconCls = this.normalizeIconClass(t.icon || '');
+						const count = counts[idx] || 0;
 						return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
-							<i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)}
+							<i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)} <span class="tab-count">(${count})</span>
 						</div>`;
 					}).join('');
 					// set default current tab to first visible type if none selected
@@ -1979,7 +2001,7 @@ class SectionManager {
 				} catch (_) { /* best-effort logging; ignore */ }
             // Seed example resources for any types that have none yet in Supabase
             try { await this._seedExampleResourcesIfMissing(types); } catch (_) {}
-            this.renderDynamicUI();
+            await this.renderDynamicUI();
             this.renderCurrentTab();
             this.showMessage('Section customized', 'success');
             modal.remove();

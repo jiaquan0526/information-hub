@@ -318,6 +318,17 @@ body {
     color: #333;
 }
 
+.nav-tab .tab-count {
+    font-size: 0.85em;
+    opacity: 0.8;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.nav-tab.active .tab-count {
+    opacity: 0.9;
+}
+
 /* Content Sections */
 .content-section {
     display: none;
