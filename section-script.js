@@ -356,6 +356,7 @@ class SectionManager {
 
         // Apply persistent background image per section (SAME as hub page card)
         try {
+            console.log('[BG] Starting background application for section:', this.currentSection);
             // Determine enablement via Supabase only
             let enabled = false;
             try {
@@ -367,15 +368,24 @@ class SectionManager {
                         .single();
                     const v = data && data.value;
                     enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                    console.log('[BG] Enabled status from DB:', enabled, 'value:', v);
                 }
-            } catch (_) { 
+            } catch (err) { 
+                console.log('[BG] Error checking enabled status:', err);
                 enabled = false; 
             }
             
-            if (!enabled) return;
+            if (!enabled) {
+                console.log('[BG] Backgrounds not enabled, exiting');
+                return;
+            }
             
             const container = document.querySelector('.container');
-            if (!container) return;
+            if (!container) {
+                console.log('[BG] Container not found');
+                return;
+            }
+            console.log('[BG] Container found');
             
             // Step 1: Try to get the SAME background image assigned to this section's card on hub page
             let assignedImage = null;
@@ -388,13 +398,19 @@ class SectionManager {
                         .maybeSingle();
                     if (data && data.image_url) {
                         assignedImage = data.image_url;
+                        console.log('[BG] Found assigned image:', assignedImage);
+                    } else {
+                        console.log('[BG] No assigned image in database');
                     }
                 }
-            } catch (_) {}
+            } catch (err) {
+                console.log('[BG] Error loading assigned image:', err);
+            }
             
             // Step 2: If no assigned image, use deterministic selection (fallback)
             let finalUrl = assignedImage;
             if (!finalUrl) {
+                console.log('[BG] Using fallback selection');
                 const loadImages = async () => {
                     try {
                         const bust = Date.now();
@@ -405,29 +421,42 @@ class SectionManager {
                                 return data.map(p => `background-pic/${p}`).sort();
                             }
                         }
-                    } catch (_) {}
+                    } catch (err) {
+                        console.log('[BG] Error loading manifest:', err);
+                    }
                     return [];
                 };
                 const images = await loadImages();
+                console.log('[BG] Loaded', images.length, 'images from manifest');
                 if (images.length > 0) {
                     // Use deterministic selection based on section ID
                     const idx = Math.abs(this._hash(this.currentSection)) % images.length;
                     finalUrl = images[idx];
+                    console.log('[BG] Selected fallback image:', finalUrl, 'at index', idx);
                 }
             }
             
-            if (!finalUrl) return;
+            if (!finalUrl) {
+                console.log('[BG] No final URL, exiting');
+                return;
+            }
+            console.log('[BG] Final image URL:', finalUrl);
             
             // Apply the background
             container.style.borderRadius = '12px';
             container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
+            console.log('[BG] Base gradient applied, scheduling background...');
             
             const applyBg = async () => {
                 try {
+                    console.log('[BG] applyBg function called');
                     // Skip on low-data connections
                     try {
                         const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                        if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
+                        if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) {
+                            console.log('[BG] Skipping - low data connection');
+                            return;
+                        }
                     } catch (_) {}
                     
                     // Prefer WebP if available using the hub page helper when present
@@ -448,18 +477,26 @@ class SectionManager {
                             }
                         }
                     } catch (_) {}
+                    console.log('[BG] Applying final background:', optimizedUrl);
                     container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${optimizedUrl}')`;
                     container.style.backgroundSize = 'cover';
                     container.style.backgroundPosition = 'center';
-                } catch(_) {}
+                    console.log('[BG] ✓ Background applied successfully!');
+                } catch(err) {
+                    console.log('[BG] Error in applyBg:', err);
+                }
             };
             
             if ('requestIdleCallback' in window) {
+                console.log('[BG] Scheduling via requestIdleCallback');
                 requestIdleCallback(applyBg, { timeout: 1200 });
             } else {
+                console.log('[BG] Scheduling via setTimeout');
                 setTimeout(applyBg, 200);
             }
-        } catch (_) {}
+        } catch (err) {
+            console.log('[BG] Critical error:', err);
+        }
     }
 
     // Ensure sectionConfig is loaded and normalized from Supabase before first render
@@ -2065,3 +2102,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sectionManager = new SectionManager();
     await sectionManager.init();
 });
+
