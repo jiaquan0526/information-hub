@@ -17,8 +17,23 @@
     <!-- Supabase config (match index.html) -->
     <meta name="supabase-url" content="https://pioubcszuayewepdawzt.supabase.co">
     <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
+    
+    <style>
+        /* CRITICAL: Block all content during initial load to prevent flash of legacy data */
+        body.initial-loading #mainContent {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
+        /* Ensure loading screen is always on top during initial load */
+        body.initial-loading #loadingScreen {
+            display: flex !important;
+            z-index: 99999 !important;
+        }
+    </style>
 </head>
-<body>
+<body class="initial-loading">
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
         <div style="text-align: center; max-width: 400px; padding: 0 20px;">
             <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
@@ -159,6 +174,11 @@
                 const content = document.getElementById('mainContent');
                 if (loading && getComputedStyle(loading).display !== 'none') {
                     console.warn('[Section] Loading took too long, showing content anyway');
+                    // Remove CSS blocking class on failsafe timeout
+                    try {
+                        document.body.classList.remove('initial-loading');
+                        console.log('[Section Failsafe] Removed initial-loading class');
+                    } catch (_) {}
                     loading.style.transition = 'opacity 0.3s ease-out';
                     loading.style.opacity = '0';
                     setTimeout(() => {

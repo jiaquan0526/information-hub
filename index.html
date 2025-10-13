@@ -218,9 +218,29 @@
     try { window.globalBackgroundsEnabled = false; } catch (_) {}
     
     </script>
+    
+    <style>
+        /* CRITICAL: Block all content during initial load to prevent flash of legacy data */
+        body.initial-loading #mainContent {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
+        body.initial-loading .hub-grid {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        
+        /* Ensure loading screen is always on top during initial load */
+        body.initial-loading #loadingScreen {
+            display: flex !important;
+            z-index: 99999 !important;
+        }
+    </style>
 
 </head>
-<body>
+<body class="initial-loading">
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
         <div style="text-align: center; max-width: 400px; padding: 0 20px;">
             <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
@@ -1083,6 +1103,10 @@
         // Function to show fallback sections if database fails
         function showFallbackSections() {
             console.log('[Hub] Database connection failed, showing empty state');
+            // Remove CSS blocking class on error
+            try {
+                document.body.classList.remove('initial-loading');
+            } catch (_) {}
             // Show content only on error - with smooth transition
             try {
                 const loadingScreen = document.getElementById('loadingScreen');
@@ -1285,6 +1309,11 @@
                     const mainContent = document.getElementById('mainContent');
                     if (loadingScreen && getComputedStyle(loadingScreen).display !== 'none') {
                         console.warn('[Failsafe] Loading took too long, showing content');
+                        // Remove CSS blocking class on failsafe timeout
+                        try {
+                            document.body.classList.remove('initial-loading');
+                            console.log('[Failsafe] Removed initial-loading class');
+                        } catch (_) {}
                         loadingScreen.style.transition = 'opacity 0.3s ease-out';
                         loadingScreen.style.opacity = '0';
                         setTimeout(() => loadingScreen.style.display = 'none', 300);
@@ -6396,6 +6425,11 @@ Permissions:
                         hubGrid.style.opacity = '1';
                         hubGrid.style.pointerEvents = 'auto';
                     }
+                    // Remove CSS blocking class
+                    try {
+                        document.body.classList.remove('initial-loading');
+                        console.log('[Hub] Removed initial-loading class (empty state)');
+                    } catch (_) {}
                 }
                 isUpdatingSections = false;
                 return;
@@ -6641,6 +6675,12 @@ Permissions:
                 
                 hasCompletedFirstLoad = true;
                 console.log('[Hub] ✅ First load complete - fresh data rendered');
+                
+                // Remove CSS blocking class to allow content to show
+                try {
+                    document.body.classList.remove('initial-loading');
+                    console.log('[Hub] Removed initial-loading class - content unblocked');
+                } catch (_) {}
             }
             
             // Stats for currently built sections (non-blocking)

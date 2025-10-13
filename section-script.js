@@ -150,6 +150,8 @@ class SectionManager {
         const allowed = await this.checkAccess();
         if (!allowed) {
             try {
+                // Remove CSS blocking class even on access denied
+                document.body.classList.remove('initial-loading');
                 const loadingEl = document.getElementById('loadingScreen');
                 const contentEl = document.getElementById('mainContent');
                 if (loadingEl) loadingEl.style.display = 'none';
@@ -219,6 +221,12 @@ class SectionManager {
         if (typeof window.updateSectionLoadingProgress === 'function') {
             window.updateSectionLoadingProgress('Complete!', 100);
         }
+        
+        // Remove CSS blocking class to allow content to show
+        try {
+            document.body.classList.remove('initial-loading');
+            console.log('[Section] Removed initial-loading class - content unblocked');
+        } catch (_) {}
         
         const loadingEl = document.getElementById('loadingScreen');
         const contentEl = document.getElementById('mainContent');
