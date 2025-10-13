@@ -3733,7 +3733,20 @@ Permissions:
 
 			// Build next permissions payload based on currentEditingUser
 			const existingPerm = currentEditingUser.permissions && typeof currentEditingUser.permissions === 'object' ? currentEditingUser.permissions : {};
-			const nextPermissions = { ...existingPerm, sections: newSections, editableSections: newEditableSections };
+			
+			// Determine if user has access to all sections
+			const hasAllSections = (newSections.length === sections.length && sections.length > 0);
+			const canViewAllSections = hasAllSections;
+			
+			// Use wildcard if user has all sections, otherwise use specific IDs
+			const finalSections = hasAllSections ? ['*'] : newSections;
+			
+			const nextPermissions = { 
+				...existingPerm, 
+				sections: finalSections, 
+				editableSections: newEditableSections,
+				canViewAllSections: canViewAllSections
+			};
             
             // Debug: log exact payload and target id
             try {
@@ -4782,6 +4795,9 @@ Permissions:
                 const permissions = profile.permissions || {};
                 let sections = Array.isArray(permissions.sections) ? permissions.sections : [];
                 
+                // Remove wildcard if present (we'll use specific section IDs)
+                sections = sections.filter(id => id !== '*');
+                
                 // Update sections array
                 if (checked) {
                     if (!sections.includes(sectionId)) {
@@ -4791,13 +4807,18 @@ Permissions:
                     sections = sections.filter(id => id !== sectionId);
                 }
                 
+                // Get all available sections to check if user now has access to all
+                const allSections = await getAllAvailableSections();
+                const hasAllSections = (sections.length === allSections.length && allSections.length > 0);
+                
                 // Update permissions in database
                 const { error: updateError } = await window.supabaseClient
                     .from('profiles')
                     .update({ 
                         permissions: { 
                             ...permissions, 
-                            sections 
+                            sections: hasAllSections ? ['*'] : sections,
+                            canViewAllSections: hasAllSections
                         } 
                     })
                     .eq('id', userId);
