@@ -220,22 +220,40 @@
     </script>
     
     <style>
-        /* CRITICAL: Block all content during initial load to prevent flash of legacy data */
-        body.initial-loading #mainContent {
+        /* CRITICAL: Nuclear option - hide EVERYTHING except loading screen */
+        body.initial-loading > *:not(#loadingScreen) {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
         }
         
-        body.initial-loading .hub-grid {
-            display: none !important;
-            visibility: hidden !important;
-        }
-        
-        /* Ensure loading screen is always on top during initial load */
+        /* Ensure loading screen is ALWAYS visible and on top */
         body.initial-loading #loadingScreen {
             display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
             z-index: 99999 !important;
+        }
+        
+        /* Block mainContent and all its children aggressively */
+        body.initial-loading #mainContent,
+        body.initial-loading #mainContent *,
+        body.initial-loading .hub-grid,
+        body.initial-loading .hub-card,
+        body.initial-loading .container,
+        body.initial-loading .header,
+        body.initial-loading .hub-grid * {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
+        /* Also hide any cards that might be in the DOM */
+        body.initial-loading [class*="card"],
+        body.initial-loading [class*="hub-"],
+        body.initial-loading [data-section-id] {
+            display: none !important;
+            visibility: hidden !important;
         }
     </style>
 

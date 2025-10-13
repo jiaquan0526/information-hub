@@ -19,17 +19,31 @@
     <meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb3ViY3N6dWF5ZXdlcGRhd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDU1MjIsImV4cCI6MjA3NDEyMTUyMn0.-L-vDiKP2xh18OMgBoBQ8mruzVGXhWvMdvxJg9mjY9k">
     
     <style>
-        /* CRITICAL: Block all content during initial load to prevent flash of legacy data */
-        body.initial-loading #mainContent {
+        /* CRITICAL: Nuclear option - hide EVERYTHING except loading screen */
+        body.initial-loading > *:not(#loadingScreen) {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
         }
         
-        /* Ensure loading screen is always on top during initial load */
+        /* Ensure loading screen is ALWAYS visible and on top */
         body.initial-loading #loadingScreen {
             display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
             z-index: 99999 !important;
+        }
+        
+        /* Block mainContent and all its children aggressively */
+        body.initial-loading #mainContent,
+        body.initial-loading #mainContent *,
+        body.initial-loading .container,
+        body.initial-loading .resource-card,
+        body.initial-loading [class*="tab"],
+        body.initial-loading [class*="resource"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
         }
     </style>
 </head>
