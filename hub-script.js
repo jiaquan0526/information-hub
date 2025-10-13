@@ -97,6 +97,8 @@ class InformationHub {
         console.log('Authentication successful, continuing initialization');
         await this.loadData();
         this.bindEvents();
+        // Load and apply hub settings from database
+        await this.loadAndApplyHubSettings();
         // Start blank by default; no sample data seeding
         this.updateUserInterface();
         // Track hub page session
@@ -860,6 +862,8 @@ class InformationHub {
             this.loadAuditLog();
         } else if (tabName === 'export') {
             this.loadExportOptions();
+        } else if (tabName === 'hubsettings') {
+            this.loadHubSettings();
         }
         try { this.logActivity('SWITCH_ADMIN_TAB', `Switched to ${tabName}`); } catch(_) {}
     }
@@ -1287,6 +1291,149 @@ class InformationHub {
         } catch (_) {}
     }
 
+    // Load and apply hub settings on page load
+    async loadAndApplyHubSettings() {
+        try {
+            // Load hub settings from database
+            const hubTitle = await db.getSiteSetting('hub_title');
+            const hubDescription = await db.getSiteSetting('hub_description');
+
+            // Apply settings to page if they exist
+            if (hubTitle || hubDescription) {
+                const title = hubTitle || 'Information Hub';
+                const description = hubDescription || 'Central dashboard for accessing all functional areas and resources';
+                
+                // Update the header
+                const headerTitle = document.querySelector('.header-title h1');
+                const headerDesc = document.querySelector('.header-title p');
+
+                if (headerTitle && title) {
+                    headerTitle.textContent = title;
+                }
+                if (headerDesc && description) {
+                    headerDesc.textContent = description;
+                }
+
+                // Update document title
+                if (title) {
+                    document.title = `${title} - Central Dashboard`;
+                }
+
+                console.log('Hub settings applied:', { title, description });
+            }
+        } catch (error) {
+            console.error('Error loading hub settings on startup:', error);
+            // Don't show error to user, just use defaults
+        }
+    }
+
+    // Hub Settings Management
+    async loadHubSettings() {
+        try {
+            // Load hub settings from database
+            const hubTitle = await db.getSiteSetting('hub_title');
+            const hubDescription = await db.getSiteSetting('hub_description');
+
+            // Populate form inputs
+            const titleInput = document.getElementById('hubTitleInput');
+            const descInput = document.getElementById('hubDescriptionInput');
+            const charCount = document.getElementById('descCharCount');
+
+            if (titleInput) {
+                titleInput.value = hubTitle || 'Information Hub';
+            }
+            if (descInput) {
+                descInput.value = hubDescription || 'Central dashboard for accessing all functional areas and resources';
+                if (charCount) {
+                    charCount.textContent = descInput.value.length;
+                }
+            }
+
+            // Update preview
+            this.updateHubSettingsPreview();
+
+            // Add character counter
+            if (descInput && charCount) {
+                descInput.addEventListener('input', () => {
+                    charCount.textContent = descInput.value.length;
+                });
+            }
+
+            console.log('Hub settings loaded');
+        } catch (error) {
+            console.error('Error loading hub settings:', error);
+            this.showMessage('Error loading hub settings', 'error');
+        }
+    }
+
+    async saveHubSettings() {
+        try {
+            const titleInput = document.getElementById('hubTitleInput');
+            const descInput = document.getElementById('hubDescriptionInput');
+
+            if (!titleInput || !descInput) {
+                throw new Error('Hub settings form not found');
+            }
+
+            const hubTitle = titleInput.value.trim() || 'Information Hub';
+            const hubDescription = descInput.value.trim() || 'Central dashboard for accessing all functional areas and resources';
+
+            // Save to database
+            await db.setSiteSetting('hub_title', hubTitle);
+            await db.setSiteSetting('hub_description', hubDescription);
+
+            // Update the live page header
+            this.applyHubSettings(hubTitle, hubDescription);
+
+            this.showMessage('Hub settings saved successfully', 'success');
+            this.logActivity('UPDATE_HUB_SETTINGS', `Updated hub title and description`);
+        } catch (error) {
+            console.error('Error saving hub settings:', error);
+            this.showMessage(error.message || 'Error saving hub settings', 'error');
+        }
+    }
+
+    applyHubSettings(title, description) {
+        try {
+            // Update the actual hub header
+            const headerTitle = document.querySelector('.header-title h1');
+            const headerDesc = document.querySelector('.header-title p');
+
+            if (headerTitle) {
+                headerTitle.textContent = title;
+            }
+            if (headerDesc) {
+                headerDesc.textContent = description;
+            }
+
+            // Update preview
+            this.updateHubSettingsPreview();
+
+            // Update document title
+            document.title = `${title} - Central Dashboard`;
+        } catch (error) {
+            console.error('Error applying hub settings:', error);
+        }
+    }
+
+    updateHubSettingsPreview() {
+        try {
+            const titleInput = document.getElementById('hubTitleInput');
+            const descInput = document.getElementById('hubDescriptionInput');
+            const previewTitle = document.getElementById('previewHubTitle');
+            const previewDesc = document.getElementById('previewHubDescription');
+
+            if (previewTitle && titleInput) {
+                previewTitle.textContent = titleInput.value.trim() || 'Information Hub';
+            }
+            if (previewDesc && descInput) {
+                previewDesc.textContent = descInput.value.trim() || 'Central dashboard for accessing all functional areas and resources';
+            }
+        } catch (error) {
+            console.error('Error updating preview:', error);
+        }
+    }
+
     // Expose for index.html to call directly
     static async loadExportOptions() {
         try { 
@@ -1468,6 +1615,38 @@ window.deleteUser = async (userId) => {
         try { await informationHub.loadUsersList(); } catch (_) {}
     } catch (e) {
         alert('Disable failed');
+    }
+};
+
+// Global hub settings functions
+window.loadHubSettings = async () => {
+    try {
+        if (window.informationHub) {
+            await informationHub.loadHubSettings();
+        }
+    } catch (e) {
+        console.error('Error loading hub settings:', e);
+    }
+};
+
+window.saveHubSettings = async () => {
+    try {
+        if (window.informationHub) {
+            await informationHub.saveHubSettings();
+        }
+    } catch (e) {
+        console.error('Error saving hub settings:', e);
+        alert('Failed to save hub settings: ' + e.message);
+    }
+};
+
+window.previewHubSettings = () => {
+    try {
+        if (window.informationHub) {
+            informationHub.updateHubSettingsPreview();
+        }
+    } catch (e) {
+        console.error('Error previewing hub settings:', e);
     }
 };
 
