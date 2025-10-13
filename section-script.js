@@ -739,6 +739,8 @@ class SectionManager {
         const dbType = this._mapUiTypeToDbType(uiType);
         if (!window.supabaseClient) return [];
         try {
+            const timestamp = Date.now(); // Cache buster reference
+            console.log(`[Section] Fetching fresh ${dbType} resources from Supabase (timestamp: ${timestamp})...`);
             const { data, error } = await window.supabaseClient
                 .from('resources')
                 .select('*, sections(name)')
@@ -747,8 +749,12 @@ class SectionManager {
                 .order('created_at', { ascending: false });
             if (error) throw error;
             const list = Array.isArray(data) ? data : [];
+            console.log(`[Section] ✅ Loaded ${list.length} fresh ${dbType} resources from Supabase`);
             return list.map(r => this._normalizeResourceRow(r, uiType));
-        } catch (_) { return []; }
+        } catch (err) { 
+            console.warn(`[Section] Failed to load ${dbType} resources:`, err);
+            return []; 
+        }
     }
 
     async getResourceCount(type) {

@@ -6211,6 +6211,7 @@ Permissions:
         let lastUpdateTime = 0;
         let lastContentHash = '';
         let isInitialLoad = true;
+        let hasCompletedFirstLoad = false; // Track if we've ever successfully loaded data
         
         // Define the real implementation and store it separately
         console.log('[Hub] Defining __realUpdateMainHubSections now...');
@@ -6231,7 +6232,10 @@ Permissions:
             } catch(_) {}
             
             // Prevent too frequent updates (debounce) - just cancel, don't retry
-            if (now - lastUpdateTime < 2000) {
+            // BUT: always allow the first load to proceed
+            if (!hasCompletedFirstLoad) {
+                console.log('[Hub] First load - bypassing debounce check');
+            } else if (now - lastUpdateTime < 2000) {
                 console.log('Update called too frequently (last update:', (now - lastUpdateTime), 'ms ago), skipping');
                 isUpdatingSections = false;
                 return;
@@ -6247,13 +6251,24 @@ Permissions:
                 return;
             }
             
+            // Show loading state on initial load
+            if (!hasCompletedFirstLoad) {
+                console.log('[Hub] Initial load - hiding grid until fresh data arrives...');
+                hubGrid.style.opacity = '0';
+                hubGrid.style.pointerEvents = 'none';
+            }
+            
             // Load sections from Supabase database (Supabase-only)
+            // Force fresh data by adding a timestamp to bypass any browser caching
             let visibleSections = [];
             try {
                 if (!window.supabaseClient) {
                     console.error('Supabase client not available');
                 } else {
                     let sections = [];
+                    const timestamp = Date.now(); // Cache buster
+                    console.log(`[Hub] Fetching fresh sections data (timestamp: ${timestamp})...`);
+                    
                     try {
                         const resp = await window.supabaseClient
                             .from('sections')
@@ -6261,6 +6276,7 @@ Permissions:
                             .order('config->order', { ascending: true, nullsFirst: true });
                         if (resp.error) throw resp.error;
                         sections = resp.data || [];
+                        console.log(`[Hub] ✅ Loaded ${sections.length} sections from Supabase`);
                     } catch (orderErr) {
                         console.warn('Order by config->order failed; retry without order', orderErr);
                         const resp2 = await window.supabaseClient
@@ -6268,6 +6284,7 @@ Permissions:
                             .select('*');
                         if (resp2.error) throw resp2.error;
                         sections = resp2.data || [];
+                        console.log(`[Hub] ✅ Loaded ${sections.length} sections from Supabase (fallback)`);
                     }
                     const rows = (Array.isArray(sections) ? sections : []).map(s => {
                         let cfg = s && s.config ? s.config : {};
@@ -6300,6 +6317,16 @@ Permissions:
                 } catch (_) {}
                 // Mark sections load state globally (even if empty)
                 try { window.hubSections = []; window.hubSectionsLoaded = true; } catch(_) {}
+                // Mark first load as complete even when empty
+                if (!hasCompletedFirstLoad) {
+                    hasCompletedFirstLoad = true;
+                    console.log('[Hub] ✅ First load complete (empty state)');
+                    if (hubGrid) {
+                        hubGrid.style.transition = 'opacity 0.3s ease-in';
+                        hubGrid.style.opacity = '1';
+                        hubGrid.style.pointerEvents = 'auto';
+                    }
+                }
                 isUpdatingSections = false;
                 return;
             }
@@ -6552,6 +6579,18 @@ Permissions:
             
             // Populate info bar with recent activities
             try { if (typeof rotateInfoBar === 'function') rotateInfoBar(); } catch(_) {}
+            
+            // Mark first load as complete and show the grid
+            if (!hasCompletedFirstLoad) {
+                hasCompletedFirstLoad = true;
+                console.log('[Hub] ✅ First load complete - showing grid with fresh data');
+                // Smoothly show the grid
+                if (hubGrid) {
+                    hubGrid.style.transition = 'opacity 0.3s ease-in';
+                    hubGrid.style.opacity = '1';
+                    hubGrid.style.pointerEvents = 'auto';
+                }
+            }
             
             // Reset the flag
             isUpdatingSections = false;
