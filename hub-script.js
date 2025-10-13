@@ -2846,3 +2846,444 @@ if (document.readyState === 'loading') {
 } else {
 	initInformationHubOnce();
 }
+
+// ===== Global Resource Search Functionality =====
+class GlobalResourceSearch {
+	constructor() {
+		this.allResources = [];
+		this.filteredResults = [];
+		this.searchInput = null;
+		this.resultsPanel = null;
+		this.resultsList = null;
+		this.clearBtn = null;
+		this.sectionFilter = null;
+		this.typeFilter = null;
+		this.resultCount = null;
+		this.isInitialized = false;
+		this.sectionsMap = {};
+	}
+
+	async init() {
+		if (this.isInitialized) return;
+		
+		// Wait for DOM to be ready
+		if (document.readyState === 'loading') {
+			await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
+		}
+
+		// Get DOM elements
+		this.searchInput = document.getElementById('globalSearchInput');
+		this.resultsPanel = document.getElementById('searchResultsPanel');
+		this.resultsList = document.getElementById('searchResultsList');
+		this.clearBtn = document.getElementById('clearSearchBtn');
+		this.sectionFilter = document.getElementById('searchSectionFilter');
+		this.typeFilter = document.getElementById('searchTypeFilter');
+		this.resultCount = document.getElementById('searchResultCount');
+
+		if (!this.searchInput || !this.resultsPanel) {
+			console.warn('[GlobalSearch] Search elements not found');
+			return;
+		}
+
+		// Bind events
+		this.searchInput.addEventListener('input', () => this.handleSearch());
+		this.searchInput.addEventListener('focus', () => this.handleSearch());
+		this.clearBtn.addEventListener('click', () => this.clearSearch());
+		this.sectionFilter.addEventListener('change', () => this.handleSearch());
+		this.typeFilter.addEventListener('change', () => this.handleSearch());
+
+		// Close results when clicking outside
+		document.addEventListener('click', (e) => {
+			if (!e.target.closest('.search-container')) {
+				this.hideResults();
+			}
+		});
+
+		// Load resources
+		await this.loadResources();
+		this.populateFilters();
+		
+		this.isInitialized = true;
+		console.log('[GlobalSearch] Initialized with', this.allResources.length, 'resources');
+	}
+
+	async loadResources() {
+		try {
+			if (!window.supabaseClient) {
+				console.warn('[GlobalSearch] Supabase client not ready');
+				return;
+			}
+
+			// Get current user's permissions
+			const currentUser = await this.getCurrentUserWithPermissions();
+			const allowedSections = this.getAllowedSections(currentUser);
+
+			// Load sections first (all sections for filter display, but we'll filter resources)
+			const { data: sections, error: sectionsError } = await window.supabaseClient
+				.from('sections')
+				.select('section_id, name, icon, color');
+
+			if (sectionsError) throw sectionsError;
+
+			if (sections) {
+				// Only show sections user has access to
+				sections.forEach(s => {
+					if (allowedSections === null || allowedSections.has(s.section_id)) {
+						this.sectionsMap[s.section_id] = s;
+					}
+				});
+			}
+
+			// Load resources - only from sections user can access
+			let resourcesQuery = window.supabaseClient
+				.from('resources')
+				.select('*')
+				.order('created_at', { ascending: false });
+
+			// Filter by allowed sections if user is not admin
+			if (allowedSections !== null) {
+				const sectionIds = Array.from(allowedSections);
+				if (sectionIds.length === 0) {
+					// User has no section access
+					this.allResources = [];
+					console.log('[GlobalSearch] User has no section access');
+					return;
+				}
+				resourcesQuery = resourcesQuery.in('section_id', sectionIds);
+			}
+
+			const { data: resources, error: resourcesError } = await resourcesQuery;
+
+			if (resourcesError) throw resourcesError;
+
+			this.allResources = resources || [];
+			console.log('[GlobalSearch] Loaded', this.allResources.length, 'resources (filtered by user permissions)');
+		} catch (error) {
+			console.error('[GlobalSearch] Error loading resources:', error);
+		}
+	}
+
+	async getCurrentUserWithPermissions() {
+		try {
+			// Try to get user from InformationHub instance first
+			if (window.informationHub && window.informationHub.currentUser) {
+				return window.informationHub.currentUser;
+			}
+
+			// Fallback: get from Supabase directly
+			const { data: { user }, error: authError } = await window.supabaseClient.auth.getUser();
+			if (authError || !user) {
+				console.warn('[GlobalSearch] No authenticated user');
+				return null;
+			}
+
+			const { data: profile, error: profileError } = await window.supabaseClient
+				.from('profiles')
+				.select('role, permissions')
+				.eq('id', user.id)
+				.single();
+
+			if (profileError || !profile) {
+				console.warn('[GlobalSearch] No profile found for user');
+				return { id: user.id, role: null, permissions: {} };
+			}
+
+			return {
+				id: user.id,
+				role: profile.role,
+				permissions: profile.permissions || {}
+			};
+		} catch (error) {
+			console.error('[GlobalSearch] Error getting user permissions:', error);
+			return null;
+		}
+	}
+
+	getAllowedSections(user) {
+		if (!user) {
+			// No user = no access
+			return new Set();
+		}
+
+		const role = String(user.role || '').toLowerCase();
+		const perms = user.permissions || {};
+
+		// Parse permissions if it's a string (shouldn't be, but just in case)
+		let permissions = perms;
+		if (typeof permissions === 'string') {
+			try {
+				permissions = JSON.parse(permissions);
+			} catch (_) {
+				permissions = {};
+			}
+		}
+
+		const userSections = Array.isArray(permissions.sections) ? permissions.sections : [];
+		
+		// Admin or users with canViewAllSections can see everything
+		const canViewAll = (
+			role === 'admin' ||
+			!!permissions.canViewAllSections ||
+			!!permissions.canManageUsers ||
+			userSections.includes('*') ||
+			(Object.keys(permissions).length === 0 && !role) // New users with no permissions set
+		);
+
+		if (canViewAll) {
+			return null; // null means "all sections"
+		}
+
+		// Return specific sections user has access to
+		return new Set(userSections);
+	}
+
+	populateFilters() {
+		if (!this.sectionFilter || !this.typeFilter) return;
+
+		// Clear existing options (except the "All" options)
+		this.sectionFilter.innerHTML = '<option value="">All Sections</option>';
+		this.typeFilter.innerHTML = '<option value="">All Types</option>';
+
+		// Populate section filter (only with sections user has access to)
+		const sections = Object.values(this.sectionsMap).sort((a, b) => 
+			(a.name || '').localeCompare(b.name || '')
+		);
+		sections.forEach(section => {
+			const option = document.createElement('option');
+			option.value = section.section_id;
+			option.textContent = section.name;
+			this.sectionFilter.appendChild(option);
+		});
+
+		// Populate type filter (only types that exist in user's accessible resources)
+		const types = [...new Set(this.allResources.map(r => r.type))].sort();
+		types.forEach(type => {
+			const option = document.createElement('option');
+			option.value = type;
+			option.textContent = this.formatTypeName(type);
+			this.typeFilter.appendChild(option);
+		});
+	}
+
+	formatTypeName(type) {
+		return type
+			.split('-')
+			.map(word => word.charAt(0).toUpperCase() + word.slice(1))
+			.join(' ');
+	}
+
+	handleSearch() {
+		const query = this.searchInput.value.trim();
+		const selectedSection = this.sectionFilter.value;
+		const selectedType = this.typeFilter.value;
+
+		// Show/hide clear button
+		this.clearBtn.style.display = query ? 'block' : 'none';
+
+		// Filter resources
+		this.filteredResults = this.allResources.filter(resource => {
+			// Apply section filter
+			if (selectedSection && resource.section_id !== selectedSection) {
+				return false;
+			}
+
+			// Apply type filter
+			if (selectedType && resource.type !== selectedType) {
+				return false;
+			}
+
+			// If no query, show all (filtered by section/type)
+			if (!query) {
+				return true;
+			}
+
+			// Search in title, description, URL, tags
+			const searchText = query.toLowerCase();
+			const title = (resource.title || '').toLowerCase();
+			const description = (resource.description || '').toLowerCase();
+			const url = (resource.url || '').toLowerCase();
+			const tags = (resource.tags || []).join(' ').toLowerCase();
+			const category = (resource.extra?.category || '').toLowerCase();
+
+			return title.includes(searchText) ||
+				   description.includes(searchText) ||
+				   url.includes(searchText) ||
+				   tags.includes(searchText) ||
+				   category.includes(searchText);
+		});
+
+		// Update UI
+		if (query || selectedSection || selectedType) {
+			this.displayResults();
+			this.showResults();
+		} else {
+			this.hideResults();
+		}
+	}
+
+	displayResults() {
+		if (this.filteredResults.length === 0) {
+			this.resultsList.innerHTML = `
+				<div class="search-no-results">
+					<i class="fas fa-search"></i>
+					<p>No resources found</p>
+					<small>Try different keywords or filters</small>
+				</div>
+			`;
+			this.resultCount.textContent = '0 results';
+			return;
+		}
+
+		const query = this.searchInput.value.trim();
+		this.resultCount.textContent = `${this.filteredResults.length} result${this.filteredResults.length !== 1 ? 's' : ''}`;
+
+		this.resultsList.innerHTML = this.filteredResults
+			.slice(0, 50) // Limit to 50 results for performance
+			.map(resource => this.createResultItem(resource, query))
+			.join('');
+
+		// Add click handlers
+		this.resultsList.querySelectorAll('.search-result-item').forEach((item, index) => {
+			item.addEventListener('click', () => {
+				const resource = this.filteredResults[index];
+				if (resource.url) {
+					window.open(resource.url, '_blank');
+				}
+			});
+		});
+	}
+
+	createResultItem(resource, query) {
+		const section = this.sectionsMap[resource.section_id];
+		const sectionName = section ? section.name : resource.section_id;
+		const sectionIcon = section ? section.icon : 'fas fa-folder';
+		
+		const title = this.highlightText(resource.title || 'Untitled', query);
+		const description = resource.description 
+			? this.highlightText(this.truncateText(resource.description, 150), query)
+			: '<span class="muted">No description</span>';
+		
+		const url = resource.url || '';
+		const displayUrl = url ? this.truncateText(url, 60) : '';
+		
+		const category = resource.extra?.category || '';
+		const type = this.formatTypeName(resource.type);
+
+		return `
+			<div class="search-result-item">
+				<div class="search-result-header">
+					<div class="search-result-title">${title}</div>
+				</div>
+				<div class="search-result-description">${description}</div>
+				${url ? `
+					<a href="${this.escapeHtml(url)}" 
+					   class="search-result-url" 
+					   onclick="event.stopPropagation();" 
+					   target="_blank" 
+					   rel="noopener noreferrer">
+						<i class="fas fa-external-link-alt"></i>
+						${this.escapeHtml(displayUrl)}
+					</a>
+				` : ''}
+				<div class="search-result-meta">
+					<span class="search-meta-badge section">
+						<i class="${sectionIcon}"></i>
+						${this.escapeHtml(sectionName)}
+					</span>
+					<span class="search-meta-badge type">
+						<i class="fas fa-tag"></i>
+						${this.escapeHtml(type)}
+					</span>
+					${category ? `
+						<span class="search-meta-badge category">
+							<i class="fas fa-folder"></i>
+							${this.escapeHtml(category)}
+						</span>
+					` : ''}
+				</div>
+			</div>
+		`;
+	}
+
+	highlightText(text, query) {
+		if (!query) return this.escapeHtml(text);
+		
+		const escaped = this.escapeHtml(text);
+		const regex = new RegExp(`(${this.escapeRegex(query)})`, 'gi');
+		return escaped.replace(regex, '<span class="highlight">$1</span>');
+	}
+
+	truncateText(text, maxLength) {
+		if (text.length <= maxLength) return text;
+		return text.substring(0, maxLength) + '...';
+	}
+
+	escapeHtml(text) {
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
+	escapeRegex(text) {
+		return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	}
+
+	showResults() {
+		this.resultsPanel.style.display = 'block';
+	}
+
+	hideResults() {
+		this.resultsPanel.style.display = 'none';
+	}
+
+	clearSearch() {
+		this.searchInput.value = '';
+		this.sectionFilter.value = '';
+		this.typeFilter.value = '';
+		this.clearBtn.style.display = 'none';
+		this.hideResults();
+		this.resultCount.textContent = '';
+	}
+
+	// Public method to refresh resources (call after adding/editing resources or permission changes)
+	async refresh() {
+		console.log('[GlobalSearch] Refreshing resources and filters...');
+		this.sectionsMap = {}; // Clear sections map
+		await this.loadResources();
+		this.populateFilters();
+		// Re-run search if there's an active query
+		if (this.searchInput && this.searchInput.value.trim()) {
+			this.handleSearch();
+		}
+	}
+}
+
+// Initialize global search when page loads
+let globalResourceSearch = null;
+
+async function initGlobalSearch() {
+	try {
+		// Wait for Supabase client to be ready
+		let attempts = 0;
+		while (!window.supabaseClient && attempts < 100) {
+			await new Promise(r => setTimeout(r, 100));
+			attempts++;
+		}
+
+		if (!window.supabaseClient) {
+			console.warn('[GlobalSearch] Supabase client not available after waiting');
+			return;
+		}
+
+		globalResourceSearch = new GlobalResourceSearch();
+		await globalResourceSearch.init();
+		window.globalResourceSearch = globalResourceSearch;
+	} catch (error) {
+		console.error('[GlobalSearch] Initialization error:', error);
+	}
+}
+
+// Initialize search after a short delay to ensure everything else is loaded
+setTimeout(() => {
+	initGlobalSearch();
+}, 2000);

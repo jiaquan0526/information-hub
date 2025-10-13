@@ -337,6 +337,39 @@
             </div>
         </header>
 
+        <!-- Global Resource Search Bar -->
+        <div class="search-container">
+            <div class="search-wrapper">
+                <div class="search-input-group">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" 
+                           id="globalSearchInput" 
+                           class="search-input" 
+                           placeholder="Search all resources by title, description, or tags..."
+                           autocomplete="off">
+                    <button id="clearSearchBtn" class="clear-search-btn" style="display: none;" title="Clear search">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="search-filters">
+                    <select id="searchSectionFilter" class="search-filter-select">
+                        <option value="">All Sections</option>
+                    </select>
+                    <select id="searchTypeFilter" class="search-filter-select">
+                        <option value="">All Types</option>
+                    </select>
+                    <span id="searchResultCount" class="search-result-count"></span>
+                </div>
+            </div>
+            
+            <!-- Search Results Dropdown -->
+            <div id="searchResultsPanel" class="search-results-panel" style="display: none;">
+                <div id="searchResultsList" class="search-results-list">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+
         <div class="hub-grid" style="opacity: 0; pointer-events: none;"></div>
 
         <div class="quick-actions">
