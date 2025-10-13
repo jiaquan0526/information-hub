@@ -2894,7 +2894,7 @@ class GlobalResourceSearch {
 
 		// Close results when clicking outside
 		document.addEventListener('click', (e) => {
-			if (!e.target.closest('.search-container')) {
+			if (!e.target.closest('.header-search')) {
 				this.hideResults();
 			}
 		});
