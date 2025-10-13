@@ -337,6 +337,7 @@ class InformationHub {
 
     setupGitHubAutoRefresh() {
         if (this._ghHubTimer) try { clearInterval(this._ghHubTimer); } catch(_) {}
+        let lastVisibleRefresh = 0;
         const refresh = async () => {
             try {
                 if (document.hidden) return;
@@ -353,7 +354,17 @@ class InformationHub {
         setTimeout(refresh, 2000);
         this._ghHubTimer = setInterval(refresh, 60000);
         window.addEventListener('beforeunload', () => { try { clearInterval(this._ghHubTimer); } catch(_) {} });
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => refresh().catch(()=>{}), 250); });
+        // Only refresh when returning to the tab if enough time has passed (prevent flash on quick tab switches)
+        document.addEventListener('visibilitychange', () => { 
+            if (!document.hidden) {
+                const now = Date.now();
+                // Only refresh if it's been more than 30 seconds since last refresh when tab became visible
+                if (now - lastVisibleRefresh > 30000) {
+                    lastVisibleRefresh = now;
+                    setTimeout(() => refresh().catch(()=>{}), 250);
+                }
+            }
+        });
     }
 
     setupHubSessionLogging() {

@@ -6163,6 +6163,8 @@ Permissions:
         } catch(_) {}
         let isUpdatingSections = false;
         let lastUpdateTime = 0;
+        let lastContentHash = '';
+        let isInitialLoad = true;
         
         // Define the real implementation and store it separately
         console.log('[Hub] Defining __realUpdateMainHubSections now...');
@@ -6433,11 +6435,31 @@ Permissions:
                 console.warn('Advanced hub card build produced no content. Investigate data and builder logic.');
             }
 
-            // Replace grid content all at once to prevent flashing
-            try {
-                hubGrid.innerHTML = newContent;
-            } catch (e) {
-                console.error('Hub grid update failed; not rendering minimal fallback. Investigate error:', e);
+            // Only update DOM if content has actually changed (prevent unnecessary flashing)
+            const contentHash = String(newContent).length + ':' + visibleSections.map(s => s.id).join(',');
+            const shouldUpdate = contentHash !== lastContentHash || isInitialLoad;
+            
+            if (shouldUpdate) {
+                console.log('[Hub Update] Content changed, updating DOM');
+                lastContentHash = contentHash;
+                
+                // Replace grid content all at once
+                try {
+                    hubGrid.innerHTML = newContent;
+                    
+                    // Only add animation class on initial load
+                    if (isInitialLoad) {
+                        setTimeout(() => {
+                            const cards = document.querySelectorAll('.hub-card');
+                            cards.forEach(card => card.classList.add('animate-in'));
+                        }, 10);
+                        isInitialLoad = false;
+                    }
+                } catch (e) {
+                    console.error('Hub grid update failed; not rendering minimal fallback. Investigate error:', e);
+                }
+            } else {
+                console.log('[Hub Update] Content unchanged, skipping DOM update to prevent flash');
             }
             // Ensure the main UI is visible once content is ready
             try {
