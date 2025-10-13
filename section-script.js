@@ -1,4 +1,6 @@
 // Section Page JavaScript - Handles individual section functionality
+// VERSION: 2.0.2 - Background fix with proper JSON string parsing
+console.log('[Section Script] Version 2.0.2 loaded - JSON string parsing fixed');
 class SectionManager {
     constructor() {
         this.currentUser = null;
@@ -367,15 +369,21 @@ class SectionManager {
                         .eq('key', 'backgrounds')
                         .single();
                     let v = data && data.value;
-                    // Parse if it's a string
-                    if (typeof v === 'string') {
+                    console.log('[BG] Raw value from DB:', v, 'type:', typeof v);
+                    
+                    // Parse if it's a string (Supabase sometimes returns JSONB as string)
+                    if (typeof v === 'string' && v.length > 0) {
                         try {
                             v = JSON.parse(v);
-                        } catch (_) {}
+                            console.log('[BG] Parsed JSON string to object:', v);
+                        } catch (err) {
+                            console.log('[BG] Failed to parse JSON:', err);
+                        }
                     }
-                    console.log('[BG] Debug - v:', v);
-                    console.log('[BG] Debug - v.forceEnabled:', v && v.forceEnabled);
-                    console.log('[BG] Debug - typeof v.forceEnabled:', v && typeof v.forceEnabled);
+                    
+                    console.log('[BG] After parsing - v:', v);
+                    console.log('[BG] After parsing - v.forceEnabled:', v && v.forceEnabled);
+                    console.log('[BG] After parsing - typeof v.forceEnabled:', v && typeof v.forceEnabled);
                     
                     // More robust check - handle string "true" or boolean true
                     if (v && v.forceEnabled !== undefined && v.forceEnabled !== null) {
@@ -387,7 +395,7 @@ class SectionManager {
                             enabled = !!v.forceEnabled;
                         }
                     }
-                    console.log('[BG] Enabled status from DB:', enabled, 'value:', v);
+                    console.log('[BG] Final enabled status:', enabled);
                 }
             } catch (err) { 
                 console.log('[BG] Error checking enabled status:', err);
