@@ -1299,8 +1299,13 @@ class InformationHub {
                 console.log('Database not ready for hub settings');
                 return;
             }
-            const hubTitle = await window.hubDatabase.getSiteSetting('hub_title');
-            const hubDescription = await window.hubDatabase.getSiteSetting('hub_description');
+            
+            let hubTitle = await window.hubDatabase.getSiteSetting('hub_title');
+            let hubDescription = await window.hubDatabase.getSiteSetting('hub_description');
+
+            // Convert values to strings (handle both string and object returns)
+            hubTitle = this.normalizeSettingValue(hubTitle);
+            hubDescription = this.normalizeSettingValue(hubDescription);
 
             // Apply settings to page if they exist
             if (hubTitle || hubDescription) {
@@ -1331,6 +1336,18 @@ class InformationHub {
         }
     }
 
+    // Helper to normalize setting values from JSONB
+    normalizeSettingValue(value) {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'string') return value;
+        if (typeof value === 'object' && value !== null) {
+            // If it's an object, try to extract a string value
+            if (value.value !== undefined) return String(value.value);
+            return JSON.stringify(value);
+        }
+        return String(value);
+    }
+
     // Hub Settings Management
     async loadHubSettings() {
         try {
@@ -1338,8 +1355,13 @@ class InformationHub {
             if (!window.hubDatabase || !window.hubDatabaseReady) {
                 throw new Error('Database not available');
             }
-            const hubTitle = await window.hubDatabase.getSiteSetting('hub_title');
-            const hubDescription = await window.hubDatabase.getSiteSetting('hub_description');
+            
+            let hubTitle = await window.hubDatabase.getSiteSetting('hub_title');
+            let hubDescription = await window.hubDatabase.getSiteSetting('hub_description');
+
+            // Normalize values from JSONB
+            hubTitle = this.normalizeSettingValue(hubTitle);
+            hubDescription = this.normalizeSettingValue(hubDescription);
 
             // Populate form inputs
             const titleInput = document.getElementById('hubTitleInput');
@@ -1359,17 +1381,18 @@ class InformationHub {
             // Update preview
             this.updateHubSettingsPreview();
 
-            // Add character counter
-            if (descInput && charCount) {
+            // Add character counter (only once)
+            if (descInput && charCount && !descInput.dataset.listenerAdded) {
                 descInput.addEventListener('input', () => {
                     charCount.textContent = descInput.value.length;
                 });
+                descInput.dataset.listenerAdded = 'true';
             }
 
-            console.log('Hub settings loaded');
+            console.log('Hub settings loaded successfully');
         } catch (error) {
             console.error('Error loading hub settings:', error);
-            this.showMessage('Error loading hub settings', 'error');
+            this.showMessage('Error loading hub settings: ' + error.message, 'error');
         }
     }
 
