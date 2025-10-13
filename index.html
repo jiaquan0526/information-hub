@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Information Hub - Central Dashboard</title>
+    
+    <!-- Prevent browser from caching this page to avoid showing stale data -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
@@ -262,7 +268,7 @@
             </div>
         </header>
 
-        <div class="hub-grid"></div>
+        <div class="hub-grid" style="opacity: 0; pointer-events: none;"></div>
 
         <div class="quick-actions">
             <h3>Quick Actions</h3>
@@ -761,8 +767,9 @@
             console.log('hub-script.js loaded successfully');
             window.updateLoadingProgress('Preparing interface...', 40);
             
-            // Keep loading screen visible - it will be hidden when fresh data loads
-            // The updateMainHubSections function handles hiding the loading screen
+            // CRITICAL: Keep loading screen visible and mainContent hidden
+            // Do NOT show mainContent here - updateMainHubSections will show it after fresh data loads
+            // This prevents any cached/stale content from flashing on screen
             
             // Ensure a callable stub exists even before the real builder attaches
             // Advanced-only: do not override builder with any stub; rely on advanced builder export below
@@ -959,12 +966,7 @@
                         setTimeout(() => {
                             try { if (typeof updateMainHubSections === 'function') updateMainHubSections(); } catch(_) {}
                             updateHubProgress('✅ Hub loaded successfully!', 100);
-                            try {
-                                const loadingScreen = document.getElementById('loadingScreen');
-                                const mainContent = document.getElementById('mainContent');
-                                if (loadingScreen) loadingScreen.style.display = 'none';
-                                if (mainContent) mainContent.style.display = 'block';
-                            } catch (_) {}
+                            // DO NOT show mainContent here - updateMainHubSections handles it after fresh data loads
                             setTimeout(() => {
                                 // Hide progress after success
                                 const progressContainer = document.querySelector('.hub-grid > div');
@@ -1081,11 +1083,21 @@
         // Function to show fallback sections if database fails
         function showFallbackSections() {
             console.log('[Hub] Database connection failed, showing empty state');
+            // Show content only on error - with smooth transition
             try {
                 const loadingScreen = document.getElementById('loadingScreen');
                 const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'block';
+                if (loadingScreen) {
+                    loadingScreen.style.transition = 'opacity 0.3s ease-out';
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.style.display = 'none', 300);
+                }
+                if (mainContent) {
+                    mainContent.style.display = 'block';
+                    mainContent.style.opacity = '0';
+                    mainContent.style.transition = 'opacity 0.3s ease-in';
+                    setTimeout(() => mainContent.style.opacity = '1', 50);
+                }
             } catch (_) {}
             showEmptyState();
         }
@@ -1103,11 +1115,17 @@
             window.addEventListener('pageshow', () => {
             try {
                 if (window.DISABLE_FAILSAFES) return;
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'block';
-                // Removed: Don't rebuild sections on tab switch - only update stats
+                // Do NOT show content on pageshow - only if first load is already complete
+                if (typeof hasCompletedFirstLoad !== 'undefined' && hasCompletedFirstLoad) {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                    if (mainContent && mainContent.style.display !== 'block') {
+                        mainContent.style.display = 'block';
+                        mainContent.style.opacity = '1';
+                    }
+                }
+                // Don't rebuild sections on tab switch - only update stats
                 console.log('[PageShow] Page shown, updating stats only (no rebuild)');
                 if (typeof updateSectionStats === 'function') updateSectionStats();
             } catch (_) {}
@@ -1177,10 +1195,8 @@
         if (!window.rebuildHubCardsNow) {
             window.rebuildHubCardsNow = async function() {
                 try {
-                    const loadingOverlay = document.getElementById('loadingScreen');
-                    const main = document.getElementById('mainContent');
-                    if (loadingOverlay) loadingOverlay.style.display = 'none';
-                    if (main) main.style.display = 'block';
+                    // Do NOT show content here - only if already shown
+                    // This function is for rebuilding, not initial load
                     if (typeof window.updateMainHubSections === 'function') {
                         await window.updateMainHubSections();
                     }
@@ -1201,13 +1217,8 @@
         // Show hub as soon as database is ready, then build sections
         document.addEventListener('hubdb-ready', () => {
             try {
-                if (!window.DISABLE_FAILSAFES) {
-                    const loadingScreen = document.getElementById('loadingScreen');
-                    const mainContent = document.getElementById('mainContent');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-                    try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-                    if (mainContent) mainContent.style.display = 'block';
-                }
+                // Do NOT show content here - updateMainHubSections will handle it
+                console.log('[hubdb-ready] Database ready, triggering section load');
                 callUpdateMainHubSectionsSoon();
                 // Show/hide admin-only global backgrounds button
                 // Global button is always visible in quick actions
@@ -1268,15 +1279,24 @@
         // Final window-load fallback to ensure UI becomes visible
         window.addEventListener('load', () => {
             try {
+                // Failsafe: After 10 seconds, if still loading, show what we have
                 setTimeout(async () => {
                     const loadingScreen = document.getElementById('loadingScreen');
                     const mainContent = document.getElementById('mainContent');
                     if (loadingScreen && getComputedStyle(loadingScreen).display !== 'none') {
-                        loadingScreen.style.display = 'none';
-                        if (mainContent) mainContent.style.display = 'block';
+                        console.warn('[Failsafe] Loading took too long, showing content');
+                        loadingScreen.style.transition = 'opacity 0.3s ease-out';
+                        loadingScreen.style.opacity = '0';
+                        setTimeout(() => loadingScreen.style.display = 'none', 300);
+                        if (mainContent) {
+                            mainContent.style.display = 'block';
+                            mainContent.style.opacity = '0';
+                            mainContent.style.transition = 'opacity 0.3s ease-in';
+                            setTimeout(() => mainContent.style.opacity = '1', 50);
+                        }
                         try { if (typeof window.loadSectionsFromSupabase === 'function') await window.loadSectionsFromSupabase(); } catch (_) {}
                     }
-                }, 1000);
+                }, 10000); // Increased to 10 seconds
             } catch (_) {}
         });
         
