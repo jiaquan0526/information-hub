@@ -13,35 +13,55 @@
 
 ## 🔒 Domain-Level Security (Action Required)
 
-### 1. Domain Registrar Security
+### 1. Vercel Domain & Account Security
 **Priority: HIGH**
 
-At your domain registrar (where you bought ctsinformationhub.com):
+**Good News**: Your domain is registered with Vercel, so everything is in one place!
 
-- [ ] **Enable Domain Lock/Transfer Lock** - Prevents unauthorized domain transfers
-- [ ] **Enable Two-Factor Authentication (2FA)** - Protects your registrar account
+At Vercel (https://vercel.com/account):
+
+- [ ] **Enable Two-Factor Authentication (2FA)** - Protects your Vercel account
+  - Go to: https://vercel.com/account/security
+  - Enable 2FA and save backup codes
 - [ ] **Use a strong, unique password** - Use a password manager
-- [ ] **Enable domain privacy/WHOIS protection** - Hides personal information
-- [ ] **Keep registrar contact info updated** - For security notifications
+- [ ] **Domain Lock** - Enabled by default on Vercel domains ✅
+- [ ] **WHOIS Privacy Protection** - Enabled by default on Vercel domains ✅
+- [ ] **Enable Auto-Renewal** - Prevents accidental domain expiration
+  - Check at: https://vercel.com/account/domains
+- [ ] **Keep contact info updated** - For renewal and security notifications
+- [ ] **Review team access** - Ensure only authorized users have access
+  - Check at: Your Project → Settings → Team Members
 
-### 2. DNS Security
-**Priority: HIGH**
+### 2. DNS Security (Managed by Vercel)
+**Priority: MEDIUM**
 
-Configure these DNS records at your DNS provider (likely Vercel or your registrar):
+**Location**: Vercel Dashboard → Your Project → Settings → Domains → DNS
 
-#### CAA Records (Certificate Authority Authorization)
-Prevents unauthorized SSL certificate issuance:
+#### CAA Records (Certificate Authority Authorization) - OPTIONAL
+Prevents unauthorized SSL certificate issuance. Vercel handles SSL automatically, but CAA adds extra protection:
+
+To add in Vercel:
+1. Go to your project → Settings → Domains
+2. Scroll to DNS Records section
+3. Add these CAA records:
 
 ```
-ctsinformationhub.com CAA 0 issue "letsencrypt.org"
-ctsinformationhub.com CAA 0 issue "pki.goog"
-ctsinformationhub.com CAA 0 issuewild ";"
-ctsinformationhub.com CAA 0 iodef "mailto:security@ctsinformationhub.com"
+Type: CAA | Name: @ | Value: 0 issue "letsencrypt.org"
+Type: CAA | Name: @ | Value: 0 issue "pki.goog"
+Type: CAA | Name: @ | Value: 0 issuewild ";"
+Type: CAA | Name: @ | Value: 0 iodef "mailto:admin@ctsinformationhub.com"
 ```
 
 #### DNSSEC (Domain Name System Security Extensions)
-- [ ] Enable DNSSEC at your DNS provider
+- **Note**: DNSSEC support varies by DNS provider
+- Check Vercel documentation for current DNSSEC support
 - Protects against DNS spoofing and cache poisoning
+
+#### Vercel DNS Advantages ✅
+- **Built-in DDoS Protection**: Automatic protection against attacks
+- **Global Edge Network**: Fast DNS resolution worldwide
+- **Automatic SSL**: Free SSL certificates with auto-renewal
+- **DNS Propagation**: Fast DNS updates (typically < 60 seconds)
 
 ### 3. SSL/TLS Certificate
 **Priority: HIGH**
