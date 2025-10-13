@@ -1295,8 +1295,12 @@ class InformationHub {
     async loadAndApplyHubSettings() {
         try {
             // Load hub settings from database
-            const hubTitle = await db.getSiteSetting('hub_title');
-            const hubDescription = await db.getSiteSetting('hub_description');
+            if (!window.hubDatabase || !window.hubDatabaseReady) {
+                console.log('Database not ready for hub settings');
+                return;
+            }
+            const hubTitle = await window.hubDatabase.getSiteSetting('hub_title');
+            const hubDescription = await window.hubDatabase.getSiteSetting('hub_description');
 
             // Apply settings to page if they exist
             if (hubTitle || hubDescription) {
@@ -1331,8 +1335,11 @@ class InformationHub {
     async loadHubSettings() {
         try {
             // Load hub settings from database
-            const hubTitle = await db.getSiteSetting('hub_title');
-            const hubDescription = await db.getSiteSetting('hub_description');
+            if (!window.hubDatabase || !window.hubDatabaseReady) {
+                throw new Error('Database not available');
+            }
+            const hubTitle = await window.hubDatabase.getSiteSetting('hub_title');
+            const hubDescription = await window.hubDatabase.getSiteSetting('hub_description');
 
             // Populate form inputs
             const titleInput = document.getElementById('hubTitleInput');
@@ -1368,6 +1375,10 @@ class InformationHub {
 
     async saveHubSettings() {
         try {
+            if (!window.hubDatabase || !window.hubDatabaseReady) {
+                throw new Error('Database not available');
+            }
+
             const titleInput = document.getElementById('hubTitleInput');
             const descInput = document.getElementById('hubDescriptionInput');
 
@@ -1379,8 +1390,8 @@ class InformationHub {
             const hubDescription = descInput.value.trim() || 'Central dashboard for accessing all functional areas and resources';
 
             // Save to database
-            await db.setSiteSetting('hub_title', hubTitle);
-            await db.setSiteSetting('hub_description', hubDescription);
+            await window.hubDatabase.setSiteSetting('hub_title', hubTitle);
+            await window.hubDatabase.setSiteSetting('hub_description', hubDescription);
 
             // Update the live page header
             this.applyHubSettings(hubTitle, hubDescription);
