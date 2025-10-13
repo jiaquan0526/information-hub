@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Test - Information Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .test-section {
+            margin-bottom: 2rem;
+        }
+        
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        
+        .test-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #ddd;
+        }
+        
+        .test-item.pass {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        
+        .test-item.fail {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        
+        .test-item.warning {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+        }
+        
+        .test-item.testing {
+            border-left-color: #17a2b8;
+            background: #d1ecf1;
+        }
+        
+        .status-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            min-width: 30px;
+        }
+        
+        .test-content {
+            flex: 1;
+        }
+        
+        .test-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        
+        .test-description {
+            font-size: 0.875rem;
+            color: #666;
+        }
+        
+        .test-value {
+            font-size: 0.75rem;
+            color: #888;
+            font-family: monospace;
+            margin-top: 0.5rem;
+            background: white;
+            padding: 0.5rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .score {
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .score-number {
+            font-size: 4rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #ddd;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .legend-icon {
+            font-size: 1.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 Security Test Dashboard</h1>
+            <p>Testing security configuration for www.ctsinformationhub.com</p>
+        </div>
+
+        <div class="card score" id="scoreCard">
+            <h2>Security Score</h2>
+            <div class="score-number" id="scoreNumber">-</div>
+            <div id="scoreText">Running tests...</div>
+        </div>
+
+        <div class="card">
+            <div class="test-section">
+                <h2>🌐 Protocol & Connection Security</h2>
+                <div id="protocolTests"></div>
+            </div>
+
+            <div class="test-section">
+                <h2>🛡️ Security Headers</h2>
+                <div id="headerTests"></div>
+            </div>
+
+            <div class="test-section">
+                <h2>🔐 Authentication & Session</h2>
+                <div id="authTests"></div>
+            </div>
+
+            <div class="test-section">
+                <h2>📊 Configuration Status</h2>
+                <div id="configTests"></div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="legend-icon">✅</span>
+                    <span>Pass - Working correctly</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-icon">⚠️</span>
+                    <span>Warning - Needs attention</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-icon">❌</span>
+                    <span>Fail - Requires immediate fix</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-icon">🔄</span>
+                    <span>Testing - In progress</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🔗 External Security Tests</h2>
+            <p style="margin-bottom: 1rem; color: #666;">Run these external tests for comprehensive security analysis:</p>
+            <div class="action-buttons">
+                <a href="https://www.ssllabs.com/ssltest/analyze.html?d=www.ctsinformationhub.com" target="_blank" class="btn btn-primary">
+                    SSL Labs Test
+                </a>
+                <a href="https://securityheaders.com/?q=www.ctsinformationhub.com" target="_blank" class="btn btn-primary">
+                    Security Headers Test
+                </a>
+                <a href="https://observatory.mozilla.org/analyze/www.ctsinformationhub.com" target="_blank" class="btn btn-primary">
+                    Mozilla Observatory
+                </a>
+                <a href="https://hstspreload.org/?domain=ctsinformationhub.com" target="_blank" class="btn btn-secondary">
+                    HSTS Preload Check
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📚 Next Steps</h2>
+            <ol style="line-height: 2; color: #333;">
+                <li>Review any failed or warning tests above</li>
+                <li>Run the external security tests</li>
+                <li>Follow recommendations in <code>SECURITY_GUIDE.md</code></li>
+                <li>Re-run this test after making changes</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const tests = {
+            protocol: [],
+            headers: [],
+            auth: [],
+            config: []
+        };
+
+        let passCount = 0;
+        let failCount = 0;
+        let warningCount = 0;
+
+        function addTest(category, name, description, status, value = '') {
+            tests[category].push({ name, description, status, value });
+            
+            if (status === 'pass') passCount++;
+            else if (status === 'fail') failCount++;
+            else if (status === 'warning') warningCount++;
+        }
+
+        function renderTest(test) {
+            const icons = {
+                pass: '✅',
+                fail: '❌',
+                warning: '⚠️',
+                testing: '🔄'
+            };
+
+            return `
+                <div class="test-item ${test.status}">
+                    <div class="status-icon">${icons[test.status]}</div>
+                    <div class="test-content">
+                        <div class="test-name">${test.name}</div>
+                        <div class="test-description">${test.description}</div>
+                        ${test.value ? `<div class="test-value">${test.value}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function runTests() {
+            // Protocol Tests
+            const isHTTPS = window.location.protocol === 'https:';
+            addTest('protocol', 'HTTPS Enabled', 'Site is using secure HTTPS protocol', 
+                isHTTPS ? 'pass' : 'fail',
+                `Protocol: ${window.location.protocol}`);
+
+            const hasHSTS = document.createElement('div');
+            addTest('protocol', 'HSTS (Checked via headers)', 'Strict-Transport-Security header should be present',
+                'testing', 'Check external test results');
+
+            // Header Tests (most require server-side check, but we can test CSP)
+            const hasCSPMeta = !!document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+            addTest('headers', 'Content-Security-Policy', 'CSP protects against XSS attacks',
+                'testing', 'Configured in vercel.json - check Security Headers Test');
+
+            addTest('headers', 'X-Frame-Options', 'Prevents clickjacking attacks',
+                'testing', 'Configured as DENY - check Security Headers Test');
+
+            addTest('headers', 'X-Content-Type-Options', 'Prevents MIME-type sniffing',
+                'testing', 'Configured as nosniff - check Security Headers Test');
+
+            addTest('headers', 'Referrer-Policy', 'Controls referrer information',
+                'testing', 'Configured - check Security Headers Test');
+
+            // Auth Tests
+            const hasSupabase = typeof window.supabaseClient !== 'undefined';
+            addTest('auth', 'Supabase Client', 'Authentication system is available',
+                hasSupabase ? 'pass' : 'fail',
+                hasSupabase ? 'Supabase client initialized' : 'Supabase client not found');
+
+            const hasConfig = typeof window.CONFIG !== 'undefined';
+            addTest('auth', 'Configuration Loaded', 'App configuration is present',
+                hasConfig ? 'pass' : 'fail');
+
+            if (hasConfig) {
+                const hasSessionTimeout = window.CONFIG.SESSION_TIMEOUT_MS > 0;
+                addTest('auth', 'Session Timeout', 'Sessions expire after inactivity',
+                    hasSessionTimeout ? 'pass' : 'warning',
+                    hasSessionTimeout ? `Timeout: ${window.CONFIG.SESSION_TIMEOUT_MS / 1000 / 60 / 60} hours` : 'Not configured');
+
+                const hasMaxAttempts = window.CONFIG.MAX_LOGIN_ATTEMPTS > 0;
+                addTest('auth', 'Login Attempt Limit', 'Limits brute force attacks',
+                    hasMaxAttempts ? 'pass' : 'warning',
+                    hasMaxAttempts ? `Max attempts: ${window.CONFIG.MAX_LOGIN_ATTEMPTS}` : 'Not configured');
+            }
+
+            // Config Tests
+            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isProduction = window.location.hostname.includes('ctsinformationhub.com') || 
+                                window.location.hostname.includes('vercel.app');
+            
+            addTest('config', 'Environment Detection', 'App knows if running in dev or production',
+                (isDevelopment || isProduction) ? 'pass' : 'warning',
+                isDevelopment ? 'Development' : isProduction ? 'Production' : 'Unknown');
+
+            if (hasConfig && window.CONFIG.SUPABASE_URL) {
+                const isValidUrl = window.CONFIG.SUPABASE_URL.startsWith('https://');
+                addTest('config', 'Supabase URL Protocol', 'Database connection uses HTTPS',
+                    isValidUrl ? 'pass' : 'fail',
+                    window.CONFIG.SUPABASE_URL);
+            }
+
+            // Mixed Content
+            const hasMixedContent = document.querySelectorAll('img[src^="http:"], script[src^="http:"], link[href^="http:"]').length > 0;
+            addTest('config', 'No Mixed Content', 'All resources loaded over HTTPS',
+                hasMixedContent ? 'warning' : 'pass',
+                hasMixedContent ? 'Some HTTP resources detected' : 'All resources use HTTPS');
+
+            // Render all tests
+            document.getElementById('protocolTests').innerHTML = tests.protocol.map(renderTest).join('');
+            document.getElementById('headerTests').innerHTML = tests.headers.map(renderTest).join('');
+            document.getElementById('authTests').innerHTML = tests.auth.map(renderTest).join('');
+            document.getElementById('configTests').innerHTML = tests.config.map(renderTest).join('');
+
+            // Calculate score
+            const totalTests = passCount + failCount + warningCount;
+            const score = Math.round((passCount / totalTests) * 100);
+            
+            document.getElementById('scoreNumber').textContent = score + '%';
+            
+            let scoreText = '';
+            let scoreColor = '';
+            
+            if (score >= 90) {
+                scoreText = '🎉 Excellent! Your security is strong.';
+                scoreColor = '#28a745';
+            } else if (score >= 70) {
+                scoreText = '👍 Good! A few improvements recommended.';
+                scoreColor = '#ffc107';
+            } else {
+                scoreText = '⚠️ Needs Attention! Review failed tests.';
+                scoreColor = '#dc3545';
+            }
+            
+            document.getElementById('scoreText').innerHTML = `
+                ${scoreText}<br>
+                <small style="opacity: 0.9; margin-top: 0.5rem; display: block;">
+                    ${passCount} passed • ${warningCount} warnings • ${failCount} failed
+                </small>
+            `;
+            
+            document.querySelector('.score').style.background = `linear-gradient(135deg, ${scoreColor} 0%, ${adjustColor(scoreColor, -20)} 100%)`;
+        }
+
+        function adjustColor(color, amount) {
+            return color; // Simplified for now
+        }
+
+        // Run tests when page loads
+        window.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>
+
