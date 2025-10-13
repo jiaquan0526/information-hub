@@ -1,6 +1,4 @@
 // Section Page JavaScript - Handles individual section functionality
-// VERSION: 2.0.2 - Background fix with proper JSON string parsing
-console.log('[Section Script] Version 2.0.2 loaded - JSON string parsing fixed');
 class SectionManager {
     constructor() {
         this.currentUser = null;
@@ -358,7 +356,6 @@ class SectionManager {
 
         // Apply persistent background image per section (SAME as hub page card)
         try {
-            console.log('[BG] Starting background application for section:', this.currentSection);
             // Determine enablement via Supabase only
             let enabled = false;
             try {
@@ -369,21 +366,13 @@ class SectionManager {
                         .eq('key', 'backgrounds')
                         .single();
                     let v = data && data.value;
-                    console.log('[BG] Raw value from DB:', v, 'type:', typeof v);
                     
                     // Parse if it's a string (Supabase sometimes returns JSONB as string)
                     if (typeof v === 'string' && v.length > 0) {
                         try {
                             v = JSON.parse(v);
-                            console.log('[BG] Parsed JSON string to object:', v);
-                        } catch (err) {
-                            console.log('[BG] Failed to parse JSON:', err);
-                        }
+                        } catch (_) {}
                     }
-                    
-                    console.log('[BG] After parsing - v:', v);
-                    console.log('[BG] After parsing - v.forceEnabled:', v && v.forceEnabled);
-                    console.log('[BG] After parsing - typeof v.forceEnabled:', v && typeof v.forceEnabled);
                     
                     // More robust check - handle string "true" or boolean true
                     if (v && v.forceEnabled !== undefined && v.forceEnabled !== null) {
@@ -395,24 +384,15 @@ class SectionManager {
                             enabled = !!v.forceEnabled;
                         }
                     }
-                    console.log('[BG] Final enabled status:', enabled);
                 }
-            } catch (err) { 
-                console.log('[BG] Error checking enabled status:', err);
+            } catch (_) { 
                 enabled = false; 
             }
             
-            if (!enabled) {
-                console.log('[BG] Backgrounds not enabled, exiting');
-                return;
-            }
+            if (!enabled) return;
             
             const container = document.querySelector('.container');
-            if (!container) {
-                console.log('[BG] Container not found');
-                return;
-            }
-            console.log('[BG] Container found');
+            if (!container) return;
             
             // Step 1: Try to get the SAME background image assigned to this section's card on hub page
             let assignedImage = null;
@@ -425,19 +405,13 @@ class SectionManager {
                         .maybeSingle();
                     if (data && data.image_url) {
                         assignedImage = data.image_url;
-                        console.log('[BG] Found assigned image:', assignedImage);
-                    } else {
-                        console.log('[BG] No assigned image in database');
                     }
                 }
-            } catch (err) {
-                console.log('[BG] Error loading assigned image:', err);
-            }
+            } catch (_) {}
             
             // Step 2: If no assigned image, use deterministic selection (fallback)
             let finalUrl = assignedImage;
             if (!finalUrl) {
-                console.log('[BG] Using fallback selection');
                 const loadImages = async () => {
                     try {
                         const bust = Date.now();
@@ -448,42 +422,29 @@ class SectionManager {
                                 return data.map(p => `background-pic/${p}`).sort();
                             }
                         }
-                    } catch (err) {
-                        console.log('[BG] Error loading manifest:', err);
-                    }
+                    } catch (_) {}
                     return [];
                 };
                 const images = await loadImages();
-                console.log('[BG] Loaded', images.length, 'images from manifest');
                 if (images.length > 0) {
                     // Use deterministic selection based on section ID
                     const idx = Math.abs(this._hash(this.currentSection)) % images.length;
                     finalUrl = images[idx];
-                    console.log('[BG] Selected fallback image:', finalUrl, 'at index', idx);
                 }
             }
             
-            if (!finalUrl) {
-                console.log('[BG] No final URL, exiting');
-                return;
-            }
-            console.log('[BG] Final image URL:', finalUrl);
+            if (!finalUrl) return;
             
             // Apply the background
             container.style.borderRadius = '12px';
             container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
-            console.log('[BG] Base gradient applied, scheduling background...');
             
             const applyBg = async () => {
                 try {
-                    console.log('[BG] applyBg function called');
                     // Skip on low-data connections
                     try {
                         const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                        if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) {
-                            console.log('[BG] Skipping - low data connection');
-                            return;
-                        }
+                        if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
                     } catch (_) {}
                     
                     // Prefer WebP if available using the hub page helper when present
@@ -504,26 +465,18 @@ class SectionManager {
                             }
                         }
                     } catch (_) {}
-                    console.log('[BG] Applying final background:', optimizedUrl);
                     container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${optimizedUrl}')`;
                     container.style.backgroundSize = 'cover';
                     container.style.backgroundPosition = 'center';
-                    console.log('[BG] ✓ Background applied successfully!');
-                } catch(err) {
-                    console.log('[BG] Error in applyBg:', err);
-                }
+                } catch(_) {}
             };
             
             if ('requestIdleCallback' in window) {
-                console.log('[BG] Scheduling via requestIdleCallback');
                 requestIdleCallback(applyBg, { timeout: 1200 });
             } else {
-                console.log('[BG] Scheduling via setTimeout');
                 setTimeout(applyBg, 200);
             }
-        } catch (err) {
-            console.log('[BG] Critical error:', err);
-        }
+        } catch (_) {}
     }
 
     // Ensure sectionConfig is loaded and normalized from Supabase before first render
