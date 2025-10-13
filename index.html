@@ -314,49 +314,51 @@
                     <p></p>
                 </div>
                 
-                <div class="user-info">
-                    <div class="user-details">
-                        <span class="user-name" id="userName">Loading...</span>
-                        <span class="user-role" id="userRole">Loading...</span>
+                <div class="header-right">
+                    <div class="user-info">
+                        <div class="user-details">
+                            <span class="user-name" id="userName">Loading...</span>
+                            <span class="user-role" id="userRole">Loading...</span>
+                        </div>
+                        <div class="user-actions">
+                            <button class="btn btn-secondary" onclick="showUserProfile()" title="Profile">
+                                <i class="fas fa-user"></i>
+                            </button>
+                            <button class="btn btn-secondary" onclick="logout()" title="Logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="user-actions">
-                        <button class="btn btn-secondary" onclick="showUserProfile()" title="Profile">
-                            <i class="fas fa-user"></i>
-                        </button>
-                        <button class="btn btn-secondary" onclick="logout()" title="Logout">
-                            <i class="fas fa-sign-out-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Global Resource Search -->
-            <div class="header-search">
-                <div class="search-input-group">
-                    <i class="fas fa-search search-icon"></i>
-                    <input type="text" 
-                           id="globalSearchInput" 
-                           class="search-input" 
-                           placeholder="Search resources..."
-                           autocomplete="off">
-                    <button id="clearSearchBtn" class="clear-search-btn" style="display: none;" title="Clear">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                
-                <!-- Search Results Dropdown -->
-                <div id="searchResultsPanel" class="search-results-panel" style="display: none;">
-                    <div class="search-filters">
-                        <select id="searchSectionFilter" class="search-filter-select">
-                            <option value="">All Sections</option>
-                        </select>
-                        <select id="searchTypeFilter" class="search-filter-select">
-                            <option value="">All Types</option>
-                        </select>
-                        <span id="searchResultCount" class="search-result-count"></span>
-                    </div>
-                    <div id="searchResultsList" class="search-results-list">
-                        <!-- Results will be populated here -->
+                    
+                    <!-- Global Resource Search -->
+                    <div class="header-search">
+                        <div class="search-input-group">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" 
+                                   id="globalSearchInput" 
+                                   class="search-input" 
+                                   placeholder="Search resources..."
+                                   autocomplete="off">
+                            <button id="clearSearchBtn" class="clear-search-btn" style="display: none;" title="Clear">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Search Results Dropdown -->
+                        <div id="searchResultsPanel" class="search-results-panel" style="display: none;">
+                            <div class="search-filters">
+                                <select id="searchSectionFilter" class="search-filter-select">
+                                    <option value="">All Sections</option>
+                                </select>
+                                <select id="searchTypeFilter" class="search-filter-select">
+                                    <option value="">All Types</option>
+                                </select>
+                                <span id="searchResultCount" class="search-result-count"></span>
+                            </div>
+                            <div id="searchResultsList" class="search-results-list">
+                                <!-- Results will be populated here -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
