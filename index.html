@@ -216,10 +216,14 @@
 </head>
 <body>
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
-        <div style="text-align: center;">
-            <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
-            <h2>Loading Information Hub...</h2>
-            <p>Please wait while we verify your access.</p>
+        <div style="text-align: center; max-width: 400px; padding: 0 20px;">
+            <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+            <h2 id="loadingTitle" style="margin: 20px 0 10px;">Loading Information Hub...</h2>
+            <p id="loadingMessage" style="margin: 10px 0; opacity: 0.9;">Initializing...</p>
+            <div style="width: 100%; background: rgba(255,255,255,0.2); border-radius: 10px; height: 8px; margin: 20px auto; overflow: hidden;">
+                <div id="loadingBar" style="width: 10%; height: 100%; background: white; border-radius: 10px; transition: width 0.3s ease;"></div>
+            </div>
+            <p style="font-size: 12px; opacity: 0.7; margin-top: 10px;">Loading fresh data from database...</p>
         </div>
     </div>
     
@@ -249,7 +253,7 @@
                     </div>
                 </div>
             </div>
-            <div id="infoBar" class="info-bar" style="display:none;">
+            <div id="infoBar" class="info-bar" style="opacity:0; visibility:hidden;">
                 <i class="fas fa-bullhorn" aria-hidden="true"></i>
                 <div class="info-marquee">
                     <div id="infoBarTrack" class="info-marquee-track"></div>
@@ -688,17 +692,27 @@
     <script>
         console.log('navigateToSection function exists:', typeof window.navigateToSection);
         
+        // Helper function to update loading progress
+        window.updateLoadingProgress = function(message, progress) {
+            try {
+                const loadingMessage = document.getElementById('loadingMessage');
+                const loadingBar = document.getElementById('loadingBar');
+                if (loadingMessage && message) {
+                    loadingMessage.textContent = message;
+                    console.log('[Hub Loading]', message, progress ? `(${progress}%)` : '');
+                }
+                if (loadingBar && typeof progress === 'number') {
+                    loadingBar.style.width = Math.min(100, Math.max(0, progress)) + '%';
+                }
+            } catch (_) {}
+        };
+        
         // Wait for all scripts to load before initializing
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('=== DOMContentLoaded started ===');
-            // Immediately show UI to prevent loader from sticking if init takes long
-            try {
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-                if (mainContent) mainContent.style.display = 'block';
-            } catch (_) {}
+            
+            // Keep loading screen visible - show progress instead of hiding
+            window.updateLoadingProgress('Verifying authentication...', 20);
             
             // Ensure Supabase client exists even if ensureSupabaseClient isn't ready yet
             try {
@@ -725,31 +739,30 @@
             
             if (typeof window.informationHub === 'undefined') {
                 console.error('hub-script.js failed to load after waiting');
-                // Graceful fallback: hide overlay and load sections directly via Supabase
-                if (!window.DISABLE_FAILSAFES) try {
-                    const loadingScreen = document.getElementById('loadingScreen');
-                    const mainContent = document.getElementById('mainContent');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-                    if (mainContent) mainContent.style.display = 'block';
-                } catch (_) {}
+                window.updateLoadingProgress('Loading sections...', 60);
+                // Graceful fallback: load sections directly via Supabase
+                // Loading screen will be hidden by loadSectionsFromSupabase when data is ready
                 if (!window.DISABLE_FAILSAFES) {
                     try { await loadSectionsFromSupabase(); }
-                    catch (e) { console.error('Fallback section load failed:', e); }
+                    catch (e) { 
+                        console.error('Fallback section load failed:', e);
+                        // Only hide on error
+                        try {
+                            const loadingScreen = document.getElementById('loadingScreen');
+                            const mainContent = document.getElementById('mainContent');
+                            if (loadingScreen) loadingScreen.style.display = 'none';
+                            if (mainContent) mainContent.style.display = 'block';
+                        } catch (_) {}
+                    }
                 }
                 return;
             }
             
             console.log('hub-script.js loaded successfully');
+            window.updateLoadingProgress('Preparing interface...', 40);
             
-            // Show interface after scripts are ready
-            const loadingScreen = document.getElementById('loadingScreen');
-            const mainContent = document.getElementById('mainContent');
-            
-            if (!window.DISABLE_FAILSAFES) {
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                try { const hip = document.getElementById('hubInitProgress'); if (hip) hip.remove(); } catch(_) {}
-                if (mainContent) mainContent.style.display = 'block';
-            }
+            // Keep loading screen visible - it will be hidden when fresh data loads
+            // The updateMainHubSections function handles hiding the loading screen
             
             // Ensure a callable stub exists even before the real builder attaches
             // Advanced-only: do not override builder with any stub; rely on advanced builder export below
@@ -2009,8 +2022,14 @@
                     return `<span class="info-item"><strong>${safe(who)}</strong> ${safe(action)} ${resource ? `"${safe(resource)}" ` : ''}in <em>${safe(sectionLabel)}</em><span class="info-sep">•</span><span class="muted">${safe(when)}</span></span>`;
                 });
                 const items = (broadcastItem ? [broadcastItem] : []).concat(itemsFromActivities);
-                if (items.length === 0) { infoBar.style.display = 'none'; return; }
-                infoBar.style.display = 'flex';
+                if (items.length === 0) { 
+                    infoBar.style.opacity = '0'; 
+                    infoBar.style.visibility = 'hidden'; 
+                    return; 
+                }
+                // Fade in smoothly
+                infoBar.style.opacity = '1';
+                infoBar.style.visibility = 'visible';
                 // Duplicate items to enable seamless loop
                 const html = items.join('') + items.join('');
                 track.innerHTML = html;
@@ -6256,6 +6275,7 @@ Permissions:
                 console.log('[Hub] Initial load - hiding grid until fresh data arrives...');
                 hubGrid.style.opacity = '0';
                 hubGrid.style.pointerEvents = 'none';
+                window.updateLoadingProgress('Loading sections from database...', 50);
             }
             
             // Load sections from Supabase database (Supabase-only)
@@ -6268,6 +6288,9 @@ Permissions:
                     let sections = [];
                     const timestamp = Date.now(); // Cache buster
                     console.log(`[Hub] Fetching fresh sections data (timestamp: ${timestamp})...`);
+                    if (!hasCompletedFirstLoad) {
+                        window.updateLoadingProgress('Fetching fresh data...', 60);
+                    }
                     
                     try {
                         const resp = await window.supabaseClient
@@ -6277,6 +6300,9 @@ Permissions:
                         if (resp.error) throw resp.error;
                         sections = resp.data || [];
                         console.log(`[Hub] ✅ Loaded ${sections.length} sections from Supabase`);
+                        if (!hasCompletedFirstLoad) {
+                            window.updateLoadingProgress(`Processing ${sections.length} sections...`, 75);
+                        }
                     } catch (orderErr) {
                         console.warn('Order by config->order failed; retry without order', orderErr);
                         const resp2 = await window.supabaseClient
@@ -6285,6 +6311,9 @@ Permissions:
                         if (resp2.error) throw resp2.error;
                         sections = resp2.data || [];
                         console.log(`[Hub] ✅ Loaded ${sections.length} sections from Supabase (fallback)`);
+                        if (!hasCompletedFirstLoad) {
+                            window.updateLoadingProgress(`Processing ${sections.length} sections...`, 75);
+                        }
                     }
                     const rows = (Array.isArray(sections) ? sections : []).map(s => {
                         let cfg = s && s.config ? s.config : {};
@@ -6297,6 +6326,9 @@ Permissions:
                     visibleSections = rows
                         .filter(s => (s && s.config && s.config.visible === false) ? false : true)
                         .sort((a,b) => ((a && a.config && a.config.order) || 0) - ((b && b.config && b.config.order) || 0));
+                    if (!hasCompletedFirstLoad) {
+                        window.updateLoadingProgress('Rendering sections...', 85);
+                    }
                 }
             } catch (error) {
                 console.error('Error loading sections from Supabase:', error);
@@ -6308,12 +6340,30 @@ Permissions:
                 try {
                     hubGrid.innerHTML = '<div class="no-sections">No sections available. Please contact an administrator to add content.</div>';
                 } catch(_) {}
-                // Ensure overlay is hidden even when nothing to render
+                // Hide loading screen with smooth transition
                 try {
+                    window.updateLoadingProgress('Complete!', 100);
                     const loadingScreen = document.getElementById('loadingScreen');
                     const mainContent = document.getElementById('mainContent');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-                    if (mainContent) mainContent.style.display = 'block';
+                    
+                    // Smooth fade out of loading screen
+                    if (loadingScreen) {
+                        loadingScreen.style.transition = 'opacity 0.3s ease-out';
+                        loadingScreen.style.opacity = '0';
+                        setTimeout(() => {
+                            loadingScreen.style.display = 'none';
+                        }, 300);
+                    }
+                    
+                    // Smooth fade in of main content
+                    if (mainContent) {
+                        mainContent.style.display = 'block';
+                        mainContent.style.opacity = '0';
+                        mainContent.style.transition = 'opacity 0.3s ease-in';
+                        setTimeout(() => {
+                            mainContent.style.opacity = '1';
+                        }, 50);
+                    }
                 } catch (_) {}
                 // Mark sections load state globally (even if empty)
                 try { window.hubSections = []; window.hubSectionsLoaded = true; } catch(_) {}
@@ -6534,13 +6584,44 @@ Permissions:
             } else {
                 console.log('[Hub Update] Content unchanged, skipping DOM update to prevent flash');
             }
-            // Ensure the main UI is visible once content is ready
-            try {
-                const loadingScreen = document.getElementById('loadingScreen');
-                const mainContent = document.getElementById('mainContent');
-                if (loadingScreen) loadingScreen.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'block';
-            } catch (_) {}
+            
+            // Hide loading screen with smooth transition when content is ready
+            if (!hasCompletedFirstLoad) {
+                window.updateLoadingProgress('Complete!', 100);
+                try {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    const mainContent = document.getElementById('mainContent');
+                    
+                    // Smooth fade out of loading screen
+                    if (loadingScreen) {
+                        loadingScreen.style.transition = 'opacity 0.3s ease-out';
+                        loadingScreen.style.opacity = '0';
+                        setTimeout(() => {
+                            loadingScreen.style.display = 'none';
+                        }, 300);
+                    }
+                    
+                    // Smooth fade in of main content
+                    if (mainContent) {
+                        mainContent.style.display = 'block';
+                        mainContent.style.opacity = '0';
+                        mainContent.style.transition = 'opacity 0.3s ease-in';
+                        setTimeout(() => {
+                            mainContent.style.opacity = '1';
+                        }, 50);
+                    }
+                    
+                    // Show grid with fade in
+                    if (hubGrid) {
+                        hubGrid.style.transition = 'opacity 0.3s ease-in';
+                        hubGrid.style.opacity = '1';
+                        hubGrid.style.pointerEvents = 'auto';
+                    }
+                } catch (_) {}
+                
+                hasCompletedFirstLoad = true;
+                console.log('[Hub] ✅ First load complete - fresh data rendered');
+            }
             
             // Stats for currently built sections (non-blocking)
             try { if (typeof updateSectionStats === 'function') updateSectionStats(); } catch(_) {}
@@ -6770,6 +6851,7 @@ Permissions:
             min-height: 28px;
             width: 100%;
             max-width: 100%;
+            transition: opacity 0.6s ease-in-out, visibility 0.6s ease-in-out;
         }
         .info-bar i { color: #4CAF50; }
         .info-bar .muted { color: #888; }

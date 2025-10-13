@@ -131,8 +131,22 @@ class SectionManager {
 
     async init() {
         if (this._initStarted) return; this._initStarted = true;
+        
+        console.log('[Section] Initialization started - keeping loading screen visible until fresh data loads');
+        
+        // Update progress: verifying session
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Verifying session...', 30);
+        }
+        
         const ok = await this.validateSession();
         if (!ok) return;
+        
+        // Update progress: checking access
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Checking access permissions...', 40);
+        }
+        
         const allowed = await this.checkAccess();
         if (!allowed) {
             try {
@@ -141,18 +155,43 @@ class SectionManager {
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (contentEl) contentEl.style.display = 'block';
             } catch (_) {}
+            return;
         }
+        
         // Section session start
         this.sectionSessionStartMs = Date.now();
+        
+        // Load all data with loading screen visible
+        console.log('[Section] Loading fresh data from Supabase...');
+        
+        // Update progress: loading section data
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Loading section data...', 50);
+        }
+        
         // IDs are handled by Supabase; no local migrations
         await this.loadSectionData();
+        
+        // Update progress: loading configuration
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Loading configuration...', 65);
+        }
 		// Ensure config is loaded before first render
 		try { await this.ensureSectionConfigLoaded(); } catch (_) {}
 		// Do not auto-infer tabs from resources; show blank until configured in Supabase
         this.bindEvents();
+        
+        // Update progress: rendering UI
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Preparing interface...', 75);
+        }
+        
+        // Render UI with fresh data
         await this.renderDynamicUI();
+        
         // One-time fetch on init only; further updates are manual via Refresh
-        try { this._refreshSectionConfigFromDb(); } catch (_) {}
+        try { await this._refreshSectionConfigFromDb(); } catch (_) {}
+        
         // Ensure filters are cleared on entry to avoid stale search/category narrowing results
         try {
             const searchInput = document.getElementById('searchInput');
@@ -160,16 +199,45 @@ class SectionManager {
             if (searchInput) searchInput.value = '';
             if (categoryFilter) categoryFilter.value = '';
         } catch (_) {}
-        // Show content early to avoid spinner stuck on minor errors
-        const loadingEl = document.getElementById('loadingScreen');
-        const contentEl = document.getElementById('mainContent');
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (contentEl) contentEl.style.display = 'block';
+        
+        // Update progress: rendering content
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Rendering content...', 90);
+        }
+        
+        // Render current tab with fresh data
         try {
             this.renderCurrentTab();
         } catch (e) {
             console.error('Error rendering tab:', e);
         }
+        
+        // NOW show content - all fresh data is loaded and rendered
+        console.log('[Section] ✅ All fresh data loaded - showing content');
+        
+        // Update progress to complete
+        if (typeof window.updateSectionLoadingProgress === 'function') {
+            window.updateSectionLoadingProgress('Complete!', 100);
+        }
+        
+        const loadingEl = document.getElementById('loadingScreen');
+        const contentEl = document.getElementById('mainContent');
+        if (loadingEl) {
+            loadingEl.style.transition = 'opacity 0.3s ease-out';
+            loadingEl.style.opacity = '0';
+            setTimeout(() => {
+                loadingEl.style.display = 'none';
+            }, 300);
+        }
+        if (contentEl) {
+            contentEl.style.display = 'block';
+            contentEl.style.opacity = '0';
+            contentEl.style.transition = 'opacity 0.3s ease-in';
+            setTimeout(() => {
+                contentEl.style.opacity = '1';
+            }, 50);
+        }
+        
         // usage logging for resource clicks
         this.bindResourceClickLogging();
         this.setupSectionSessionLogging();
@@ -296,14 +364,12 @@ class SectionManager {
                     } catch (_) {}
                     sectionConfig = data;
                     console.log('Loaded section from Supabase (authoritative):', sectionConfig);
-                    // Apply config immediately so tabs render on first load
+                    // Store config but don't render yet - wait for init() to complete
                     try {
                         const cfgObj = (sectionConfig && sectionConfig.config && typeof sectionConfig.config === 'object') ? sectionConfig.config : null;
                         if (cfgObj) {
                             this.sectionConfig = cfgObj;
-                            // Render immediately without waiting for later refreshes
-                            try { await this.renderDynamicUI(); } catch (_) {}
-                            try { this.renderCurrentTab(); } catch (_) {}
+                            console.log('[Section] Config stored - deferring render until init completes');
                         }
                     } catch (_) {}
                 }
