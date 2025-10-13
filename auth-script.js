@@ -580,7 +580,8 @@ class AuthSystem {
         const role = String(profile.role || '').toLowerCase();
         const sections = Array.isArray(profile.permissions.sections) ? profile.permissions.sections : [];
         const editable = Array.isArray(profile.permissions.editableSections) ? profile.permissions.editableSections : [];
-        if (role === 'admin' || profile.permissions.canEditAllSections === true) return true;
+        // Check if user has edit-all permissions via flag, role, or wildcard
+        if (role === 'admin' || profile.permissions.canEditAllSections === true || editable.includes('*')) return true;
         return (!!sectionId && (editable.includes(sectionId) || sections.includes(sectionId)));
     }
 
