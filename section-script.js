@@ -366,8 +366,27 @@ class SectionManager {
                         .select('value')
                         .eq('key', 'backgrounds')
                         .single();
-                    const v = data && data.value;
-                    enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
+                    let v = data && data.value;
+                    // Parse if it's a string
+                    if (typeof v === 'string') {
+                        try {
+                            v = JSON.parse(v);
+                        } catch (_) {}
+                    }
+                    console.log('[BG] Debug - v:', v);
+                    console.log('[BG] Debug - v.forceEnabled:', v && v.forceEnabled);
+                    console.log('[BG] Debug - typeof v.forceEnabled:', v && typeof v.forceEnabled);
+                    
+                    // More robust check - handle string "true" or boolean true
+                    if (v && v.forceEnabled !== undefined && v.forceEnabled !== null) {
+                        if (typeof v.forceEnabled === 'boolean') {
+                            enabled = v.forceEnabled;
+                        } else if (typeof v.forceEnabled === 'string') {
+                            enabled = v.forceEnabled.toLowerCase() === 'true';
+                        } else {
+                            enabled = !!v.forceEnabled;
+                        }
+                    }
                     console.log('[BG] Enabled status from DB:', enabled, 'value:', v);
                 }
             } catch (err) { 
