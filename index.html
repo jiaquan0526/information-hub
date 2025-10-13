@@ -258,7 +258,34 @@
     </style>
 
 </head>
-<body class="initial-loading">
+<body class="initial-loading" style="overflow: hidden;">
+    <script>
+        // IMMEDIATE: Clear any cached content in the DOM before anything renders
+        (function() {
+            try {
+                // Force clear hub-grid if it exists and has cached content
+                const clearCached = () => {
+                    const grid = document.querySelector('.hub-grid');
+                    if (grid && grid.innerHTML.trim()) {
+                        console.log('[Instant Clear] Clearing cached hub-grid content');
+                        grid.innerHTML = '';
+                        grid.style.opacity = '0';
+                        grid.style.visibility = 'hidden';
+                    }
+                };
+                // Run immediately
+                clearCached();
+                // Run again after a tiny delay
+                setTimeout(clearCached, 1);
+            } catch(e) {
+                console.error('[Instant Clear] Error:', e);
+            }
+        })();
+    </script>
+    
+    <!-- INSTANT blocking overlay - covers everything immediately before CSS loads -->
+    <div id="instantBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 999999; display: flex; justify-content: center; align-items: center;"></div>
+    
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
         <div style="text-align: center; max-width: 400px; padding: 0 20px;">
             <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
@@ -1124,6 +1151,8 @@
             // Remove CSS blocking class on error
             try {
                 document.body.classList.remove('initial-loading');
+                const blocker = document.getElementById('instantBlocker');
+                if (blocker) blocker.remove();
             } catch (_) {}
             // Show content only on error - with smooth transition
             try {
@@ -1330,6 +1359,8 @@
                         // Remove CSS blocking class on failsafe timeout
                         try {
                             document.body.classList.remove('initial-loading');
+                            const blocker = document.getElementById('instantBlocker');
+                            if (blocker) blocker.remove();
                             console.log('[Failsafe] Removed initial-loading class');
                         } catch (_) {}
                         loadingScreen.style.transition = 'opacity 0.3s ease-out';
@@ -6446,6 +6477,8 @@ Permissions:
                     // Remove CSS blocking class
                     try {
                         document.body.classList.remove('initial-loading');
+                        const blocker = document.getElementById('instantBlocker');
+                        if (blocker) blocker.remove();
                         console.log('[Hub] Removed initial-loading class (empty state)');
                     } catch (_) {}
                 }
@@ -6697,6 +6730,9 @@ Permissions:
                 // Remove CSS blocking class to allow content to show
                 try {
                     document.body.classList.remove('initial-loading');
+                    // Remove instant blocker overlay
+                    const blocker = document.getElementById('instantBlocker');
+                    if (blocker) blocker.remove();
                     console.log('[Hub] Removed initial-loading class - content unblocked');
                 } catch (_) {}
             }

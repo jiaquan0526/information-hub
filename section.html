@@ -47,7 +47,29 @@
         }
     </style>
 </head>
-<body class="initial-loading">
+<body class="initial-loading" style="overflow: hidden;">
+    <script>
+        // IMMEDIATE: Clear any cached content in the DOM before anything renders
+        (function() {
+            try {
+                const clearCached = () => {
+                    const resources = document.querySelectorAll('.resource-card, [data-resource-id]');
+                    resources.forEach(el => {
+                        el.style.display = 'none';
+                        el.style.visibility = 'hidden';
+                    });
+                };
+                clearCached();
+                setTimeout(clearCached, 1);
+            } catch(e) {
+                console.error('[Instant Clear] Error:', e);
+            }
+        })();
+    </script>
+    
+    <!-- INSTANT blocking overlay - covers everything immediately -->
+    <div id="instantBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 999999;"></div>
+    
     <div id="loadingScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
         <div style="text-align: center; max-width: 400px; padding: 0 20px;">
             <div style="border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
@@ -191,6 +213,8 @@
                     // Remove CSS blocking class on failsafe timeout
                     try {
                         document.body.classList.remove('initial-loading');
+                        const blocker = document.getElementById('instantBlocker');
+                        if (blocker) blocker.remove();
                         console.log('[Section Failsafe] Removed initial-loading class');
                     } catch (_) {}
                     loading.style.transition = 'opacity 0.3s ease-out';

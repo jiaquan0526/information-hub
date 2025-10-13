@@ -152,6 +152,8 @@ class SectionManager {
             try {
                 // Remove CSS blocking class even on access denied
                 document.body.classList.remove('initial-loading');
+                const blocker = document.getElementById('instantBlocker');
+                if (blocker) blocker.remove();
                 const loadingEl = document.getElementById('loadingScreen');
                 const contentEl = document.getElementById('mainContent');
                 if (loadingEl) loadingEl.style.display = 'none';
@@ -225,6 +227,8 @@ class SectionManager {
         // Remove CSS blocking class to allow content to show
         try {
             document.body.classList.remove('initial-loading');
+            const blocker = document.getElementById('instantBlocker');
+            if (blocker) blocker.remove();
             console.log('[Section] Removed initial-loading class - content unblocked');
         } catch (_) {}
         
