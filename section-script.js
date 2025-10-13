@@ -354,7 +354,7 @@ class SectionManager {
             introEl.style.display = intro ? 'block' : 'none';
         }
 
-        // Apply persistent background image per section (deterministic and global-seed based)
+        // Apply persistent background image per section (SAME as hub page card)
         try {
             // Determine enablement via Supabase only
             let enabled = false;
@@ -368,71 +368,96 @@ class SectionManager {
                     const v = data && data.value;
                     enabled = !!(v && (v.forceEnabled === true || String(v.forceEnabled).toLowerCase() === 'true'));
                 }
-            } catch (_) { enabled = false; }
-            const disable = !enabled;
+            } catch (_) { 
+                enabled = false; 
+            }
+            
+            if (!enabled) return;
+            
             const container = document.querySelector('.container');
-            // Deterministic list built from manifest, filtered and sorted
-            const loadImages = async () => {
-                try {
-                    const bust = Date.now();
-                    const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
-                    if (resp && resp.ok) {
-                        const data = await resp.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            return data.map(p => `background-pic/${p}`).sort();
-                        }
+            if (!container) return;
+            
+            // Step 1: Try to get the SAME background image assigned to this section's card on hub page
+            let assignedImage = null;
+            try {
+                if (window.supabaseClient && window.supabaseClient.from) {
+                    const { data } = await window.supabaseClient
+                        .from('section_backgrounds')
+                        .select('image_url')
+                        .eq('section_id', this.currentSection)
+                        .maybeSingle();
+                    if (data && data.image_url) {
+                        assignedImage = data.image_url;
                     }
-                } catch (_) {}
-                // No background images if manifest is missing or empty
-                return [];
-            };
-            const images = await loadImages();
-            if (container && Array.isArray(images) && images.length > 0) {
-                container.style.borderRadius = '12px';
-                container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
-                const applyBg = async () => {
-                    try {
-                        // Skip on user-disabled or low-data connections
-                        try {
-                            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                            if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
-                        } catch (_) {}
-                        if (disable) return;
-                        // Use a session-only seed to pick within this load (no persistence)
-                        const seed = (typeof window.BG_SESSION_SEED === 'string' && window.BG_SESSION_SEED.length > 0)
-                            ? window.BG_SESSION_SEED
-                            : (window.BG_SESSION_SEED = String(Date.now()) + ':' + Math.random());
-                        const idx = Math.abs(this._hash(`${seed}|${this.currentSection}`)) % images.length;
-                        const chosen = images[idx];
-                        // Prefer WebP if available using the hub page helper when present
-                        let finalUrl = chosen;
-                        try {
-                            if (typeof window.getOptimizedImageUrl === 'function') {
-                                // Resize/convert via online proxy before applying (with fallback)
-                                const cand = await window.getOptimizedImageUrl(chosen, 1600, 0, 0.8);
-                                if (cand && cand !== chosen) {
-                                    const ok = await new Promise((resolve)=>{
-                                        try {
-                                            const t = new Image();
-                                            t.onload = () => resolve(true);
-                                            t.onerror = () => resolve(false);
-                                            t.src = cand;
-                                        } catch(_) { resolve(false); }
-                                    });
-                                    if (ok) finalUrl = cand;
-                                }
-                            }
-                        } catch (_) {}
-                        container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${finalUrl}')`;
-                        container.style.backgroundSize = 'cover';
-                        container.style.backgroundPosition = 'center';
-                    } catch(_) {}
-                };
-                if ('requestIdleCallback' in window) {
-                    requestIdleCallback(applyBg, { timeout: 1200 });
-                } else {
-                    setTimeout(applyBg, 200);
                 }
+            } catch (_) {}
+            
+            // Step 2: If no assigned image, use deterministic selection (fallback)
+            let finalUrl = assignedImage;
+            if (!finalUrl) {
+                const loadImages = async () => {
+                    try {
+                        const bust = Date.now();
+                        const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                        if (resp && resp.ok) {
+                            const data = await resp.json();
+                            if (Array.isArray(data) && data.length > 0) {
+                                return data.map(p => `background-pic/${p}`).sort();
+                            }
+                        }
+                    } catch (_) {}
+                    return [];
+                };
+                const images = await loadImages();
+                if (images.length > 0) {
+                    // Use deterministic selection based on section ID
+                    const idx = Math.abs(this._hash(this.currentSection)) % images.length;
+                    finalUrl = images[idx];
+                }
+            }
+            
+            if (!finalUrl) return;
+            
+            // Apply the background
+            container.style.borderRadius = '12px';
+            container.style.backgroundImage = 'linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92))';
+            
+            const applyBg = async () => {
+                try {
+                    // Skip on low-data connections
+                    try {
+                        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                        if (conn && (conn.saveData === true || (conn.effectiveType && /(^|\b)(2g|slow-2g)\b/i.test(conn.effectiveType)))) return;
+                    } catch (_) {}
+                    
+                    // Prefer WebP if available using the hub page helper when present
+                    let optimizedUrl = finalUrl;
+                    try {
+                        if (typeof window.getOptimizedImageUrl === 'function') {
+                            const cand = await window.getOptimizedImageUrl(finalUrl, 1600, 0, 0.8);
+                            if (cand && cand !== finalUrl) {
+                                const ok = await new Promise((resolve)=>{
+                                    try {
+                                        const t = new Image();
+                                        t.onload = () => resolve(true);
+                                        t.onerror = () => resolve(false);
+                                        t.src = cand;
+                                    } catch(_) { resolve(false); }
+                                });
+                                if (ok) optimizedUrl = cand;
+                            }
+                        }
+                    } catch (_) {}
+                    container.style.backgroundImage = `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url('${optimizedUrl}')`;
+                    container.style.backgroundSize = 'cover';
+                    container.style.backgroundPosition = 'center';
+                } catch(_) {}
+            };
+            
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(applyBg, { timeout: 1200 });
+            } else {
+                setTimeout(applyBg, 200);
             }
         } catch (_) {}
     }
