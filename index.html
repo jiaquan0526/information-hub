@@ -6277,7 +6277,7 @@ Permissions:
                     const currentUrl = card.getAttribute('data-bg-url') || '';
                     if (currentUrl === img) return;
                 } catch(_) {}
-                card.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('${img}')`;
+                card.style.backgroundImage = `url('${img}')`;
                 card.style.backgroundSize = 'cover';
                 card.style.backgroundPosition = 'center';
                 card.style.backgroundRepeat = 'no-repeat';

@@ -464,20 +464,65 @@ body {
     border: 0; /* avoid side halos by removing transparent border */
 }
 
+/* Background image wrapper for zoom effect */
+.hub-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: inherit;
+    background-size: inherit;
+    background-position: inherit;
+    background-repeat: inherit;
+    transition: transform 0.5s ease, opacity 0.3s ease;
+    z-index: 0;
+    opacity: 1;
+}
+
 .hub-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 0; /* hide top bar placeholder */
-    background: transparent;
+    bottom: 0;
+    background: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35));
+    z-index: 1;
+    transition: background 0.3s ease;
+    pointer-events: none;
 }
 
 .hub-card:hover {
     transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     border-color: transparent; /* remove green outline on hover */
+}
+
+/* Brighten overlay on hover */
+.hub-card:hover::before {
+    background: linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25));
+}
+
+/* Zoom effect on background image when hovering */
+.hub-card:hover::after {
+    transform: scale(1.1);
+}
+
+.card-header {
+    position: relative;
+    z-index: 2;
+}
+
+.card-title {
+    position: relative;
+    z-index: 2;
+}
+
+.card-intro {
+    position: relative;
+    z-index: 2;
 }
 
 .card-icon {
@@ -485,6 +530,8 @@ body {
     color: #4CAF50;
     margin-bottom: 20px;
     text-align: center;
+    position: relative;
+    z-index: 2;
 }
 
 .hub-card h3 {
@@ -493,6 +540,8 @@ body {
     color: #2c3e50;
     margin-bottom: 15px;
     text-align: center;
+    position: relative;
+    z-index: 2;
 }
 
 .hub-card p {
@@ -500,6 +549,8 @@ body {
     margin-bottom: 25px;
     text-align: center;
     line-height: 1.6;
+    position: relative;
+    z-index: 2;
 }
 
 /* When a background image is applied, avoid white halo on rounded corners */
@@ -513,6 +564,11 @@ body {
     border: 0;
 }
 
+/* For cards without background images, add subtle scale effect */
+.hub-card:not(.bg-ready):hover {
+    transform: translateY(-8px) scale(1.02);
+}
+
 .card-stats {
     display: flex;
     justify-content: space-around;
@@ -520,6 +576,8 @@ body {
     gap: 15px;
     margin-top: 20px;
     padding-top: 20px;
+    position: relative;
+    z-index: 2;
     border-top: 1px solid #eee;
 }
 
