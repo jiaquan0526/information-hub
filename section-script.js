@@ -1733,21 +1733,21 @@ class SectionManager {
         if (customizeBtn) {
             customizeBtn.style.display = this.canCustomizeSection() ? 'inline-flex' : 'none';
         }
-				// Build visible types from tabs + tab_names; robust fallbacks when config is partial
-			const cfg = this.sectionConfig || {};
-			const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
-			const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
-			const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
-			const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
-			let visibleTypes = [];
-			if (tabsArr.length > 0) {
-				visibleTypes = tabsArr.map((rawId, i) => {
-					const id = String(rawId || '').trim();
-					const base = typesById.get(id) || {};
-					const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
-					const icon = String(base.icon || '').trim();
-					return { id, name, icon };
-				}).filter(t => t.id);
+		// Build visible types from tabs + tab_names; robust fallbacks when config is partial
+		const cfg = this.sectionConfig || {};
+		const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
+		const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
+		const typesArr = Array.isArray(cfg.types) ? cfg.types : [];
+		const typesById = new Map(typesArr.map(t => [String(t?.id || '').trim(), t]));
+		let visibleTypes = [];
+		if (tabsArr.length > 0) {
+			visibleTypes = tabsArr.map((rawId, i) => {
+				const id = String(rawId || '').trim();
+				const base = typesById.get(id) || {};
+				const name = String((tabNames[i] !== undefined && tabNames[i] !== null && String(tabNames[i]).trim()) ? tabNames[i] : (base.name || id)).trim();
+				const icon = String(base.icon || '').trim();
+				return { id, name, icon };
+			}).filter(t => t.id);
 			} else {
 				// Fallback 1: configured types
 				visibleTypes = (typesArr || [])
@@ -1767,31 +1767,31 @@ class SectionManager {
 					}).filter(Boolean);
 				}
 			}
-			// Render tabs
-			const tabs = document.getElementById('navTabs');
-			if (tabs) {
-				if (visibleTypes.length === 0) {
-					tabs.innerHTML = '';
-					this.currentTab = '';
-				} else {
-					// Fetch counts for all visible types in parallel
-					const countsPromises = visibleTypes.map(t => this.getResourceCount(t.id).catch(() => 0));
-					const counts = await Promise.all(countsPromises);
-					
-					tabs.innerHTML = visibleTypes.map((t, idx) => {
-						const active = (idx === 0 ? 'active' : '');
-						const iconCls = this.normalizeIconClass(t.icon || '');
-						const count = counts[idx] || 0;
-						return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
-							<i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)} <span class="tab-count">(${count})</span>
-						</div>`;
-					}).join('');
-					// set default current tab to first visible type if none selected
-					if (!this.currentTab && visibleTypes[0]) {
-						this.currentTab = visibleTypes[0].id;
-					}
+		// Render tabs
+		const tabs = document.getElementById('navTabs');
+		if (tabs) {
+			if (visibleTypes.length === 0) {
+				tabs.innerHTML = '';
+				this.currentTab = '';
+			} else {
+				// Fetch counts for all visible types in parallel
+				const countsPromises = visibleTypes.map(t => this.getResourceCount(t.id).catch(() => 0));
+				const counts = await Promise.all(countsPromises);
+				
+				tabs.innerHTML = visibleTypes.map((t, idx) => {
+					const active = (idx === 0 ? 'active' : '');
+					const iconCls = this.normalizeIconClass(t.icon || '');
+					const count = counts[idx] || 0;
+					return `<div class="nav-tab ${active}" onclick="switchTab('${t.id}')">
+						<i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)} <span class="tab-count">(${count})</span>
+					</div>`;
+				}).join('');
+				// set default current tab to first visible type if none selected
+				if (!this.currentTab && visibleTypes[0]) {
+					this.currentTab = visibleTypes[0].id;
 				}
 			}
+		}
         // Render category filter (normalize values and preserve selection)
         const catSel = document.getElementById('categoryFilter');
         if (catSel) {
