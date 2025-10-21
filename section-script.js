@@ -1080,11 +1080,7 @@ class SectionManager {
                     <div class="form-group">
                         <label for="resourceCategory">Category</label>
                         <select id="resourceCategory" name="category">
-                            <option value="process">Process</option>
-                            <option value="procedure">Procedure</option>
-                            <option value="guide">Guide</option>
-                            <option value="template">Template</option>
-                            <option value="checklist">Checklist</option>
+                            ${this.getCategoryOptions()}
                         </select>
                     </div>
                     <div class="form-group">
@@ -1226,11 +1222,7 @@ class SectionManager {
                     <div class="form-group">
                         <label for="editResourceCategory">Category</label>
                         <select id="editResourceCategory" name="category">
-                            <option value="process" ${resource.category === 'process' ? 'selected' : ''}>Process</option>
-                            <option value="procedure" ${resource.category === 'procedure' ? 'selected' : ''}>Procedure</option>
-                            <option value="guide" ${resource.category === 'guide' ? 'selected' : ''}>Guide</option>
-                            <option value="template" ${resource.category === 'template' ? 'selected' : ''}>Template</option>
-                            <option value="checklist" ${resource.category === 'checklist' ? 'selected' : ''}>Checklist</option>
+                            ${this.getCategoryOptions(resource.category)}
                         </select>
                     </div>
                     <div class="form-group">
@@ -1490,6 +1482,34 @@ class SectionManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    getCategoryOptions(selectedCategory = '') {
+        // Get categories from section config, or use defaults if none configured
+        const cfg = this.sectionConfig || {};
+        const categories = Array.isArray(cfg.categories) && cfg.categories.length > 0 
+            ? cfg.categories 
+            : ['process', 'procedure', 'guide', 'template', 'checklist'];
+        
+        // Normalize the selected category for comparison
+        const normalizedSelected = String(selectedCategory || '').trim().toLowerCase();
+        
+        // Generate options with proper capitalization
+        const options = categories.map(cat => {
+            const catValue = String(cat || '').trim();
+            const catLower = catValue.toLowerCase();
+            const catLabel = catValue.charAt(0).toUpperCase() + catValue.slice(1);
+            const selected = catLower === normalizedSelected ? ' selected' : '';
+            return `<option value="${this.escapeHtml(catValue)}"${selected}>${this.escapeHtml(catLabel)}</option>`;
+        });
+        
+        // If the selected category is not in the list, add it as the first option
+        if (normalizedSelected && !categories.some(c => String(c || '').trim().toLowerCase() === normalizedSelected)) {
+            const catLabel = selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1);
+            options.unshift(`<option value="${this.escapeHtml(selectedCategory)}" selected>${this.escapeHtml(catLabel)}</option>`);
+        }
+        
+        return options.join('');
     }
 
     showMessage(message, type) {
