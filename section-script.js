@@ -1980,27 +1980,17 @@ class SectionManager {
         // Seed existing types
         (cfg.types || []).filter(t => !t.hidden).forEach(t => typeList.appendChild(makeRow(t)));
 
-        // Local normalizer to ensure consistent IDs and detect collisions
+        // No normalization - use type ID exactly as entered
         const normalizeTypeIdLocal = (raw) => {
-            try {
-                let t = String(raw || '').toLowerCase().trim();
-                t = t.replace(/\s+/g, '-');
-                t = t.replace(/_/g, '-');
-                // Collapse repeats and strip invalids
-                t = t.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                // Canonicalize built-ins and common synonyms
-                if (t === 'playbook') t = 'playbooks';
-                if (t === 'boxlink' || t === 'box-links' || t === 'boxlinks' || t === 'box') t = 'box-links';
-                if (t === 'dashboard') t = 'dashboards';
-                return t;
-            } catch (_) { return String(raw || '').toLowerCase().trim(); }
+            // Just trim whitespace, no other normalization
+            return String(raw || '').trim();
         };
 
         modal.querySelector('#addTypeBtn').addEventListener('click', () => {
             // Suggest a unique ID automatically
             try {
                 const existingIds = Array.from(typeList.querySelectorAll('.type-row .type-id'))
-                    .map(inp => normalizeTypeIdLocal(inp.value || ''))
+                    .map(inp => String(inp.value || '').trim())
                     .filter(Boolean);
                 let idx = 1;
                 let candidate = 'type';
@@ -2018,7 +2008,7 @@ class SectionManager {
 			modal.querySelector('#saveCfgBtn').addEventListener('click', async () => {
             // Collect rows in UI order
             const rows = Array.from(typeList.querySelectorAll('.type-row'));
-            // Normalize and build last-wins dedup by id while preserving final order
+            // Build last-wins dedup by id while preserving final order (no normalization)
             const normalized = rows.map((r, idx) => ({
                 rawId: String(r.querySelector('.type-id')?.value || '').trim(),
                 name: String(r.querySelector('.type-name')?.value || '').trim(),
@@ -2028,7 +2018,7 @@ class SectionManager {
             const lastIndexById = new Map();
             const rowById = new Map();
             normalized.forEach(t => {
-                const id = normalizeTypeIdLocal(t.rawId);
+                const id = t.rawId;  // Use raw ID as-is, no normalization
                 lastIndexById.set(id, t.idx);
                 rowById.set(id, { id, name: t.name, icon: t.icon });
             });
