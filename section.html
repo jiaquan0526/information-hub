@@ -20,6 +20,10 @@
     
     <style>
         /* CRITICAL: Nuclear option - hide EVERYTHING except loading screen */
+        body.initial-loading {
+            overflow: hidden !important;
+        }
+        
         body.initial-loading > *:not(#loadingScreen) {
             display: none !important;
             visibility: hidden !important;
@@ -47,7 +51,7 @@
         }
     </style>
 </head>
-<body class="initial-loading" style="overflow: hidden;">
+<body class="initial-loading">
     <script>
         // IMMEDIATE: Clear any cached content in the DOM before anything renders
         (function() {
