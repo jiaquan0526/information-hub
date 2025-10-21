@@ -553,6 +553,75 @@ body {
     z-index: 2;
 }
 
+/* Card intro text with smooth transitions */
+.card-intro {
+    overflow: hidden;
+    transition: all 0.3s ease;
+    max-height: 4.8em; /* ~3 lines at 1.6 line-height */
+}
+
+.card-intro .intro-text {
+    display: inline;
+    transition: all 0.3s ease;
+}
+
+/* Read more indicator */
+.read-more-indicator {
+    color: #4CAF50;
+    font-weight: 600;
+    margin-left: 4px;
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.hub-card:hover .read-more-indicator {
+    opacity: 1;
+    animation: none;
+}
+
+/* Subtle pulse animation for read-more indicator */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.8;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Expanded text state */
+.hub-card.text-expanded .card-intro {
+    max-height: 20em; /* Allow more text to show */
+}
+
+/* Subtle zoom-out effect when text is expanded */
+.hub-card.has-long-text.text-expanded {
+    transform: translateY(-8px) scale(1.03);
+}
+
+/* For cards with backgrounds and long text */
+.hub-card.has-long-text.bg-ready .card-intro {
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    font-weight: 500;
+}
+
+.hub-card.has-long-text.bg-ready h3 {
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.hub-card.has-long-text.bg-ready .read-more-indicator {
+    color: #8BC34A;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* For cards with background, ensure text remains readable when expanded */
+.hub-card.bg-ready .card-intro {
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
 /* When a background image is applied, avoid white halo on rounded corners */
 .hub-card.bg-ready {
     background-color: #0e0f10; /* dark base under transparent gradient to prevent white outlines */
@@ -1150,6 +1219,16 @@ form {
     
     .hub-card {
         padding: 20px;
+    }
+    
+    /* Reduce text expansion height on mobile */
+    .hub-card.text-expanded .card-intro {
+        max-height: 15em;
+    }
+    
+    /* Reduce zoom effect on mobile for better fit */
+    .hub-card.has-long-text.text-expanded {
+        transform: translateY(-5px) scale(1.02);
     }
     
     .card-stats {

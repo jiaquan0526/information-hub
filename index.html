@@ -6759,13 +6759,20 @@ Permissions:
                         return `<span><i class="${iconClass}"></i> <span id="${safeId}">0</span> ${escapeHtml(label)}</span>`;
                     }).join(' ');
                     
+                    const fullIntro = escapeHtml(section.intro || '');
+                    const truncatedIntro = escapeHtml(truncate(section.intro || '', 120));
+                    const hasLongText = (section.intro || '').length > 120;
+                    
                     const cardHTML = `
-                <div class="hub-card" id="card-${section.id}" data-section-id="${section.id}" onclick="navigateToSection('${section.id}')">
+                <div class="hub-card ${hasLongText ? 'has-long-text' : ''}" id="card-${section.id}" data-section-id="${section.id}" data-full-intro="${fullIntro.replace(/"/g, '&quot;')}" onclick="navigateToSection('${section.id}')">
                     <div class="card-header">
                         <div class="card-icon"><i class="${escapeHtml(section.icon || 'fas fa-th-large')}"></i></div>
                         <div class="card-title">
                             <h3>${escapeHtml(section.name || prettyName(section.id))}</h3>
-                            <p class="card-intro">${escapeHtml(truncate(section.intro || '', 120))}</p>
+                            <p class="card-intro">
+                                <span class="intro-text">${truncatedIntro}</span>
+                                ${hasLongText ? '<span class="read-more-indicator">...</span>' : ''}
+                            </p>
                         </div>
                     </div>
                     <div class="card-stats" id="${section.id}-stats">${statsHTML}</div>
@@ -6803,6 +6810,30 @@ Permissions:
                         }, 10);
                         isInitialLoad = false;
                     }
+                    
+                    // Add hover effect for long text expansion
+                    setTimeout(() => {
+                        const cards = document.querySelectorAll('.hub-card.has-long-text');
+                        cards.forEach(card => {
+                            const introElement = card.querySelector('.card-intro .intro-text');
+                            const fullIntro = card.getAttribute('data-full-intro') || '';
+                            const truncatedIntro = introElement ? introElement.innerHTML : '';
+                            
+                            card.addEventListener('mouseenter', () => {
+                                if (introElement && fullIntro) {
+                                    introElement.innerHTML = fullIntro;
+                                    card.classList.add('text-expanded');
+                                }
+                            });
+                            
+                            card.addEventListener('mouseleave', () => {
+                                if (introElement && truncatedIntro) {
+                                    introElement.innerHTML = truncatedIntro;
+                                    card.classList.remove('text-expanded');
+                                }
+                            });
+                        });
+                    }, 20);
                 } catch (e) {
                     console.error('Hub grid update failed; not rendering minimal fallback. Investigate error:', e);
                 }
