@@ -16,21 +16,21 @@ class SectionManager {
             if (!window.supabaseClient) return;
             const secId = this.currentSection;
             for (const t of (types || [])) {
-                const uiId = String(t.id || '').toLowerCase();
-                const dbType = this._mapUiTypeToDbType(uiId);
+                // No normalization - use type ID exactly as it appears in section config
+                const typeId = String(t.id || '').trim();
                 const { count, error } = await window.supabaseClient
                     .from('resources')
                     .select('*', { count: 'exact', head: true })
                     .eq('section_id', secId)
-                    .eq('type', dbType);
+                    .eq('type', typeId);
                 if (error) continue;
                 if (!count || count === 0) {
                     const sectionNameEl = document.getElementById('sectionName');
                     const sectionName = (sectionNameEl && sectionNameEl.textContent) ? sectionNameEl.textContent.trim() : secId;
-                    const typeName = String(t.name || t.id || uiId).trim();
+                    const typeName = String(t.name || t.id || typeId).trim();
                     const payload = {
                         section_id: secId,
-                        type: dbType,
+                        type: typeId,  // Save type as-is from config
                         title: `${typeName} example` ,
                         description: '',
                         url: 'https://example.com',
@@ -813,38 +813,36 @@ class SectionManager {
     }
 
     async getResources(type) {
-        const uiType = this.mapToStorageType(type);
-        const dbType = this._mapUiTypeToDbType(uiType);
+        // No normalization - use type ID exactly as it appears in section config
         if (!window.supabaseClient) return [];
         try {
             const timestamp = Date.now(); // Cache buster reference
-            console.log(`[Section] Fetching fresh ${dbType} resources from Supabase (timestamp: ${timestamp})...`);
+            console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
             const { data, error } = await window.supabaseClient
                 .from('resources')
                 .select('*, sections(name)')
                 .eq('section_id', this.currentSection)
-                .eq('type', dbType)
+                .eq('type', type)
                 .order('created_at', { ascending: false });
             if (error) throw error;
             const list = Array.isArray(data) ? data : [];
-            console.log(`[Section] ✅ Loaded ${list.length} fresh ${dbType} resources from Supabase`);
-            return list.map(r => this._normalizeResourceRow(r, uiType));
+            console.log(`[Section] ✅ Loaded ${list.length} fresh ${type} resources from Supabase`);
+            return list.map(r => this._normalizeResourceRow(r, type));
         } catch (err) { 
-            console.warn(`[Section] Failed to load ${dbType} resources:`, err);
+            console.warn(`[Section] Failed to load ${type} resources:`, err);
             return []; 
         }
     }
 
     async getResourceCount(type) {
-        const uiType = this.mapToStorageType(type);
-        const dbType = this._mapUiTypeToDbType(uiType);
+        // No normalization - use type ID exactly as it appears in section config
         if (!window.supabaseClient) return 0;
         try {
             const { count, error } = await window.supabaseClient
                 .from('resources')
                 .select('*', { count: 'exact', head: true })
                 .eq('section_id', this.currentSection)
-                .eq('type', dbType);
+                .eq('type', type);
             if (error) throw error;
             return count || 0;
         } catch (_) { return 0; }
@@ -864,7 +862,7 @@ class SectionManager {
     }
 
     createResourceCard(resource, type) {
-        const storageType = this.mapToStorageType(type);
+        // No normalization - use type ID exactly as it appears in section config
         const cfg = this.sectionConfig || {};
         const tabsArr = Array.isArray(cfg.tabs) ? cfg.tabs : [];
         const tabNames = Array.isArray(cfg.tab_names) ? cfg.tab_names : [];
@@ -874,7 +872,9 @@ class SectionManager {
         const base = typesById.get(String(type || '').trim()) || {};
         const displayName = (idx >= 0 && tabNames[idx] && String(tabNames[idx]).trim()) ? String(tabNames[idx]).trim() : (base.name || type || '');
         const label = String(displayName || type || '').toUpperCase();
-        const iconClass = (base && base.icon) ? this.normalizeIconClass(base.icon) : (storageType === 'playbooks' ? 'fas fa-book' : storageType === 'boxLinks' ? 'fas fa-link' : storageType === 'dashboards' ? 'fas fa-chart-bar' : 'fas fa-folder');
+        // Get icon from config or use default based on type name (no normalization)
+        const typeStr = String(type || '').toLowerCase();
+        const iconClass = (base && base.icon) ? this.normalizeIconClass(base.icon) : (typeStr.includes('playbook') ? 'fas fa-book' : typeStr.includes('link') ? 'fas fa-link' : typeStr.includes('dashboard') ? 'fas fa-chart-bar' : 'fas fa-folder');
 
         const canEdit = this.canEditResource() && (this.isAdmin() || this.isResourceOwner(resource));
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
@@ -1134,7 +1134,7 @@ class SectionManager {
             return false;
         }
         // Log content creation
-        try { this.logContentActivity('created', this.mapToStorageType(type), resource.title); } catch(_) {}
+        try { this.logContentActivity('created', type, resource.title); } catch(_) {}
         await this.renderDynamicUI(); // Update tab counts
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} added successfully!`, 'success');
@@ -1143,13 +1143,12 @@ class SectionManager {
 
     async addResourceToSection(type, resource) {
         try {
-            const uiType = this.mapToStorageType(type);
-            const dbType = this._mapUiTypeToDbType(uiType);
+            // No normalization - use type ID exactly as it appears in section config
             if (!window.supabaseClient) throw new Error('Supabase unavailable');
             // Enrich with display fields for easier joins/use
             const payload = {
                 section_id: this.currentSection,
-                type: dbType,
+                type: type,  // Save type as-is from config
                 title: resource.title,
                 description: resource.description || '',
                 url: resource.url,
@@ -1158,7 +1157,7 @@ class SectionManager {
             };
             const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
             if (error) throw error;
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType: uiType });
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType: type });
             return true;
         } catch (error) {
             console.error('Error saving resource:', error);
@@ -1317,7 +1316,7 @@ class SectionManager {
 
         await this.updateResourceInSection(type, original.id || id, updatedResource, original);
         // Log content update
-        try { this.logContentActivity('updated', this.mapToStorageType(type), updatedResource.title); } catch(_) {}
+        try { this.logContentActivity('updated', type, updatedResource.title); } catch(_) {}
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} updated successfully!`, 'success');
         return true;
@@ -1359,7 +1358,7 @@ class SectionManager {
 
     async updateResourceInSection(type, id, updatedResource, original) {
         try {
-            const uiType = this.mapToStorageType(type);
+            // No normalization - use type ID exactly as it appears in section config
             const payload = {
                 title: updatedResource.title,
                 description: updatedResource.description || '',
@@ -1373,7 +1372,7 @@ class SectionManager {
                 .update(payload)
                 .eq('id', id);
             if (error) throw error;
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType: uiType });
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'update', resourceType: type });
             return true;
         } catch (error) {
             console.error('Error updating resource:', error);
@@ -1400,7 +1399,7 @@ class SectionManager {
         const ok = await this.removeResourceFromSection(type, id);
         if (!ok) return;
         // Log content deletion (use original resource title if available)
-        try { this.logContentActivity('deleted', this.mapToStorageType(type), resource?.title || ''); } catch(_) {}
+        try { this.logContentActivity('deleted', type, resource?.title || ''); } catch(_) {}
         await this.renderDynamicUI(); // Update tab counts
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} deleted successfully!`, 'success');
@@ -1408,14 +1407,14 @@ class SectionManager {
 
     async removeResourceFromSection(type, id) {
         try {
-            const uiType = this.mapToStorageType(type);
+            // No normalization - use type ID exactly as it appears in section config
             if (!window.supabaseClient) throw new Error('Supabase unavailable');
             const { error } = await window.supabaseClient
                 .from('resources')
                 .delete()
                 .eq('id', id);
             if (error) throw error;
-            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType: uiType });
+            this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'delete', resourceType: type });
             return true;
         } catch (error) {
             console.error('Error deleting resource:', error);

@@ -1518,8 +1518,13 @@
                             console.log('Hub received sync message:', msg);
                             // If section customized or returning from section view, rebuild cards to reflect new tabs
                             if (msg.type === 'SECTION_CUSTOMIZE' || msg.type === 'NAV_BACK') {
-                                try { updateMainHubSections(); } catch(_) {}
+                                try { 
+                                    updateMainHubSections(); 
+                                    // After rebuilding cards, update stats to show correct counts
+                                    setTimeout(() => updateSectionStats(), 100);
+                                } catch(_) {}
                             } else {
+                                // For RESOURCE_CHANGE and other events, just update stats
                                 updateSectionStats();
                             }
                             try { rotateInfoBar(); } catch(_) {}
@@ -1967,13 +1972,13 @@
                 // Query Supabase counts per type
                 await Promise.all(typesList.map(async (tid) => {
                     if (!window.supabaseClient) { updateCountDom(sectionId, tid, 0); return; }
-                    const dbType = String(tid || '').trim();
+                    // No normalization - use type ID exactly as saved in Supabase config
                     try {
                         const { count, error } = await window.supabaseClient
                             .from('resources')
                             .select('*', { count: 'exact', head: true })
                             .eq('section_id', sectionId)
-                            .ilike('type', dbType);
+                            .eq('type', tid);  // Exact match with type ID from config
                         if (error) throw error;
                         updateCountDom(sectionId, tid, count || 0);
                     } catch (_) {
