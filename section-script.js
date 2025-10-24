@@ -820,7 +820,7 @@ class SectionManager {
             console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
             const { data, error } = await window.supabaseClient
                 .from('resources')
-                .select('*, sections(name)')
+                .select('*, sections(name), profiles!created_by(email, name, username)')
                 .eq('section_id', this.currentSection)
                 .eq('type', type)
                 .order('created_at', { ascending: false });
@@ -880,6 +880,13 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
+        // Get creator info for contact link
+        const creator = resource.profiles || {};
+        const creatorEmail = creator.email || '';
+        const creatorName = creator.name || creator.username || 'creator';
+        const emailSubject = encodeURIComponent(`Issue with resource: ${resource.title}`);
+        const emailBody = encodeURIComponent(`Hi ${creatorName},\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title}\nURL: ${resource.url}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`);
+
         return `
             <div class="resource-card" data-id="${resource.id}">
                 <div class="resource-header">
@@ -902,6 +909,15 @@ class SectionManager {
                         </div>
                     ` : ''}
                 </div>
+                
+                ${creatorEmail ? `
+                    <div class="resource-contact">
+                        <i class="fas fa-envelope"></i>
+                        <a href="mailto:${creatorEmail}?subject=${emailSubject}&body=${emailBody}" class="contact-creator" title="Email ${this.escapeHtml(creatorName)} about access issues">
+                            Contact creator: ${this.escapeHtml(creatorEmail)}
+                        </a>
+                    </div>
+                ` : ''}
                 
                 <div class="resource-footer">
                     ${resource.createdAt ? `<span>Added: ${new Date(resource.createdAt).toLocaleDateString()}</span>` : ''}
