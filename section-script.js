@@ -2093,8 +2093,28 @@ class SectionManager {
                 const next = row.nextElementSibling?.nextElementSibling;
                 typeList.insertBefore(row, next || null);
             });
-            row.querySelector('.btn-del').addEventListener('click', () => {
-                row.remove();
+            row.querySelector('.btn-del').addEventListener('click', async () => {
+                const tabId = row.querySelector('.type-id').value.trim();
+                const tabName = row.querySelector('.type-name').value.trim() || tabId;
+                
+                // Count resources in this tab
+                let resourceCount = 0;
+                try {
+                    if (window.supabaseClient && this.currentSection) {
+                        resourceCount = await this.getResourceCount(tabId);
+                    }
+                } catch (err) {
+                    console.warn('Failed to count resources for tab:', err);
+                }
+                
+                // Confirm deletion
+                const message = resourceCount > 0 
+                    ? `Are you sure you want to delete the tab "${tabName}"?\n\nThis will permanently delete ${resourceCount} resource(s) in this tab.`
+                    : `Are you sure you want to delete the tab "${tabName}"?`;
+                
+                if (confirm(message)) {
+                    row.remove();
+                }
             });
             // Icon choose behavior
             const iconBtn = row.querySelector('.icon-choose');
@@ -2262,11 +2282,29 @@ class SectionManager {
                         });
 
                         // Deletions
-                        prevIds.forEach(async (id) => {
+                        for (const id of prevIds) {
                             if (!nextSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, tabName: prevNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try {
+                                    // Delete all resources associated with this tab/type
+                                    await window.supabaseClient
+                                        .from('resources')
+                                        .delete()
+                                        .eq('section_id', sid)
+                                        .eq('type', id);
+                                    
+                                    // Log the deletion activity
+                                    await window.supabaseClient.from('activities').insert({ 
+                                        user_id: this.currentUser ? this.currentUser.id : null, 
+                                        action: 'DELETE_TAB', 
+                                        section_id: sid, 
+                                        metadata: { tabId: id, tabName: prevNameById.get(id) || id, username: uname, name: uname }, 
+                                        timestamp: new Date(ts) 
+                                    });
+                                } catch (err) {
+                                    console.warn(`Failed to delete tab ${id} and its resources:`, err);
+                                }
                             }
-                        });
+                        }
 
                         // Renames (ids unchanged, name changed)
                         nextIds.forEach(async (id) => {
