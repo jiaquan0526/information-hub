@@ -819,33 +819,53 @@ class SectionManager {
             const timestamp = Date.now(); // Cache buster reference
             console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
             
-            // Try to fetch with creator email, fallback to basic query if it fails
-            let data, error;
-            try {
-                const response = await window.supabaseClient
-                    .from('resources')
-                    .select('*, sections(name), profiles!created_by(email, name, username)')
-                    .eq('section_id', this.currentSection)
-                    .eq('type', type)
-                    .order('created_at', { ascending: false });
-                data = response.data;
-                error = response.error;
-            } catch (joinError) {
-                console.warn('[Section] Could not fetch with creator info, trying basic query:', joinError);
-                const response = await window.supabaseClient
-                    .from('resources')
-                    .select('*, sections(name)')
-                    .eq('section_id', this.currentSection)
-                    .eq('type', type)
-                    .order('created_at', { ascending: false });
-                data = response.data;
-                error = response.error;
-            }
+            // Fetch resources first
+            const { data: resources, error } = await window.supabaseClient
+                .from('resources')
+                .select('*, sections(name)')
+                .eq('section_id', this.currentSection)
+                .eq('type', type)
+                .order('created_at', { ascending: false });
             
             if (error) throw error;
-            const list = Array.isArray(data) ? data : [];
+            const list = Array.isArray(resources) ? resources : [];
             console.log(`[Section] ✅ Loaded ${list.length} fresh ${type} resources from Supabase`);
-            return list.map(r => this._normalizeResourceRow(r, type));
+            
+            // Get unique creator IDs (filter out nulls)
+            const creatorIds = [...new Set(list.map(r => r.created_by).filter(Boolean))];
+            
+            // Fetch creator emails separately if there are any creator IDs
+            let creatorsById = {};
+            if (creatorIds.length > 0) {
+                try {
+                    const { data: creators, error: creatorsError } = await window.supabaseClient
+                        .from('profiles')
+                        .select('id, email, name, username')
+                        .in('id', creatorIds);
+                    
+                    if (!creatorsError && creators) {
+                        // Map creators by ID for easy lookup
+                        creators.forEach(creator => {
+                            creatorsById[creator.id] = creator;
+                        });
+                        console.log(`[Section] ✅ Loaded ${creators.length} creator profiles`);
+                    }
+                } catch (creatorErr) {
+                    console.warn('[Section] Could not fetch creator emails:', creatorErr);
+                    // Continue without creator info - not critical
+                }
+            }
+            
+            // Attach creator info to resources
+            const enrichedList = list.map(r => {
+                const enriched = this._normalizeResourceRow(r, type);
+                if (r.created_by && creatorsById[r.created_by]) {
+                    enriched.profiles = creatorsById[r.created_by];
+                }
+                return enriched;
+            });
+            
+            return enrichedList;
         } catch (err) { 
             console.warn(`[Section] Failed to load ${type} resources:`, err);
             return []; 
