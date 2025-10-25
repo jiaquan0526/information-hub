@@ -363,11 +363,18 @@ class SectionManager {
         let sectionConfig = null;
         try {
             if (window.supabaseClient) {
-                const { data, error } = await window.supabaseClient
+                // Add timeout protection for section metadata query
+                const sectionPromise = window.supabaseClient
                     .from('sections')
                     .select('section_id, name, icon, color, config')
                     .eq('section_id', this.currentSection)
                     .single();
+                
+                const timeoutPromise = new Promise((resolve) => 
+                    setTimeout(() => resolve({ data: null, error: 'Query timeout' }), 5000)
+                );
+                
+                const { data, error } = await Promise.race([sectionPromise, timeoutPromise]);
                 if (!error && data) {
                     try {
                         if (data && data.config && typeof data.config === 'string') {
@@ -384,6 +391,8 @@ class SectionManager {
                             console.log('[Section] Config stored - deferring render until init completes');
                         }
                     } catch (_) {}
+                } else if (error) {
+                    console.warn('Section metadata query failed or timed out:', error);
                 }
             }
         } catch (e) {
@@ -433,16 +442,24 @@ class SectionManager {
         }
 
         // Apply persistent background image per section (SAME as hub page card)
+        // IMPORTANT: Use timeout protection to prevent hanging if database calls fail
         try {
-            // Determine enablement via Supabase only
+            // Determine enablement via Supabase only (with timeout)
             let enabled = false;
             try {
                 if (window.supabaseClient && window.supabaseClient.from) {
-                    const { data } = await window.supabaseClient
+                    // Use Promise.race with timeout to prevent hanging
+                    const settingsPromise = window.supabaseClient
                         .from('site_settings')
                         .select('value')
                         .eq('key', 'backgrounds')
                         .single();
+                    
+                    const timeoutPromise = new Promise((resolve) => 
+                        setTimeout(() => resolve({ data: null, error: 'timeout' }), 2000)
+                    );
+                    
+                    const { data } = await Promise.race([settingsPromise, timeoutPromise]);
                     let v = data && data.value;
                     
                     // Parse if it's a string (Supabase sometimes returns JSONB as string)
@@ -473,27 +490,42 @@ class SectionManager {
             if (!container) return;
             
             // Step 1: Try to get the SAME background image assigned to this section's card on hub page
+            // Use timeout protection to prevent hanging
             let assignedImage = null;
             try {
                 if (window.supabaseClient && window.supabaseClient.from) {
-                    const { data } = await window.supabaseClient
+                    const bgPromise = window.supabaseClient
                         .from('section_backgrounds')
                         .select('image_url')
                         .eq('section_id', this.currentSection)
                         .maybeSingle();
+                    
+                    const timeoutPromise = new Promise((resolve) => 
+                        setTimeout(() => resolve({ data: null, error: 'timeout' }), 2000)
+                    );
+                    
+                    const { data } = await Promise.race([bgPromise, timeoutPromise]);
                     if (data && data.image_url) {
                         assignedImage = data.image_url;
                     }
                 }
-            } catch (_) {}
+            } catch (_) {
+                console.log('[Section] Background image query failed or timed out - continuing without background');
+            }
             
             // Step 2: If no assigned image, use deterministic selection (fallback)
+            // Use timeout protection for manifest fetch
             let finalUrl = assignedImage;
             if (!finalUrl) {
                 const loadImages = async () => {
                     try {
                         const bust = Date.now();
-                        const resp = await fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                        const fetchPromise = fetch(`background-pic/manifest.json?t=${bust}`, { cache: 'no-store' });
+                        const timeoutPromise = new Promise((resolve) => 
+                            setTimeout(() => resolve(null), 2000)
+                        );
+                        
+                        const resp = await Promise.race([fetchPromise, timeoutPromise]);
                         if (resp && resp.ok) {
                             const data = await resp.json();
                             if (Array.isArray(data) && data.length > 0) {
@@ -879,13 +911,24 @@ class SectionManager {
         try {
             const timestamp = Date.now(); // Cache buster reference
             console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
-            const { data, error } = await window.supabaseClient
+            
+            // Add timeout protection to prevent hanging if creator_email or other fields cause issues
+            const resourcesPromise = window.supabaseClient
                 .from('resources')
                 .select('*, sections(name)')
                 .eq('section_id', this.currentSection)
                 .eq('type', type)
                 .order('created_at', { ascending: false });
-            if (error) throw error;
+            
+            const timeoutPromise = new Promise((resolve) => 
+                setTimeout(() => resolve({ data: null, error: 'Query timeout after 5 seconds' }), 5000)
+            );
+            
+            const { data, error } = await Promise.race([resourcesPromise, timeoutPromise]);
+            if (error) {
+                console.warn(`[Section] Resource query failed or timed out for ${type}:`, error);
+                throw error;
+            }
             const list = Array.isArray(data) ? data : [];
             console.log(`[Section] ✅ Loaded ${list.length} fresh ${type} resources from Supabase`);
             return list.map(r => this._normalizeResourceRow(r, type));
@@ -899,11 +942,18 @@ class SectionManager {
         // No normalization - use type ID exactly as it appears in section config
         if (!window.supabaseClient) return 0;
         try {
-            const { count, error } = await window.supabaseClient
+            // Add timeout protection
+            const countPromise = window.supabaseClient
                 .from('resources')
                 .select('*', { count: 'exact', head: true })
                 .eq('section_id', this.currentSection)
                 .eq('type', type);
+            
+            const timeoutPromise = new Promise((resolve) => 
+                setTimeout(() => resolve({ count: 0, error: 'Query timeout' }), 3000)
+            );
+            
+            const { count, error } = await Promise.race([countPromise, timeoutPromise]);
             if (error) throw error;
             return count || 0;
         } catch (_) { return 0; }
