@@ -115,19 +115,21 @@ class SectionManager {
             let role = 'viewer';
             let permissions = { sections: ['*'], canViewAllSections: true, canEditAllSections: false };
             let username = '';
+            let name = '';
             try {
                 const { data: profile } = await window.supabaseClient
                     .from('profiles')
-                    .select('role, permissions, username, email')
+                    .select('role, permissions, username, email, name')
                     .eq('id', user.id)
                     .single();
                 if (profile) {
                     role = profile.role || role;
                     permissions = (profile.permissions && typeof profile.permissions === 'object') ? profile.permissions : permissions;
                     username = profile.username || profile.email || '';
+                    name = profile.name || profile.username || profile.email || '';
                 }
             } catch (_) {}
-            return { id: user.id, email: user.email, username: username || user.email, role, permissions };
+            return { id: user.id, email: user.email, username: username || user.email, name: name || username || user.email, role, permissions };
         } catch (_) { return null; }
     }
 
@@ -2249,7 +2251,7 @@ class SectionManager {
 						const prevSet = new Set(prevIds);
 						const nextSet = new Set(nextIds);
 						const ts = new Date().toISOString();
-						const uname = this.currentUser.name || this.currentUser.email || null;
+						const uname = this.currentUser.name || this.currentUser.username || this.currentUser.email || null;
 						const sid = this.currentSection;
 
                         // Creates

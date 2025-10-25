@@ -2169,42 +2169,70 @@
                 } catch (_) { /* ignore */ }
                 // Build message HTML items
                 const itemsFromActivities = latest.map(a => {
-                    const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
                     const meta = (a && a.metadata) ? a.metadata : {};
                     const who = a.name || meta.name || a.username || meta.username || a.user || 'Someone';
-                    const section = a.section || a.sectionId || a.category || 'general';
-                    const sectionLabel = (sectionNames && sectionNames[section]) ? sectionNames[section] : prettyName(section);
                     const action = a.action || a.type || 'updated';
                     const actionLower = String(action).toLowerCase();
                     const resourceId = a.resource_id || a.resourceId || '';
-                    let resource = a.title || a.resource || a.description || meta.title || '';
-                    // Prefer explicit tab names for tab-related actions
-                    if (!resource && (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab'))) {
+                    const section = a.section || a.sectionId || a.category || 'general';
+                    const sectionLabel = (sectionNames && sectionNames[section]) ? sectionNames[section] : prettyName(section);
+                    
+                    // Determine hierarchy level (resource/tab/section)
+                    let level = 'resource';
+                    if (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab')) {
+                        level = 'tab';
+                    } else if (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section')) {
+                        level = 'section';
+                    }
+                    
+                    // Get resource/tab/section name
+                    let itemName = a.title || a.resource || a.description || meta.title || '';
+                    
+                    // For tabs, get tab name
+                    if (level === 'tab') {
                         if (meta && (meta.oldName || meta.newName)) {
                             const oldName = meta.oldName || '';
                             const newName = meta.newName || '';
-                            resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                            itemName = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
                             const tabId = meta.tabId || meta.tabName || '';
-                            resource = tabNameBySection[section] && tabId ? (tabNameBySection[section][tabId] || tabId) : (meta.tabName || tabId || '');
+                            itemName = tabNameBySection[section] && tabId ? (tabNameBySection[section][tabId] || tabId) : (meta.tabName || tabId || '');
                         }
                     }
-                    // Prefer section names for section-related actions
-                    if (!resource && (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section'))) {
+                    
+                    // For sections, get section name
+                    if (level === 'section') {
                         if (meta && (meta.oldName || meta.newName)) {
                             const oldName = meta.oldName || '';
                             const newName = meta.newName || '';
-                            resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                            itemName = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resource = meta.sectionName || sectionLabel || '';
+                            itemName = meta.sectionName || sectionLabel || '';
                         }
                     }
+                    
                     // Resolve resource title by ID when needed
-                    if ((isUuidLike(resource) || (resourceId && resourceId === resource) || !resource) && resourceId) {
+                    if (level === 'resource' && (isUuidLike(itemName) || (resourceId && resourceId === itemName) || !itemName) && resourceId) {
                         const resolved = resourceNameById[resourceId];
-                        if (resolved) resource = resolved;
+                        if (resolved) itemName = resolved;
                     }
-                    return `<span class="info-item"><strong>${safe(who)}</strong> ${safe(action)} ${resource ? `"${safe(resource)}" ` : ''}in <em>${safe(sectionLabel)}</em><span class="info-sep">•</span><span class="muted">${safe(when)}</span></span>`;
+                    
+                    // Build message based on hierarchy level
+                    let message = '';
+                    if (level === 'resource') {
+                        // Resource level: show full path - resource on tab in section
+                        const tabType = a.type || a.resourceType || meta.type || '';
+                        const tabName = tabNameBySection[section] && tabType ? (tabNameBySection[section][tabType] || tabType) : (tabType ? String(tabType).replace(/-/g, ' ') : 'tab');
+                        message = `<strong>${safe(who)}</strong> ${safe(action)} ${itemName ? `<em>"${safe(itemName)}"</em>` : 'resource'} on <em>${safe(tabName)}</em> in <em>${safe(sectionLabel)}</em>`;
+                    } else if (level === 'tab') {
+                        // Tab level: show tab in section
+                        message = `<strong>${safe(who)}</strong> ${safe(action)} tab ${itemName ? `<em>"${safe(itemName)}"</em>` : ''} in <em>${safe(sectionLabel)}</em>`;
+                    } else {
+                        // Section level: just show section name
+                        message = `<strong>${safe(who)}</strong> ${safe(action)} section ${itemName ? `<em>"${safe(itemName)}"</em>` : ''}`;
+                    }
+                    
+                    return `<span class="info-item">${message}</span>`;
                 });
                 const items = (broadcastItem ? [broadcastItem] : []).concat(itemsFromActivities);
                 if (items.length === 0) { 
