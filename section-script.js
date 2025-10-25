@@ -1914,6 +1914,39 @@ class SectionManager {
                 order: (incoming.order !== undefined ? incoming.order : (existingCfg.order || 0))
             };
 
+            // Track changes for activity logging
+            const configChanges = {};
+            
+            // Track intro changes
+            const oldIntro = existingCfg.intro || '';
+            const newIntro = merged.intro || '';
+            if (oldIntro !== newIntro) {
+                configChanges.intro = {
+                    old: oldIntro,
+                    new: newIntro
+                };
+            }
+            
+            // Track visibility changes
+            const oldVisible = existingCfg.visible !== false;
+            const newVisible = merged.visible !== false;
+            if (oldVisible !== newVisible) {
+                configChanges.visibility = {
+                    old: oldVisible,
+                    new: newVisible
+                };
+            }
+            
+            // Track order changes
+            const oldOrder = existingCfg.order || 0;
+            const newOrder = merged.order || 0;
+            if (oldOrder !== newOrder) {
+                configChanges.order = {
+                    old: oldOrder,
+                    new: newOrder
+                };
+            }
+            
             // If nothing would change, skip write
             try {
                 const before = JSON.stringify(existingCfg);
@@ -1948,6 +1981,31 @@ class SectionManager {
                     .from('sections')
                     .upsert(payload, { onConflict: 'section_id' });
                 if (upErr) throw upErr;
+                
+                // Log activity if there are changes
+                if (Object.keys(configChanges).length > 0) {
+                    try {
+                        const sectionName = ensure.name || this.currentSection;
+                        if (window.hubDatabase && typeof window.hubDatabase.addActivity === 'function') {
+                            await window.hubDatabase.addActivity({
+                                action: 'update',
+                                type: 'section',
+                                section: this.currentSection,
+                                sectionId: this.currentSection,
+                                title: sectionName,
+                                metadata: {
+                                    section: this.currentSection,
+                                    sectionId: this.currentSection,
+                                    sectionName: sectionName,
+                                    changes: configChanges
+                                }
+                            });
+                        }
+                    } catch (activityError) {
+                        console.warn('Failed to log section config update activity:', activityError);
+                        // Don't fail the update if activity logging fails
+                    }
+                }
             }
 
             // Verify persisted value matches (best-effort)
@@ -2185,6 +2243,9 @@ class SectionManager {
             alertBox.textContent = msg;
             setTimeout(() => { try { alertBox.style.display = 'none'; } catch(_) {} }, 2500);
         };
+        
+        // Track explicitly deleted tab IDs (when user clicks delete button)
+        const explicitlyDeletedTabIds = new Set();
 
         const makeRow = (t) => {
             const row = document.createElement('div');
@@ -2282,7 +2343,12 @@ class SectionManager {
                     : `Are you sure you want to delete the tab "${tabName}"?`;
                 
                 if (confirm(message)) {
-                row.remove();
+                    // Mark this tab as explicitly deleted
+                    if (tabId) {
+                        explicitlyDeletedTabIds.add(tabId);
+                        console.log(`[Tab Delete Button] Marked "${tabId}" for deletion with ${resourceCount} resources`);
+                    }
+                    row.remove();
                 }
             });
             // Icon choose behavior
@@ -2529,12 +2595,27 @@ class SectionManager {
                             }
                         });
 
-                        // STEP 3: Deletions (skip tabs that are being renamed)
+                        // STEP 3: Deletions (ONLY for explicitly deleted tabs via delete button)
+                        // Do NOT delete tabs that are missing due to ID changes (those are renames, not deletions)
                         for (const id of prevIds) {
-                            if (!nextSet.has(id) && !renamedOldIds.has(id)) {
-                                console.log(`[Tab Deletion] Deleting tab "${id}" from section "${sid}"`);
+                            const isExplicitlyDeleted = explicitlyDeletedTabIds.has(id);
+                            const isRenamed = renamedOldIds.has(id);
+                            const isMissing = !nextSet.has(id);
+                            
+                            console.log(`[Tab Deletion Check] ID="${id}", missing=${isMissing}, explicitlyDeleted=${isExplicitlyDeleted}, renamed=${isRenamed}`);
+                            
+                            // ONLY delete if explicitly deleted via delete button
+                            if (isExplicitlyDeleted) {
+                                // User already confirmed when clicking delete button, so proceed with deletion
+                                console.log(`[Tab Deletion] Deleting explicitly deleted tab "${id}" from section "${sid}"`);
                                 try {
-                                    // Delete all resources associated with this tab/type
+                                    // Count and delete all resources associated with this tab/type
+                                    const { count: resourceCount } = await window.supabaseClient
+                                        .from('resources')
+                                        .select('*', { count: 'exact', head: true })
+                                        .eq('section_id', sid)
+                                        .eq('type', id);
+                                    
                                     const { data: deletedResources, error: deleteError } = await window.supabaseClient
                                         .from('resources')
                                         .delete()
@@ -2554,14 +2635,16 @@ class SectionManager {
                                         user_id: this.currentUser ? this.currentUser.id : null, 
                                         action: 'DELETE_TAB', 
                                         section_id: sid, 
-                                        metadata: { tabId: id, tabName: prevNameById.get(id) || id, username: uname, name: uname }, 
+                                        metadata: { tabId: id, tabName: prevNameById.get(id) || id, resourceCount: resourceCount || 0, username: uname, name: uname }, 
                                         timestamp: new Date(ts) 
                                     });
                                 } catch (err) {
                                     console.error(`[Tab Deletion] Failed to delete tab ${id} and its resources:`, err);
                                 }
-                            } else if (renamedOldIds.has(id)) {
+                            } else if (isRenamed) {
                                 console.log(`[Tab Deletion] Skipping "${id}" - being renamed, not deleted`);
+                            } else if (isMissing && !isExplicitlyDeleted) {
+                                console.log(`[Tab Deletion] Skipping "${id}" - missing but NOT explicitly deleted (likely renamed with ID change)`);
                             }
                         }
                         

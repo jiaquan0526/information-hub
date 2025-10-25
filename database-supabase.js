@@ -412,22 +412,38 @@ class HubDatabase {
         try {
             const run = async () => {
                 const sid = section.sectionId || section.id;
-                // Read current to preserve config fields like types/categories
-                let current = null;
+                
+                // Fetch full current section data for comparison
+                let oldSection = null;
                 try {
                     const cur = await this.supabase
                         .from('sections')
-                        .select('config')
+                        .select('*')
                         .eq('section_id', sid)
                         .single();
-                    if (!cur.error) current = cur.data;
+                    if (!cur.error && cur.data) {
+                        const cfg = (cur.data.config && typeof cur.data.config === 'object') ? cur.data.config : {};
+                        oldSection = {
+                            section_id: cur.data.section_id,
+                            name: cur.data.name,
+                            icon: cur.data.icon || '',
+                            color: cur.data.color || '',
+                            visible: cfg.visible !== false,
+                            intro: cfg.intro || '',
+                            order: cfg.order || 0,
+                            image: cfg.image || ''
+                        };
+                    }
                 } catch (_) {}
-                const existingCfg = (current && typeof current.config === 'object') ? current.config : {};
+                
+                // Read current config to preserve config fields like types/categories
+                const existingCfg = oldSection ? ((oldSection.config && typeof oldSection.config === 'object') ? oldSection.config : {}) : {};
                 const nextConfig = Object.assign({}, existingCfg, section.config || {});
                 // Ensure critical flags are kept in sync but do not drop other keys
                 nextConfig.visible = section.visible !== false;
                 nextConfig.intro = section.intro || '';
                 nextConfig.order = section.order || 0;
+                
                 const { data, error } = await this.supabase
                     .from('sections')
                     .update({
@@ -439,6 +455,44 @@ class HubDatabase {
                     })
                     .eq('section_id', sid);
                 if (error) throw error;
+                
+                // Track section update activity
+                if (oldSection) {
+                    try {
+                        const newSection = {
+                            section_id: sid,
+                            name: section.name,
+                            icon: section.icon || '',
+                            color: section.color || '',
+                            visible: section.visible !== false,
+                            intro: section.intro || '',
+                            order: section.order || 0,
+                            image: (section.config && section.config.image) || ''
+                        };
+                        
+                        const changes = this.compareSectionChanges(oldSection, newSection);
+                        
+                        if (Object.keys(changes).length > 0) {
+                            await this.addActivity({
+                                action: 'update',
+                                type: 'section',
+                                section: sid,
+                                sectionId: sid,
+                                title: newSection.name,
+                                metadata: {
+                                    section: sid,
+                                    sectionId: sid,
+                                    sectionName: newSection.name,
+                                    changes: changes
+                                }
+                            });
+                        }
+                    } catch (activityError) {
+                        console.warn('Failed to log section update activity:', activityError);
+                        // Don't fail the update if activity logging fails
+                    }
+                }
+                
                 return data;
             };
             return await this.withRetry(run, { retries: 3, baseDelayMs: 300 });
