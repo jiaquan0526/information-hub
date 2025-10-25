@@ -818,19 +818,15 @@ class SectionManager {
         try {
             const timestamp = Date.now(); // Cache buster reference
             console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
-            
-            // Simple fetch - creator_email is now stored directly in resources table
-            const { data: resources, error } = await window.supabaseClient
+            const { data, error } = await window.supabaseClient
                 .from('resources')
                 .select('*, sections(name)')
                 .eq('section_id', this.currentSection)
                 .eq('type', type)
                 .order('created_at', { ascending: false });
-            
             if (error) throw error;
-            const list = Array.isArray(resources) ? resources : [];
+            const list = Array.isArray(data) ? data : [];
             console.log(`[Section] ✅ Loaded ${list.length} fresh ${type} resources from Supabase`);
-            
             return list.map(r => this._normalizeResourceRow(r, type));
         } catch (err) { 
             console.warn(`[Section] Failed to load ${type} resources:`, err);
@@ -884,13 +880,6 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
-        // Get creator info - use existing columns
-        const creatorEmail = resource.creator_email || '';
-        const creatorName = resource.created_by_name || 'creator';
-        
-        const emailSubject = creatorEmail ? encodeURIComponent(`Issue with resource: ${resource.title || 'Resource'}`) : '';
-        const emailBody = creatorEmail ? encodeURIComponent(`Hi ${creatorName},\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title || 'Resource'}\nURL: ${resource.url || ''}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`) : '';
-
         return `
             <div class="resource-card" data-id="${resource.id}">
                 <div class="resource-header">
@@ -914,11 +903,11 @@ class SectionManager {
                     ` : ''}
                 </div>
                 
-                ${creatorEmail ? `
+                ${resource.creator_email ? `
                     <div class="resource-contact">
                         <i class="fas fa-envelope"></i>
-                        <a href="mailto:${creatorEmail}?subject=${emailSubject}&body=${emailBody}" class="contact-creator" title="Email ${this.escapeHtml(creatorName)} about access issues">
-                            Contact creator: ${this.escapeHtml(creatorEmail)}
+                        <a href="mailto:${resource.creator_email}?subject=${encodeURIComponent('Issue with resource: ' + (resource.title || 'Resource'))}&body=${encodeURIComponent('Hi ' + (resource.created_by_name || 'there') + ',\\n\\nI am having trouble accessing this resource:\\n\\nResource: ' + (resource.title || 'Resource') + '\\nURL: ' + (resource.url || '') + '\\n\\nIssue details:\\n[Please describe the issue]\\n\\nThanks!')}" class="contact-creator" title="Email ${this.escapeHtml(resource.created_by_name || 'creator')} about access issues">
+                            Contact creator: ${this.escapeHtml(resource.creator_email)}
                         </a>
                     </div>
                 ` : ''}
@@ -1161,10 +1150,6 @@ class SectionManager {
         try {
             // No normalization - use type ID exactly as it appears in section config
             if (!window.supabaseClient) throw new Error('Supabase unavailable');
-            
-            // Get current user's email to store with resource
-            const creatorEmail = this.currentUser?.email || '';
-            
             // Enrich with display fields for easier joins/use
             const payload = {
                 section_id: this.currentSection,
@@ -1173,17 +1158,10 @@ class SectionManager {
                 description: resource.description || '',
                 url: resource.url,
                 tags: resource.tags || [],
-                extra: { category: resource.category || '' }
+                extra: { category: resource.category || '' },
+                creator_email: this.currentUser?.email || null,
+                created_by_name: this.currentUser?.name || this.currentUser?.username || null
             };
-            
-            // Add creator_email if we have it (column might not exist yet)
-            if (creatorEmail) {
-                try {
-                    payload.creator_email = creatorEmail;
-                } catch (e) {
-                    // Column doesn't exist yet - that's ok
-                }
-            }
             const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
             if (error) throw error;
             this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType: type });
