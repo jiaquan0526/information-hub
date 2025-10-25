@@ -629,6 +629,50 @@ class SectionManager {
                 return false;
             }
             
+            // IMPORTANT: Check for auth tokens in URL parameters first (from hub navigation)
+            const urlParams = new URLSearchParams(window.location.search);
+            const accessToken = urlParams.get('access_token');
+            const refreshToken = urlParams.get('refresh_token');
+            
+            if (accessToken && refreshToken) {
+                console.log('[Section] Found auth tokens in URL, restoring session...');
+                try {
+                    // Restore session from URL tokens
+                    const { data, error } = await window.supabaseClient.auth.setSession({
+                        access_token: decodeURIComponent(accessToken),
+                        refresh_token: decodeURIComponent(refreshToken)
+                    });
+                    
+                    if (error) {
+                        console.error('[Section] Failed to restore session from URL tokens:', error);
+                        // Continue to try existing session below
+                    } else if (data && data.user) {
+                        console.log('[Section] ✅ Session restored from URL tokens for user:', data.user.email);
+                        
+                        // Clean up URL by removing tokens (optional, for security)
+                        try {
+                            const cleanUrl = new URL(window.location.href);
+                            cleanUrl.searchParams.delete('access_token');
+                            cleanUrl.searchParams.delete('refresh_token');
+                            cleanUrl.searchParams.delete('token_type');
+                            window.history.replaceState({}, document.title, cleanUrl.toString());
+                        } catch (_) {}
+                        
+                        this.currentUser = await this.getCurrentUser();
+                        if (!this.currentUser) {
+                            console.error('[Section] Failed to get current user profile after session restore');
+                            window.location.href = 'auth.html';
+                            return false;
+                        }
+                        
+                        return true;
+                    }
+                } catch (e) {
+                    console.error('[Section] Error restoring session from URL:', e);
+                    // Continue to try existing session below
+                }
+            }
+            
             // Give the session more time to restore from localStorage/cookies
             // especially when navigating from hub page without URL tokens
             let user = null;
