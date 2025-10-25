@@ -898,12 +898,27 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
-        // Get creator info for contact link
-        const creator = resource.profiles || {};
-        const creatorEmail = creator.email || '';
-        const creatorName = creator.name || creator.username || 'creator';
-        const emailSubject = encodeURIComponent(`Issue with resource: ${resource.title}`);
-        const emailBody = encodeURIComponent(`Hi ${creatorName},\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title}\nURL: ${resource.url}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`);
+        // Get creator info for contact link - handle null/undefined safely
+        let creatorEmail = '';
+        let creatorName = 'creator';
+        let emailSubject = '';
+        let emailBody = '';
+        
+        try {
+            const creator = resource.profiles || null;
+            if (creator && typeof creator === 'object') {
+                creatorEmail = creator.email || '';
+                creatorName = creator.name || creator.username || 'creator';
+            }
+            
+            if (creatorEmail) {
+                emailSubject = encodeURIComponent(`Issue with resource: ${resource.title || 'Resource'}`);
+                emailBody = encodeURIComponent(`Hi ${creatorName},\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title || 'Resource'}\nURL: ${resource.url || ''}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`);
+            }
+        } catch (e) {
+            console.warn('[Section] Could not get creator info for resource:', resource.id, e);
+            creatorEmail = ''; // Ensure it's empty if there's any error
+        }
 
         return `
             <div class="resource-card" data-id="${resource.id}">
