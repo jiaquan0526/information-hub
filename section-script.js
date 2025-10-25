@@ -2154,9 +2154,13 @@ class SectionManager {
 						<i class="${iconCls}"></i> ${this.escapeHtml(t.name || t.id)} <span class="tab-count">(${count})</span>
 					</div>`;
 				}).join('');
-				// set default current tab to first visible type if none selected
-				if (!this.currentTab && visibleTypes[0]) {
-					this.currentTab = visibleTypes[0].id;
+				// Validate current tab still exists in new config, otherwise reset to first tab
+				const validTabIds = new Set(visibleTypes.map(t => t.id));
+				if (!this.currentTab || !validTabIds.has(this.currentTab)) {
+					if (visibleTypes[0]) {
+						console.log(`[Section] Current tab "${this.currentTab}" not found in new config, resetting to first tab "${visibleTypes[0].id}"`);
+						this.currentTab = visibleTypes[0].id;
+					}
 				}
 			}
 		}
@@ -2646,14 +2650,50 @@ class SectionManager {
                         };
 
                         // STEP 2: Creates (skip IDs that are the result of renaming)
-                        nextIds.forEach((id) => {
-                            if (!prevSet.has(id) && !renamedNewIds.has(id)) {
-                                batchChanges.created.push({
-                                    tabId: id,
-                                    tabName: nextNameById.get(id) || id
-                                });
-                            }
-                        });
+                        // But also verify if resources exist - if so, it's an UPDATE not a CREATE
+                        const createdTabPromises = nextIds
+                            .filter(id => !prevSet.has(id) && !renamedNewIds.has(id))
+                            .map(async (id) => {
+                                try {
+                                    // Check if resources already exist for this tab ID
+                                    const { count } = await window.supabaseClient
+                                        .from('resources')
+                                        .select('*', { count: 'exact', head: true })
+                                        .eq('section_id', sid)
+                                        .eq('type', id);
+                                    
+                                    if (count > 0) {
+                                        // Resources exist - this is an UPDATE, not a CREATE
+                                        console.log(`[Tab Create Check] "${id}" has ${count} existing resources - treating as UPDATE not CREATE`);
+                                        // Add to updated list instead
+                                        batchChanges.updated.push({
+                                            tabId: id,
+                                            tabName: nextNameById.get(id) || id,
+                                            changes: { configured: { old: false, new: true } },
+                                            changedFields: ['configured'],
+                                            changeCount: 1,
+                                            note: 'Tab was added to config (already had resources)'
+                                        });
+                                    } else {
+                                        // No resources - genuinely new tab
+                                        console.log(`[Tab Create Check] "${id}" has no resources - treating as CREATE`);
+                                        batchChanges.created.push({
+                                            tabId: id,
+                                            tabName: nextNameById.get(id) || id
+                                        });
+                                    }
+                                } catch (err) {
+                                    console.warn(`[Tab Create Check] Failed to check resources for "${id}":`, err);
+                                    // Fallback: treat as created
+                                    batchChanges.created.push({
+                                        tabId: id,
+                                        tabName: nextNameById.get(id) || id
+                                    });
+                                }
+                            });
+                        
+                        // Wait for all create checks to complete
+                        await Promise.all(createdTabPromises);
 
                         // STEP 3: Deletions (ONLY for explicitly deleted tabs via delete button)
                         // Do NOT delete tabs that are missing due to ID changes (those are renames, not deletions)
