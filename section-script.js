@@ -884,10 +884,12 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
-        // Get creator email - now stored directly in resource row
+        // Get creator info - use existing columns
         const creatorEmail = resource.creator_email || '';
+        const creatorName = resource.created_by_name || 'creator';
+        
         const emailSubject = creatorEmail ? encodeURIComponent(`Issue with resource: ${resource.title || 'Resource'}`) : '';
-        const emailBody = creatorEmail ? encodeURIComponent(`Hi,\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title || 'Resource'}\nURL: ${resource.url || ''}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`) : '';
+        const emailBody = creatorEmail ? encodeURIComponent(`Hi ${creatorName},\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title || 'Resource'}\nURL: ${resource.url || ''}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`) : '';
 
         return `
             <div class="resource-card" data-id="${resource.id}">
@@ -1171,9 +1173,17 @@ class SectionManager {
                 description: resource.description || '',
                 url: resource.url,
                 tags: resource.tags || [],
-                extra: { category: resource.category || '' },
-                creator_email: creatorEmail  // Store email directly
+                extra: { category: resource.category || '' }
             };
+            
+            // Add creator_email if we have it (column might not exist yet)
+            if (creatorEmail) {
+                try {
+                    payload.creator_email = creatorEmail;
+                } catch (e) {
+                    // Column doesn't exist yet - that's ok
+                }
+            }
             const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
             if (error) throw error;
             this._notifyHub({ type: 'RESOURCE_CHANGE', action: 'create', resourceType: type });
