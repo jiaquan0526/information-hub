@@ -1474,10 +1474,12 @@ class SectionManager {
                 updatedAt: row.updated_at || row.updatedAt || null,
                 userId: row.created_by || row.user_id || row.userId || null,
                 type: uiType,
-                section_name: (row.sections && row.sections.name) ? row.sections.name : undefined
+                section_name: (row.sections && row.sections.name) ? row.sections.name : undefined,
+                creator_email: row.creator_email || null,
+                created_by_name: row.created_by_name || null
             };
         } catch (_) {
-            return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: null, type: uiType };
+            return { id: row.id, title: row.title || '', url: row.url || '', tags: [], category: '', createdAt: null, type: uiType, creator_email: row.creator_email || null, created_by_name: row.created_by_name || null };
         }
     }
     isValidUrl(string) {
