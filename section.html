@@ -143,97 +143,19 @@
             } catch(_) {}
         })();
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
-        // Wait for Supabase library to load, then initialize
+        // Bootstrap Supabase keys and let database-supabase.js handle client creation
         (function(){
-            function ensureKeys(){
-                try {
-                    var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
-                    var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
-                    window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || '';
-                    window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || '';
-                } catch(_) {}
-            }
-            function initClient(){
-                ensureKeys();
-                try {
-                    if (window.supabase && !window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
-                        console.log('[Section Init] Creating Supabase client with persistSession=true');
-                        window.supabaseClient = window.supabase.createClient(
-                            window.SUPABASE_URL,
-                            window.SUPABASE_ANON_KEY,
-                            { 
-                                auth: { 
-                                    persistSession: true, 
-                                    autoRefreshToken: true, 
-                                    detectSessionInUrl: true
-                                    // Use default storageKey to match hub page
-                                } 
-                            }
-                        );
-                        
-                        // Try to restore session immediately
-                        (async function restoreSession(){
-                            try {
-                                console.log('[Section Init] Attempting to restore session...');
-                                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                                if (session) {
-                                    console.log('[Section Init] ✅ Session restored for:', session.user?.email);
-                                } else {
-                                    console.warn('[Section Init] ⚠️ No session found in storage');
-                                }
-                                
-                                // Also check for URL tokens
-                                const u = new URL(window.location.href);
-                                const at = u.searchParams.get('access_token');
-                                const rt = u.searchParams.get('refresh_token');
-                                const tt = u.searchParams.get('token_type');
-                                if (at && rt) {
-                                    console.log('[Section Init] Setting session from URL tokens');
-                                    await window.supabaseClient.auth.setSession({ 
-                                        access_token: at, 
-                                        refresh_token: rt, 
-                                        token_type: tt || 'bearer' 
-                                    });
-                                    u.searchParams.delete('access_token');
-                                    u.searchParams.delete('refresh_token');
-                                    u.searchParams.delete('token_type');
-                                    history.replaceState({}, document.title, u.toString());
-                                    console.log('[Section Init] ✅ Session set from URL tokens');
-                                }
-                            } catch(e) {
-                                console.error('[Section Init] Session restore error:', e);
-                            }
-                        })();
-                        
-                        // Keep loading screen visible - section-script.js will hide it when data is ready
-                        if (typeof window.updateSectionLoadingProgress === 'function') {
-                            window.updateSectionLoadingProgress('Initializing...', 20);
-                        }
-                    }
-                } catch (e) { 
-                    console.error('[Section Init] Supabase init failed:', e);
-                    if (typeof window.updateSectionLoadingProgress === 'function') {
-                        window.updateSectionLoadingProgress('Connection issue...', 30);
-                    }
-                }
-            }
-            
-            // Wait for Supabase library to be available
-            var attempts = 0;
-            var checkInterval = setInterval(function() {
-                attempts++;
-                if (window.supabase && window.supabase.createClient) {
-                    clearInterval(checkInterval);
-                    initClient();
-                } else if (attempts > 50) {
-                    clearInterval(checkInterval);
-                    console.error('Supabase library failed to load after 5 seconds');
-                }
-            }, 100);
+            try {
+                var metaUrl = (document.querySelector('meta[name="supabase-url"]')||{}).content || '';
+                var metaKey = (document.querySelector('meta[name="supabase-anon-key"]')||{}).content || '';
+                window.SUPABASE_URL = window.SUPABASE_URL || metaUrl || '';
+                window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || metaKey || '';
+                console.log('[Section] Keys bootstrapped, database-supabase.js will create client');
+            } catch(_) {}
         })();
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="database-supabase.js" defer></script>
     <script src="section-script.js" defer></script>
     <script>
