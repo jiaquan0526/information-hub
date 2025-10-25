@@ -719,6 +719,7 @@ class HubDatabase {
                 section_id: (entry.section && String(entry.section).trim().toLowerCase() !== 'general') ? entry.section : (normalizedSection || null),
                 resource_id: normalizedResource || null,
                 metadata: {
+                    name: resolvedName || null,
                     username: resolvedUsername || null,
                     title: entry.title || null,
                     description: entry.title || null,

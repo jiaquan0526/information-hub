@@ -91,6 +91,7 @@ class SectionManager {
             // Use activities table directly
             try {
                 await window.supabaseClient.from('activities').insert({
+                    user_id: this.currentUser ? this.currentUser.id : null,
                     action: payload.action,
                     section_id: payload.section,
                     resource_id: payload.resourceId,
@@ -787,7 +788,7 @@ class SectionManager {
             try {
                 if (window.supabaseClient && this.currentUser) {
                     const desc = `Closed section ${this.currentSection} after ${Math.round(durationMs/1000)}s`;
-                    try { window.supabaseClient.from('activities').insert({ action: 'CLOSE_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
+                    try { window.supabaseClient.from('activities').insert({ user_id: this.currentUser.id, action: 'CLOSE_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
                 }
             } catch (_) {}
         };
@@ -799,7 +800,7 @@ class SectionManager {
         try {
             if (window.supabaseClient && this.currentUser) {
                 const desc = `Opened section ${this.currentSection}`;
-                try { window.supabaseClient.from('activities').insert({ action: 'OPEN_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
+                try { window.supabaseClient.from('activities').insert({ user_id: this.currentUser.id, action: 'OPEN_SECTION', section_id: this.currentSection, metadata: { description: desc }, timestamp: new Date() }); } catch (_) {}
             }
         } catch (_) {}
     }
@@ -1084,7 +1085,7 @@ class SectionManager {
                         const typeLabel = typeEl ? String(typeEl.textContent || '').trim() : '';
                         const href = anchor && anchor.getAttribute('href') ? String(anchor.getAttribute('href')).trim() : '';
                         const meta = { title, description: title || '', type: typeLabel, url: href, section: this.currentSection };
-                        await window.supabaseClient.from('activities').insert({ action: 'OPEN_RESOURCE', resource_id: resourceId, section_id: this.currentSection, metadata: meta, timestamp: new Date() });
+                        await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'OPEN_RESOURCE', resource_id: resourceId, section_id: this.currentSection, metadata: meta, timestamp: new Date() });
                     }
                 } catch (_) {}
             } catch (_) {}
@@ -2254,14 +2255,14 @@ class SectionManager {
                         // Creates
                         nextIds.forEach(async (id) => {
                             if (!prevSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, tabName: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, tabName: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 
                         // Deletions
                         prevIds.forEach(async (id) => {
                             if (!nextSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, tabName: prevNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, tabName: prevNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 
@@ -2271,7 +2272,7 @@ class SectionManager {
                                 const oldName = prevNameById.get(id) || id;
                                 const newName = nextNameById.get(id) || id;
                                 if (String(oldName).trim() !== String(newName).trim()) {
-                                    try { await window.supabaseClient.from('activities').insert({ action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                    try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                                 }
                             }
                         });
