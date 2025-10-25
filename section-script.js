@@ -819,7 +819,7 @@ class SectionManager {
             const timestamp = Date.now(); // Cache buster reference
             console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
             
-            // Fetch resources first
+            // Simple fetch - creator_email is now stored directly in resources table
             const { data: resources, error } = await window.supabaseClient
                 .from('resources')
                 .select('*, sections(name)')
@@ -831,41 +831,7 @@ class SectionManager {
             const list = Array.isArray(resources) ? resources : [];
             console.log(`[Section] ✅ Loaded ${list.length} fresh ${type} resources from Supabase`);
             
-            // Get unique creator IDs (filter out nulls)
-            const creatorIds = [...new Set(list.map(r => r.created_by).filter(Boolean))];
-            
-            // Fetch creator emails separately if there are any creator IDs
-            let creatorsById = {};
-            if (creatorIds.length > 0) {
-                try {
-                    const { data: creators, error: creatorsError } = await window.supabaseClient
-                        .from('profiles')
-                        .select('id, email, name, username')
-                        .in('id', creatorIds);
-                    
-                    if (!creatorsError && creators) {
-                        // Map creators by ID for easy lookup
-                        creators.forEach(creator => {
-                            creatorsById[creator.id] = creator;
-                        });
-                        console.log(`[Section] ✅ Loaded ${creators.length} creator profiles`);
-                    }
-                } catch (creatorErr) {
-                    console.warn('[Section] Could not fetch creator emails:', creatorErr);
-                    // Continue without creator info - not critical
-                }
-            }
-            
-            // Attach creator info to resources
-            const enrichedList = list.map(r => {
-                const enriched = this._normalizeResourceRow(r, type);
-                if (r.created_by && creatorsById[r.created_by]) {
-                    enriched.profiles = creatorsById[r.created_by];
-                }
-                return enriched;
-            });
-            
-            return enrichedList;
+            return list.map(r => this._normalizeResourceRow(r, type));
         } catch (err) { 
             console.warn(`[Section] Failed to load ${type} resources:`, err);
             return []; 
@@ -918,27 +884,10 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
-        // Get creator info for contact link - handle null/undefined safely
-        let creatorEmail = '';
-        let creatorName = 'creator';
-        let emailSubject = '';
-        let emailBody = '';
-        
-        try {
-            const creator = resource.profiles || null;
-            if (creator && typeof creator === 'object') {
-                creatorEmail = creator.email || '';
-                creatorName = creator.name || creator.username || 'creator';
-            }
-            
-            if (creatorEmail) {
-                emailSubject = encodeURIComponent(`Issue with resource: ${resource.title || 'Resource'}`);
-                emailBody = encodeURIComponent(`Hi ${creatorName},\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title || 'Resource'}\nURL: ${resource.url || ''}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`);
-            }
-        } catch (e) {
-            console.warn('[Section] Could not get creator info for resource:', resource.id, e);
-            creatorEmail = ''; // Ensure it's empty if there's any error
-        }
+        // Get creator email - now stored directly in resource row
+        const creatorEmail = resource.creator_email || '';
+        const emailSubject = creatorEmail ? encodeURIComponent(`Issue with resource: ${resource.title || 'Resource'}`) : '';
+        const emailBody = creatorEmail ? encodeURIComponent(`Hi,\n\nI'm having trouble accessing this resource:\n\nResource: ${resource.title || 'Resource'}\nURL: ${resource.url || ''}\n\nIssue details:\n[Please describe the issue you're experiencing]\n\nThanks!`) : '';
 
         return `
             <div class="resource-card" data-id="${resource.id}">
@@ -1210,6 +1159,10 @@ class SectionManager {
         try {
             // No normalization - use type ID exactly as it appears in section config
             if (!window.supabaseClient) throw new Error('Supabase unavailable');
+            
+            // Get current user's email to store with resource
+            const creatorEmail = this.currentUser?.email || '';
+            
             // Enrich with display fields for easier joins/use
             const payload = {
                 section_id: this.currentSection,
@@ -1218,7 +1171,8 @@ class SectionManager {
                 description: resource.description || '',
                 url: resource.url,
                 tags: resource.tags || [],
-                extra: { category: resource.category || '' }
+                extra: { category: resource.category || '' },
+                creator_email: creatorEmail  // Store email directly
             };
             const { error } = await window.supabaseClient.from('resources').insert(payload).select().single();
             if (error) throw error;
