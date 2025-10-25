@@ -85,7 +85,7 @@ class SectionManager {
                 section: this.currentSection || null,
                 title: title || '',
                 type: resourceType || '',
-                username: (this.currentUser && (this.currentUser.username || this.currentUser.email)) || null,
+                username: (this.currentUser && (this.currentUser.name || this.currentUser.email)) || null,
                 timestamp: new Date().toISOString()
             };
             // Use activities table directly
@@ -2247,7 +2247,7 @@ class SectionManager {
 						const prevSet = new Set(prevIds);
 						const nextSet = new Set(nextIds);
 						const ts = new Date().toISOString();
-						const uname = this.currentUser.username || this.currentUser.email || null;
+						const uname = this.currentUser.name || this.currentUser.email || null;
 						const sid = this.currentSection;
 
                         // Creates

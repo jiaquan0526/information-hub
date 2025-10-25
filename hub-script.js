@@ -260,7 +260,7 @@ class InformationHub {
 
         // Update user info in header (guard if elements not yet in DOM)
         const userNameEl = document.getElementById('userName');
-        if (userNameEl) userNameEl.textContent = this.currentUser.username;
+        if (userNameEl) userNameEl.textContent = this.currentUser.name || this.currentUser.username;
         const userRoleEl = document.getElementById('userRole');
         if (userRoleEl) userRoleEl.textContent = this.currentUser.role;
 
@@ -804,7 +804,7 @@ class InformationHub {
         const user = this.currentUser;
         if (!user) return;
 
-        document.getElementById('profileName').textContent = user.username || user.email;
+        document.getElementById('profileName').textContent = user.name || user.email;
         document.getElementById('profileUsername').textContent = user.username;
         document.getElementById('profileRole').textContent = user.role;
         document.getElementById('profileEmail').textContent = user.email || 'Not provided';
@@ -881,7 +881,7 @@ class InformationHub {
             usersList.innerHTML = users.map(user => `
                 <div class="user-item">
                     <div class="user-details-info">
-                        <div class="name">${this.escapeHtml(user.username || user.email || '')}</div>
+                        <div class="name">${this.escapeHtml(user.name || user.email || '')}</div>
                         <div class="role">${this.escapeHtml(user.role || '')}</div>
                         <div class="sections">Access: ${(user.permissions && Array.isArray(user.permissions.sections)) ? user.permissions.sections.length : 0} sections</div>
                     </div>
@@ -1226,7 +1226,7 @@ class InformationHub {
                 if (!window.supabaseClient) return;
                 const { data, error } = await window.supabaseClient
                     .from('profiles')
-                    .select('id, username, role');
+                    .select('id, username, name, role');
                 if (error) throw error;
                 const users = Array.isArray(data) ? data : [];
                 console.log('[loadExportOptions] Fetched users:', users.length);
@@ -1254,7 +1254,7 @@ class InformationHub {
                 uniqueUsers.forEach(user => {
                     const option = document.createElement('option');
                     option.value = user.id;
-                    option.textContent = `${user.username || user.id} (${user.role || ''})`;
+                    option.textContent = `${user.name || user.id} (${user.role || ''})`;
                     userSelect.appendChild(option);
                 });
                 

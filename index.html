@@ -3369,7 +3369,7 @@ Permissions:
                 const userNameEl = document.getElementById('userName');
                 const userRoleEl = document.getElementById('userRole');
                 
-                if (userNameEl) userNameEl.textContent = user.username;
+                if (userNameEl) userNameEl.textContent = user.name || user.username;
                 if (userRoleEl) userRoleEl.textContent = user.role;
                 try { if (typeof ensureHeaderVisible === 'function') ensureHeaderVisible(); } catch(_) {}
                 
@@ -3577,12 +3577,12 @@ Permissions:
             });
             
             console.log('Current user role:', currentUser.role);
-            console.log('Manageable users for', currentUser.role, ':', manageableUsers.map(u => `${u.username} (${u.role})`));
+            console.log('Manageable users for', currentUser.role, ':', manageableUsers.map(u => `${u.name || u.email} (${u.role})`));
             
             manageableUsers.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user.id;
-                option.textContent = `${user.username} (${user.role})`;
+                option.textContent = `${user.name || user.email} (${user.role})`;
                 select.appendChild(option);
             });
         };
@@ -3629,7 +3629,7 @@ Permissions:
             const userEditable = Array.isArray(perm.editableSections) ? perm.editableSections : [];
 
             currentEditingUser = { ...selectedProfile, role, permissions: { ...perm, sections: userSections, editableSections: userEditable } };
-            document.getElementById('selectedUserName').textContent = `${selectedProfile.username || selectedProfile.email || selectedProfile.id} (${role}) Permissions`;
+            document.getElementById('selectedUserName').textContent = `${selectedProfile.name || selectedProfile.email || selectedProfile.id} (${role}) Permissions`;
             document.getElementById('userPermissionForm').style.display = 'block';
             
             // Load all available sections; filtering will be applied in the renderer
@@ -3705,7 +3705,7 @@ Permissions:
             users.forEach(u => {
                 const opt = document.createElement('option');
                 opt.value = u.id;
-                opt.textContent = `${u.username || u.email || u.id} (${String(u.role || 'user').toUpperCase()})`;
+                opt.textContent = `${u.name || u.email || u.id} (${String(u.role || 'user').toUpperCase()})`;
                 select.appendChild(opt);
             });
 

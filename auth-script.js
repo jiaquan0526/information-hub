@@ -601,7 +601,7 @@ class AuthSystem {
         const activity = {
             id: Date.now().toString(),
             userId: user.id,
-            username: user.username,
+            username: user.name || user.username,
             action: action,
             description: description,
             timestamp: new Date().toISOString(),
