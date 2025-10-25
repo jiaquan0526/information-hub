@@ -2587,6 +2587,55 @@ class SectionManager {
                         // Track which new IDs are the result of renaming (don't create these)
                         const renamedNewIds = new Set(idChanges.map(c => c.newId));
                         console.log('[Tab Changes] IDs being renamed:', Array.from(renamedOldIds), '→', Array.from(renamedNewIds));
+                        
+                        // CRITICAL: Check for unmatched tabs that might be renames we missed
+                        const unmatchedDisappeared = disappearedIds.filter(id => !renamedOldIds.has(id) && !explicitlyDeletedTabIds.has(id));
+                        const unmatchedAppeared = appearedIds.filter(id => !renamedNewIds.has(id));
+                        
+                        console.log('[Tab Changes] Unmatched disappeared IDs:', unmatchedDisappeared);
+                        console.log('[Tab Changes] Unmatched appeared IDs:', unmatchedAppeared);
+                        
+                        // If we have unmatched pairs and they're equal in number, try to pair them
+                        if (unmatchedDisappeared.length > 0 && unmatchedDisappeared.length === unmatchedAppeared.length) {
+                            console.log('[Tab Changes] Found unmatched pairs - these might be renames we missed!');
+                            
+                            // For each unmatched pair, check if it has resources and ask user
+                            for (let i = 0; i < unmatchedDisappeared.length; i++) {
+                                const oldId = unmatchedDisappeared[i];
+                                const newId = unmatchedAppeared[i];
+                                
+                                // Check if old ID has resources
+                                try {
+                                    const { count: resourceCount } = await window.supabaseClient
+                                        .from('resources')
+                                        .select('*', { count: 'exact', head: true })
+                                        .eq('section_id', sid)
+                                        .eq('type', oldId);
+                                    
+                                    if (resourceCount > 0) {
+                                        const oldName = prevNameById.get(oldId) || oldId;
+                                        const newName = nextNameById.get(newId) || newId;
+                                        
+                                        const confirmMsg = `⚠️ MIGRATION NEEDED:\n\n` +
+                                                          `Did you rename tab "${oldName}" (ID: ${oldId}) to "${newName}" (ID: ${newId})?\n\n` +
+                                                          `This tab has ${resourceCount} resource(s).\n\n` +
+                                                          `• Click OK to MIGRATE resources from "${oldId}" to "${newId}"\n` +
+                                                          `• Click CANCEL to KEEP resources under "${oldId}"`;
+                                        
+                                        if (confirm(confirmMsg)) {
+                                            console.log(`[User Confirmed] Migrating resources: "${oldId}" → "${newId}"`);
+                                            idChanges.push({ oldId, newId, method: 'user-confirmed', resourceCount });
+                                            renamedOldIds.add(oldId);
+                                            renamedNewIds.add(newId);
+                                        } else {
+                                            console.log(`[User Declined] Keeping resources under "${oldId}"`);
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.warn(`Failed to check resources for unmatched tab "${oldId}":`, err);
+                                }
+                            }
+                        }
 
                         // STEP 2: Creates (skip IDs that are the result of renaming)
                         nextIds.forEach(async (id) => {
