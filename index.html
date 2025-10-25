@@ -2417,7 +2417,7 @@
                     if (enabled && message) {
                         const linkHtml = link ? ` <a href="${esc(link)}" target="_blank" rel="noopener">Learn more</a>` : '';
                         broadcastRow = `<tr style="background:#fffbeb;">
-                            <td colspan="6" style="padding:12px;border-bottom:2px solid #fcd34d;"><strong>📢 Announcement:</strong> ${esc(message)}${linkHtml}</td>
+                            <td colspan="7" style="padding:12px;border-bottom:2px solid #fcd34d;"><strong>📢 Announcement:</strong> ${esc(message)}${linkHtml}</td>
                         </tr>`;
                     }
                 } catch(_) {}
@@ -2485,12 +2485,60 @@
                     const resource = esc(resourceRaw);
                     const tabDisplay = esc(tabDisplayRaw);
                     
+                    // Build detailed changes display from metadata - COMPACT SINGLE LINE
+                    let detailsHtml = '—';
+                    try {
+                        // Show detailed changes if available - GROUP INTO ONE LINE
+                        if (meta.changes && typeof meta.changes === 'object') {
+                            const changes = meta.changes;
+                            const changeSummaries = [];
+                            
+                            // Format each field change compactly
+                            for (const [field, change] of Object.entries(changes)) {
+                                if (change && typeof change === 'object') {
+                                    if (field === 'tags' && change.added && change.removed) {
+                                        // Compact tag formatting
+                                        const parts = [];
+                                        if (change.added && change.added.length > 0) {
+                                            parts.push(`+${change.added.join(',')}`);
+                                        }
+                                        if (change.removed && change.removed.length > 0) {
+                                            parts.push(`-${change.removed.join(',')}`);
+                                        }
+                                        if (parts.length > 0) {
+                                            changeSummaries.push(`<strong>tags</strong>: ${esc(parts.join(' '))}`);
+                                        }
+                                    } else if (change.old !== undefined && change.new !== undefined) {
+                                        // Compact old → new format with truncation
+                                        const oldVal = String(change.old || '(empty)').substring(0, 30);
+                                        const newVal = String(change.new || '(empty)').substring(0, 30);
+                                        changeSummaries.push(`<strong>${esc(field)}</strong>: ${esc(oldVal)} → ${esc(newVal)}`);
+                                    }
+                                }
+                            }
+                            
+                            if (changeSummaries.length > 0) {
+                                // Single line with all changes separated by bullets
+                                detailsHtml = `📝 ${changeSummaries.join(' • ')}`;
+                            }
+                        }
+                        
+                        // Show change count if available (fallback)
+                        if (meta.changeCount && meta.changedFields && detailsHtml === '—') {
+                            const fields = Array.isArray(meta.changedFields) ? meta.changedFields : [];
+                            if (fields.length > 0) {
+                                detailsHtml = `📝 Changed ${meta.changeCount} field(s): <strong>${esc(fields.join(', '))}</strong>`;
+                            }
+                        }
+                    } catch (_) {}
+                    
                     return `<tr>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;"><strong>${who}</strong></td>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${action}</td>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${section}</td>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;color:#6366f1;">${tabDisplay || '—'}</td>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${resource || '—'}</td>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;font-size:0.85rem;color:#555;max-width:350px;">${detailsHtml}</td>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;color:#999;font-size:0.9rem;white-space:nowrap;">${esc(when)}</td>
                     </tr>`;
                 }).join('');
@@ -2498,9 +2546,9 @@
                 wrapper.className = 'modal';
                 wrapper.style.display = 'block';
                 wrapper.innerHTML = `
-                    <div class=\"modal-content\" style=\"max-width:900px;\">
+                    <div class=\"modal-content\" style=\"max-width:1100px;\">
                         <div class=\"modal-header\"><h2>Recent Updates (7 days)</h2><span class=\"close\" onclick=\"this.closest('.modal').remove()\">&times;</span></div>
-                        <div class=\"modal-body\" style=\"max-height:60vh;overflow:auto;padding:0;\">\n                            <table style=\\\"width:100%;border-collapse:collapse;font-size:0.95rem;\\\">\n                                <thead style=\\\"position:sticky;top:0;background:#f8f9fa;z-index:1;\\\">\n                                    <tr>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Who</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Action</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Section</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Type</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Resource</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">When</th>\n                                    </tr>\n                                </thead>\n                                <tbody>\n                                    ${broadcastRow}\n                                    ${content || '<tr><td colspan=\\\"6\\\" style=\\\"padding:20px;text-align:center;color:#999;\\\">No recent updates.</td></tr>'}\n                                </tbody>\n                            </table>\n                        </div>
+                        <div class=\"modal-body\" style=\"max-height:60vh;overflow:auto;padding:0;\">\n                            <table style=\\\"width:100%;border-collapse:collapse;font-size:0.95rem;\\\">\n                                <thead style=\\\"position:sticky;top:0;background:#f8f9fa;z-index:1;\\\">\n                                    <tr>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Who</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Action</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Section</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Type</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Resource</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;max-width:350px;\\\">Details</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">When</th>\n                                    </tr>\n                                </thead>\n                                <tbody>\n                                    ${broadcastRow}\n                                    ${content || '<tr><td colspan=\\\"7\\\" style=\\\"padding:20px;text-align:center;color:#999;\\\">No recent updates.</td></tr>'}\n                                </tbody>\n                            </table>\n                        </div>
                     </div>`;
                 document.body.appendChild(wrapper);
             } catch (e) { alert('Unable to open updates: ' + e.message); }
@@ -6042,6 +6090,21 @@ Permissions:
         window.saveSectionOrder = async function() {
             try {
                 if (window.hubDatabase && window.hubDatabaseReady) {
+                    // Fetch previous order for activity tracking
+                    let previousOrder = {};
+                    try {
+                        const { data: sections } = await window.supabaseClient
+                            .from('sections')
+                            .select('section_id, config')
+                            .in('section_id', sectionOrder.map(s => s.id));
+                        if (sections) {
+                            sections.forEach(s => {
+                                const order = s.config?.order || 0;
+                                previousOrder[s.section_id] = order;
+                            });
+                        }
+                    } catch (_) {}
+                    
                     // Update each section's order in Supabase via wrapper; fallback to direct Supabase batch update if wrapper fails
                     try {
                         for (const section of sectionOrder) {
@@ -6084,6 +6147,34 @@ Permissions:
                         }
                         console.log('Section order saved to Supabase (direct fallback)');
                     }
+                    
+                    // Log order changes to activity log
+                    try {
+                        const orderChanges = [];
+                        for (const section of sectionOrder) {
+                            const oldOrder = previousOrder[section.id] || 0;
+                            const newOrder = section.order || 0;
+                            if (oldOrder !== newOrder) {
+                                orderChanges.push({
+                                    sectionId: section.id,
+                                    sectionName: section.name,
+                                    oldOrder: oldOrder,
+                                    newOrder: newOrder
+                                });
+                            }
+                        }
+                        
+                        if (orderChanges.length > 0) {
+                            await hubDatabase.saveActivity({
+                                action: 'REORDER_SECTIONS',
+                                metadata: {
+                                    changes: orderChanges,
+                                    changeCount: orderChanges.length
+                                }
+                            });
+                            console.log('[Section Order] Logged', orderChanges.length, 'order changes');
+                        }
+                    } catch (_) {}
                     
                     // Section order is managed in Supabase database
                     updateMainHubSections();
