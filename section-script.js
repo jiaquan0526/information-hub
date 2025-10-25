@@ -880,6 +880,30 @@ class SectionManager {
         const isEditor = this.currentUser && String(this.currentUser.role || '').toLowerCase() === 'editor';
         const canDelete = this.canDeleteResource() && ((this.isAdmin() || isEditor) || this.isResourceOwner(resource));
 
+        // Pre-compute contact creator mailto link safely
+        let contactHtml = '';
+        try {
+            if (resource.creator_email) {
+                const creatorEmail = String(resource.creator_email || '');
+                const creatorName = String(resource.created_by_name || 'creator');
+                const resTitle = String(resource.title || 'Resource');
+                const resUrl = String(resource.url || '');
+                const subject = encodeURIComponent('Issue with resource: ' + resTitle);
+                const body = encodeURIComponent('Hi ' + creatorName + ',\n\nI am having trouble accessing this resource:\n\nResource: ' + resTitle + '\nURL: ' + resUrl + '\n\nIssue details:\n[Please describe the issue]\n\nThanks!');
+                contactHtml = `
+                    <div class="resource-contact">
+                        <i class="fas fa-envelope"></i>
+                        <a href="mailto:${this.escapeHtml(creatorEmail)}?subject=${subject}&body=${body}" class="contact-creator" title="Email ${this.escapeHtml(creatorName)} about access issues">
+                            Contact creator: ${this.escapeHtml(creatorEmail)}
+                        </a>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            // Silently skip contact link if there's any error
+            contactHtml = '';
+        }
+
         return `
             <div class="resource-card" data-id="${resource.id}">
                 <div class="resource-header">
@@ -903,14 +927,7 @@ class SectionManager {
                     ` : ''}
                 </div>
                 
-                ${resource.creator_email ? `
-                    <div class="resource-contact">
-                        <i class="fas fa-envelope"></i>
-                        <a href="mailto:${resource.creator_email}?subject=${encodeURIComponent('Issue with resource: ' + (resource.title || 'Resource'))}&body=${encodeURIComponent('Hi ' + (resource.created_by_name || 'there') + ',\\n\\nI am having trouble accessing this resource:\\n\\nResource: ' + (resource.title || 'Resource') + '\\nURL: ' + (resource.url || '') + '\\n\\nIssue details:\\n[Please describe the issue]\\n\\nThanks!')}" class="contact-creator" title="Email ${this.escapeHtml(resource.created_by_name || 'creator')} about access issues">
-                            Contact creator: ${this.escapeHtml(resource.creator_email)}
-                        </a>
-                    </div>
-                ` : ''}
+                ${contactHtml}
                 
                 <div class="resource-footer">
                     ${resource.createdAt ? `<span>Added: ${new Date(resource.createdAt).toLocaleDateString()}</span>` : ''}
