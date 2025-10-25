@@ -908,6 +908,36 @@ body {
     font-size: 0.8rem;
 }
 
+/* Contact Creator */
+.resource-contact {
+    padding: 12px;
+    background: #f8f9fa;
+    border-left: 3px solid #667eea;
+    margin: 10px 0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.resource-contact i {
+    color: #667eea;
+    font-size: 16px;
+}
+
+.contact-creator {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.contact-creator:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+
 .resource-footer {
     display: flex;
     justify-content: space-between;

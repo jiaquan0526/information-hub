@@ -3201,6 +3201,14 @@ class GlobalResourceSearch {
 						</span>
 					` : ''}
 				</div>
+				${resource.creator_email ? `
+					<div class="resource-contact" style="margin-top: 10px;">
+						<i class="fas fa-envelope"></i>
+						<a href="mailto:${resource.creator_email}?subject=${encodeURIComponent('Issue with resource: ' + (resource.title || 'Resource'))}&body=${encodeURIComponent('Hi ' + (resource.created_by_name || 'there') + ',\\n\\nI am having trouble accessing this resource:\\n\\nResource: ' + (resource.title || 'Resource') + '\\nURL: ' + (resource.url || '') + '\\n\\nIssue details:\\n[Please describe the issue]\\n\\nThanks!')}" class="contact-creator" title="Email ${this.escapeHtml(resource.created_by_name || 'creator')} about access issues" onclick="event.stopPropagation();">
+							Contact creator: ${this.escapeHtml(resource.creator_email)}
+						</a>
+					</div>
+				` : ''}
 			</div>
 		`;
 	}
