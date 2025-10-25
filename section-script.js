@@ -2458,31 +2458,73 @@ class SectionManager {
 						const sid = this.currentSection;
 
                         // STEP 1: Tab ID changes (MUST be first to prevent deletion of renamed tabs)
-                        // Build a mapping of what IDs might have been renamed by checking positions
+                        // Build a mapping of what IDs might have been renamed
                         console.log('[Tab Changes] Previous IDs:', prevIds);
                         console.log('[Tab Changes] Next IDs:', nextIds);
                         
                         const idChanges = [];
+                        
+                        // Method 1: Check by position (when same count)
                         if (prevIds.length === nextIds.length) {
-                            // If same number of tabs, check if IDs changed at same positions
                             for (let i = 0; i < prevIds.length; i++) {
                                 const oldId = prevIds[i];
                                 const newId = nextIds[i];
                                 if (oldId !== newId && !nextIds.includes(oldId) && !prevIds.includes(newId)) {
-                                    // This position had an ID change
-                                    console.log(`[Tab ID Change] Detected: position ${i}, "${oldId}" → "${newId}"`);
-                                    idChanges.push({ oldId, newId, position: i });
+                                    console.log(`[Tab ID Change] Detected by position: ${i}, "${oldId}" → "${newId}"`);
+                                    idChanges.push({ oldId, newId, position: i, method: 'position' });
+                                }
+                            }
+                        }
+                        
+                        // Method 2: Check by name similarity (more robust for complex edits)
+                        // Find tabs that disappeared from prevIds and appeared in nextIds
+                        const disappearedIds = prevIds.filter(id => !nextSet.has(id));
+                        const appearedIds = nextIds.filter(id => !prevSet.has(id));
+                        
+                        console.log('[Tab Changes] Disappeared IDs:', disappearedIds);
+                        console.log('[Tab Changes] Appeared IDs:', appearedIds);
+                        
+                        // If we have equal numbers of disappeared and appeared, try to match them
+                        if (disappearedIds.length === appearedIds.length && disappearedIds.length > 0) {
+                            // Match by name similarity
+                            for (const oldId of disappearedIds) {
+                                // Skip if already matched by position method
+                                if (idChanges.find(c => c.oldId === oldId)) continue;
+                                
+                                const oldName = prevNameById.get(oldId) || oldId;
+                                
+                                // Try to find a matching new ID by name similarity
+                                for (const newId of appearedIds) {
+                                    // Skip if already matched
+                                    if (idChanges.find(c => c.newId === newId)) continue;
+                                    
+                                    const newName = nextNameById.get(newId) || newId;
+                                    
+                                    // Match if names are similar or if this is the only unmatched pair
+                                    const namesSimilar = oldName.toLowerCase() === newName.toLowerCase() || 
+                                                        oldName.toLowerCase().includes(newName.toLowerCase()) ||
+                                                        newName.toLowerCase().includes(oldName.toLowerCase());
+                                    
+                                    const onlyUnmatchedPair = (disappearedIds.length === 1 && appearedIds.length === 1);
+                                    
+                                    if (namesSimilar || onlyUnmatchedPair) {
+                                        console.log(`[Tab ID Change] Detected by name: "${oldId}" (${oldName}) → "${newId}" (${newName})`);
+                                        idChanges.push({ oldId, newId, method: 'name' });
+                                        break;
+                                    }
                                 }
                             }
                         }
                         
                         // Track which old IDs are being renamed (don't delete these)
                         const renamedOldIds = new Set(idChanges.map(c => c.oldId));
-                        console.log('[Tab Changes] IDs being renamed:', Array.from(renamedOldIds));
+                        // Track which new IDs are the result of renaming (don't create these)
+                        const renamedNewIds = new Set(idChanges.map(c => c.newId));
+                        console.log('[Tab Changes] IDs being renamed:', Array.from(renamedOldIds), '→', Array.from(renamedNewIds));
 
-                        // STEP 2: Creates
+                        // STEP 2: Creates (skip IDs that are the result of renaming)
                         nextIds.forEach(async (id) => {
-                            if (!prevSet.has(id)) {
+                            if (!prevSet.has(id) && !renamedNewIds.has(id)) {
                                 try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, tabName: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
