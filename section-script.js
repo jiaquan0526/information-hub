@@ -2138,7 +2138,7 @@ class SectionManager {
                     : `Are you sure you want to delete the tab "${tabName}"?`;
                 
                 if (confirm(message)) {
-                    row.remove();
+                row.remove();
                 }
             });
             // Icon choose behavior
@@ -2351,6 +2351,69 @@ class SectionManager {
                                 } catch (err) {
                                     console.error(`[Tab Deletion] Failed to delete tab ${id} and its resources:`, err);
                                 }
+                            }
+                        }
+
+                        // Tab ID changes (id changed, need to update resources)
+                        // Build a mapping of what IDs might have been renamed by checking positions
+                        const idChanges = [];
+                        if (prevIds.length === nextIds.length) {
+                            // If same number of tabs, check if IDs changed at same positions
+                            for (let i = 0; i < prevIds.length; i++) {
+                                const oldId = prevIds[i];
+                                const newId = nextIds[i];
+                                if (oldId !== newId && !nextIds.includes(oldId) && !prevIds.includes(newId)) {
+                                    // This position had an ID change
+                                    idChanges.push({ oldId, newId, position: i });
+                                }
+                            }
+                        }
+                        
+                        // Update resources when tab IDs change
+                        for (const change of idChanges) {
+                            console.log(`[Tab ID Change] Renaming tab ID from "${change.oldId}" to "${change.newId}"`);
+                            try {
+                                // Count resources first
+                                const { count } = await window.supabaseClient
+                                    .from('resources')
+                                    .select('*', { count: 'exact', head: true })
+                                    .eq('section_id', sid)
+                                    .eq('type', change.oldId);
+                                
+                                if (count > 0) {
+                                    // Update all resources from old type to new type
+                                    const { data: updatedResources, error: updateError } = await window.supabaseClient
+                                        .from('resources')
+                                        .update({ type: change.newId })
+                                        .eq('section_id', sid)
+                                        .eq('type', change.oldId)
+                                        .select();
+                                    
+                                    if (updateError) {
+                                        console.error(`[Tab ID Change] Error updating resources:`, updateError);
+                                        showAlert(`Warning: Failed to update ${count} resource(s) from old tab ID "${change.oldId}" to "${change.newId}". Resources may be orphaned.`, 'error');
+                                    } else {
+                                        const updateCount = Array.isArray(updatedResources) ? updatedResources.length : 0;
+                                        console.log(`[Tab ID Change] Successfully updated ${updateCount} resource(s) from "${change.oldId}" to "${change.newId}"`);
+                                    }
+                                    
+                                    // Log the ID change activity
+                                    await window.supabaseClient.from('activities').insert({
+                                        user_id: this.currentUser ? this.currentUser.id : null,
+                                        action: 'RENAME_TAB_ID',
+                                        section_id: sid,
+                                        metadata: { 
+                                            oldTabId: change.oldId, 
+                                            newTabId: change.newId,
+                                            resourceCount: count,
+                                            username: uname 
+                                        },
+                                        timestamp: new Date(ts)
+                                    });
+                                }
+                            } catch (err) {
+                                console.error(`[Tab ID Change] Failed to update resources:`, err);
+                                showAlert(`Error: Failed to update resources when changing tab ID from "${change.oldId}" to "${change.newId}". ${err.message}`, 'error');
                             }
                         }
 
