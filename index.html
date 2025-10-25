@@ -2430,41 +2430,61 @@
                     const section = esc(sectionLabelRaw);
                     const actionRaw = a.action || a.type || 'updated';
                     const action = esc(actionRaw);
-                    const resourceId = a.resource_id || a.resourceId || '';
-                    let resourceRaw = a.title || a.resource || a.description || meta.title || '';
                     const actionLower = String(actionRaw).toLowerCase();
-                    if (!resourceRaw && (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab'))) {
+                    const resourceId = a.resource_id || a.resourceId || '';
+                    
+                    // Determine hierarchy level
+                    let level = 'resource';
+                    if (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab')) {
+                        level = 'tab';
+                    } else if (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section')) {
+                        level = 'section';
+                    }
+                    
+                    let resourceRaw = '';
+                    let tabDisplayRaw = '';
+                    
+                    if (level === 'tab') {
+                        // Tab-level: tab name goes in Type column, Resource is empty
                         if (meta && (meta.oldName || meta.newName)) {
                             const oldName = meta.oldName || '';
                             const newName = meta.newName || '';
-                            resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
+                            tabDisplayRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
                             const tabId = meta.tabId || meta.tabName || '';
-                            resourceRaw = tabNameBySection[sectionKey] && tabId ? (tabNameBySection[sectionKey][tabId] || tabId) : (meta.tabName || tabId || '');
+                            tabDisplayRaw = tabNameBySection[sectionKey] && tabId ? (tabNameBySection[sectionKey][tabId] || tabId) : (meta.tabName || tabId || '');
                         }
-                    }
-                    if (!resourceRaw && (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section'))) {
+                        resourceRaw = ''; // No resource for tab-level activities
+                    } else if (level === 'section') {
+                        // Section-level: section name already in Section column, others empty
                         if (meta && (meta.oldName || meta.newName)) {
                             const oldName = meta.oldName || '';
                             const newName = meta.newName || '';
-                            resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
-                        } else {
-                            resourceRaw = meta.sectionName || sectionLabelRaw || '';
+                            // For section renames, optionally show in resource column
+                            resourceRaw = oldName && newName ? `${oldName} → ${newName}` : '';
+                        }
+                    } else {
+                        // Resource-level: resource name in Resource column, tab in Type column
+                        resourceRaw = a.title || a.resource || a.description || meta.title || '';
+                        
+                        // Resolve resource title by ID when needed
+                        if ((isUuidLike(resourceRaw) || (resourceId && resourceId === resourceRaw) || !resourceRaw) && resourceId) {
+                            const resolved = resourceNameById[resourceId];
+                            if (resolved) resourceRaw = resolved;
+                        }
+                        
+                        // Get tab/type for resources
+                        const resourceType = a.type || a.resourceType || meta.type || '';
+                        if (resourceType && sectionKey && tabNameBySection[sectionKey] && tabNameBySection[sectionKey][resourceType]) {
+                            tabDisplayRaw = tabNameBySection[sectionKey][resourceType];
+                        } else if (resourceType) {
+                            tabDisplayRaw = String(resourceType).replace(/-/g, ' ');
                         }
                     }
-                    if ((isUuidLike(resourceRaw) || (resourceId && resourceId === resourceRaw) || !resourceRaw) && resourceId) {
-                        const resolved = resourceNameById[resourceId];
-                        if (resolved) resourceRaw = resolved;
-                    }
+                    
                     const resource = esc(resourceRaw);
-                    // Extract tab/type information
-                    let tabDisplay = '';
-                    const resourceType = a.type || a.resourceType || meta.type || '';
-                    if (resourceType && sectionKey && tabNameBySection[sectionKey] && tabNameBySection[sectionKey][resourceType]) {
-                        tabDisplay = esc(tabNameBySection[sectionKey][resourceType]);
-                    } else if (resourceType) {
-                        tabDisplay = esc(String(resourceType).replace(/-/g, ' '));
-                    }
+                    const tabDisplay = esc(tabDisplayRaw);
+                    
                     return `<tr>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;"><strong>${who}</strong></td>
                         <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${action}</td>
