@@ -2870,7 +2870,9 @@ class SectionManager {
                         }
 
                         // Tab updates (IDs unchanged - track name, icon, order changes)
-                        nextIds.forEach(async (id, newIndex) => {
+                        // Use for loop instead of forEach to ensure synchronous execution
+                        for (let newIndex = 0; newIndex < nextIds.length; newIndex++) {
+                            const id = nextIds[newIndex];
                             if (prevSet.has(id)) {
                                 const oldIndex = prevIds.indexOf(id);
                                 
@@ -2896,6 +2898,7 @@ class SectionManager {
                                 
                                 // Collect update if any changes detected
                                 if (Object.keys(tabChanges).length > 0) {
+                                    console.log(`[Tab Update] "${id}" changed:`, Object.keys(tabChanges).join(', '), tabChanges);
                                     batchChanges.updated.push({
                                         tabId: id,
                                         tabName: newTab.name,
@@ -2905,7 +2908,7 @@ class SectionManager {
                                     });
                                 }
                             }
-                        });
+                        }
                         
                         // Track section-wide category changes
                         const oldCategories = Array.isArray(existingCfg.categories) ? existingCfg.categories.sort() : [];
