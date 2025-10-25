@@ -339,6 +339,75 @@ class HubDatabase {
         }
     }
 
+    // Compare old and new section values to track detailed changes
+    compareSectionChanges(oldSection, newSection) {
+        const changes = {};
+        
+        // Track name changes
+        if (oldSection.name !== newSection.name) {
+            changes.name = {
+                old: oldSection.name,
+                new: newSection.name
+            };
+        }
+        
+        // Track icon changes
+        if (oldSection.icon !== newSection.icon) {
+            changes.icon = {
+                old: oldSection.icon || '',
+                new: newSection.icon || ''
+            };
+        }
+        
+        // Track color changes
+        if (oldSection.color !== newSection.color) {
+            changes.color = {
+                old: oldSection.color || '',
+                new: newSection.color || ''
+            };
+        }
+        
+        // Track visibility changes
+        const oldVisible = oldSection.visible !== false;
+        const newVisible = newSection.visible !== false;
+        if (oldVisible !== newVisible) {
+            changes.visibility = {
+                old: oldVisible,
+                new: newVisible
+            };
+        }
+        
+        // Track intro text changes
+        const oldIntro = oldSection.intro || '';
+        const newIntro = newSection.intro || '';
+        if (oldIntro !== newIntro) {
+            changes.intro = {
+                old: oldIntro,
+                new: newIntro
+            };
+        }
+        
+        // Track order changes
+        if (oldSection.order !== newSection.order) {
+            changes.order = {
+                old: oldSection.order || 0,
+                new: newSection.order || 0
+            };
+        }
+        
+        // Track background image changes
+        const oldImage = oldSection.image || '';
+        const newImage = newSection.image || '';
+        if (oldImage !== newImage) {
+            changes.backgroundImage = {
+                old: oldImage,
+                new: newImage
+            };
+        }
+        
+        return changes;
+    }
+
     async updateSection(section) {
         try {
             const run = async () => {

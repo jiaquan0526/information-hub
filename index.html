@@ -5677,28 +5677,49 @@ Permissions:
                     return;
                 }
                 if (isEdit) {
-                    // Fetch previous config for tab/type diff
+                    // Fetch previous section data for detailed change tracking
                     let __prevCfg = null;
+                    let __prevSection = null;
                     try {
                         if (window.supabaseClient) {
                             const { data: prevRow } = await window.supabaseClient
                                 .from('sections')
-                                .select('config')
+                                .select('section_id, name, icon, color, config')
                                 .eq('section_id', target.id)
                                 .single();
-                            __prevCfg = prevRow && prevRow.config ? prevRow.config : null;
+                            if (prevRow) {
+                                __prevCfg = prevRow.config || null;
+                                __prevSection = {
+                                    id: prevRow.section_id,
+                                    name: prevRow.name,
+                                    icon: prevRow.icon,
+                                    color: prevRow.color,
+                                    visible: prevRow.config?.visible !== false,
+                                    intro: prevRow.config?.intro || '',
+                                    order: prevRow.config?.order || 0,
+                                    image: prevRow.config?.image || ''
+                                };
+                            }
                         }
                     } catch(_) {}
                     try {
                         await hubDatabase.updateSection(target);
                         console.log('Section updated in Supabase:', target);
-                        // Log UPDATE_SECTION (include name change details when applicable)
+                        // Log UPDATE_SECTION with detailed field changes
                         try {
-                            const oldName = prevNameForLog || target.id;
-                            const newName = nameInput || target.name || target.id;
-                            const meta = (oldName && newName && String(oldName) !== String(newName))
-                                ? { oldName, newName }
-                                : { name: newName };
+                            let detailedChanges = {};
+                            if (__prevSection && hubDatabase.compareSectionChanges) {
+                                detailedChanges = hubDatabase.compareSectionChanges(__prevSection, target);
+                            }
+                            const meta = {
+                                sectionName: target.name || target.id
+                            };
+                            // Add detailed changes if any exist
+                            if (detailedChanges && Object.keys(detailedChanges).length > 0) {
+                                meta.changes = detailedChanges;
+                                meta.changedFields = Object.keys(detailedChanges);
+                                meta.changeCount = Object.keys(detailedChanges).length;
+                            }
                             hubDatabase.saveActivity({ action: 'UPDATE_SECTION', sectionId: target.id, metadata: meta });
                         } catch(_) {}
                         // Diff tabs/types and log changes

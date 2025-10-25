@@ -74,6 +74,48 @@ class SectionManager {
         } catch (_) {}
     }
 
+    // Compare old and new tab values to track detailed changes
+    compareTabChanges(oldTab, newTab) {
+        const changes = {};
+        
+        // Track ID changes
+        if (oldTab.id !== newTab.id) {
+            changes.id = {
+                old: oldTab.id,
+                new: newTab.id
+            };
+        }
+        
+        // Track name changes
+        if (oldTab.name !== newTab.name) {
+            changes.name = {
+                old: oldTab.name,
+                new: newTab.name
+            };
+        }
+        
+        // Track icon changes
+        const oldIcon = oldTab.icon || '';
+        const newIcon = newTab.icon || '';
+        if (oldIcon !== newIcon) {
+            changes.icon = {
+                old: oldIcon,
+                new: newIcon
+            };
+        }
+        
+        // Track order/position changes
+        if (oldTab.order !== undefined && newTab.order !== undefined 
+            && oldTab.order !== newTab.order) {
+            changes.order = {
+                old: oldTab.order,
+                new: newTab.order
+            };
+        }
+        
+        return changes;
+    }
+
     // Compare old and new resource values to track detailed changes
     compareResourceChanges(oldResource, newResource) {
         const changes = {};
@@ -2529,16 +2571,85 @@ class SectionManager {
                             }
                         }
 
-                        // Renames (ids unchanged, name changed)
-                        nextIds.forEach(async (id) => {
+                        // Tab updates (IDs unchanged - track name, icon, order changes)
+                        nextIds.forEach(async (id, newIndex) => {
                             if (prevSet.has(id)) {
-                                const oldName = prevNameById.get(id) || id;
-                                const newName = nextNameById.get(id) || id;
-                                if (String(oldName).trim() !== String(newName).trim()) {
-                                    try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                const oldIndex = prevIds.indexOf(id);
+                                
+                                // Build old and new tab objects for comparison
+                                const prevType = prevTypesArr.find(t => String(t?.id || '').trim() === id) || {};
+                                const oldTab = {
+                                    id: id,
+                                    name: prevNameById.get(id) || id,
+                                    icon: prevType.icon || '',
+                                    order: oldIndex
+                                };
+                                
+                                const nextRow = rowById.get(id) || {};
+                                const newTab = {
+                                    id: id,
+                                    name: nextNameById.get(id) || id,
+                                    icon: nextRow.icon || '',
+                                    order: newIndex
+                                };
+                                
+                                // Compare for detailed changes
+                                const tabChanges = this.compareTabChanges(oldTab, newTab);
+                                
+                                // Log if any changes detected
+                                if (Object.keys(tabChanges).length > 0) {
+                                    try {
+                                        await window.supabaseClient.from('activities').insert({
+                                            user_id: this.currentUser ? this.currentUser.id : null,
+                                            action: 'UPDATE_TAB',
+                                            section_id: sid,
+                                            metadata: {
+                                                tabId: id,
+                                                tabName: newTab.name,
+                                                changes: tabChanges,
+                                                changedFields: Object.keys(tabChanges),
+                                                changeCount: Object.keys(tabChanges).length,
+                                                username: uname,
+                                                name: uname
+                                            },
+                                            timestamp: new Date(ts)
+                                        });
+                                    } catch (_) {}
                                 }
                             }
                         });
+                        
+                        // Track section-wide category changes
+                        const oldCategories = Array.isArray(existingCfg.categories) ? existingCfg.categories.sort() : [];
+                        const newCategories = Array.isArray(categories) ? categories.sort() : [];
+                        const oldCatStr = JSON.stringify(oldCategories);
+                        const newCatStr = JSON.stringify(newCategories);
+                        if (oldCatStr !== newCatStr) {
+                            try {
+                                const added = newCategories.filter(c => !oldCategories.includes(c));
+                                const removed = oldCategories.filter(c => !newCategories.includes(c));
+                                await window.supabaseClient.from('activities').insert({
+                                    user_id: this.currentUser ? this.currentUser.id : null,
+                                    action: 'UPDATE_CATEGORIES',
+                                    section_id: sid,
+                                    metadata: {
+                                        changes: {
+                                            categories: {
+                                                old: oldCategories,
+                                                new: newCategories,
+                                                added: added,
+                                                removed: removed
+                                            }
+                                        },
+                                        changedFields: ['categories'],
+                                        changeCount: 1,
+                                        username: uname,
+                                        name: uname
+                                    },
+                                    timestamp: new Date(ts)
+                                });
+                            } catch (_) {}
+                        }
 					}
 				} catch (_) { /* best-effort logging; ignore */ }
             // Seed example resources for any types that have none yet in Supabase
