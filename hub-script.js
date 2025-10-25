@@ -1874,7 +1874,7 @@ window.exportAuditLog = async () => {
         const activityData = activities.map(activity => ({
             'ID': activity.id,
             'User ID': activity.userId,
-            'Username': activity.username,
+            'Name': activity.name || activity.username,
             'Action': activity.action,
             'Description': activity.description,
             'Timestamp': formatUserTZ(activity.timestamp),

@@ -781,7 +781,7 @@ class HubDatabase {
                 try {
                     const { data: profs } = await this.supabase
                         .from('profiles')
-                        .select('id, username, email')
+                        .select('id, username, name, email')
                         .in('id', userIds);
                     (profs || []).forEach(p => { usersById[p.id] = p; });
                 } catch (_) {}
@@ -791,6 +791,7 @@ class HubDatabase {
                 const meta = r.metadata || {};
                 const prof = r.user_id ? usersById[r.user_id] : null;
                 return Object.assign({}, r, {
+                    name: meta.name || (prof && prof.name) || null,
                     username: meta.username || (prof && (prof.username || prof.email)) || null,
                     description: meta.description || meta.title || null,
                     title: meta.title || null,

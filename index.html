@@ -2171,7 +2171,7 @@
                 const itemsFromActivities = latest.map(a => {
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
                     const meta = (a && a.metadata) ? a.metadata : {};
-                    const who = a.username || meta.username || a.user || 'Someone';
+                    const who = a.name || meta.name || a.username || meta.username || a.user || 'Someone';
                     const section = a.section || a.sectionId || a.category || 'general';
                     const sectionLabel = (sectionNames && sectionNames[section]) ? sectionNames[section] : prettyName(section);
                     const action = a.action || a.type || 'updated';
@@ -2399,7 +2399,7 @@
                     if (a && a.__broadcast) return a.__broadcast;
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
                     const meta = (a && a.metadata) ? a.metadata : {};
-                    const who = esc(a.username || meta.username || a.user || 'Someone');
+                    const who = esc(a.name || meta.name || a.username || meta.username || a.user || 'Someone');
                     const sectionKey = a.section || a.sectionId || a.category || 'general';
                     const sectionLabelRaw = sectionNames[sectionKey] || prettyName(sectionKey);
                     const section = esc(sectionLabelRaw);
@@ -2614,7 +2614,7 @@
             let activityText = 'Recent Activity:\n\n';
             activities.slice(0, 10).forEach(activity => {
                 const date = new Date(activity.timestamp).toLocaleString();
-                activityText += `• ${activity.username}: ${activity.action} - ${activity.description}\n   ${date}\n\n`;
+                activityText += `• ${activity.name || activity.username}: ${activity.action} - ${activity.description}\n   ${date}\n\n`;
             });
             alert(activityText);
         };

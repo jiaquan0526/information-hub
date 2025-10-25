@@ -95,6 +95,7 @@ class SectionManager {
                     section_id: payload.section,
                     resource_id: payload.resourceId,
                     metadata: {
+                        name: payload.username,
                         username: payload.username,
                         title: payload.title,
                         type: payload.type
@@ -2253,14 +2254,14 @@ class SectionManager {
                         // Creates
                         nextIds.forEach(async (id) => {
                             if (!prevSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, name: nextNameById.get(id) || id, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, name: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 
                         // Deletions
                         prevIds.forEach(async (id) => {
                             if (!nextSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, name: prevNameById.get(id) || id, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, name: prevNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 
@@ -2270,7 +2271,7 @@ class SectionManager {
                                 const oldName = prevNameById.get(id) || id;
                                 const newName = nextNameById.get(id) || id;
                                 if (String(oldName).trim() !== String(newName).trim()) {
-                                    try { await window.supabaseClient.from('activities').insert({ action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                    try { await window.supabaseClient.from('activities').insert({ action: 'UPDATE_TAB', section_id: sid, metadata: { tabId: id, oldName, newName, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                                 }
                             }
                         });
