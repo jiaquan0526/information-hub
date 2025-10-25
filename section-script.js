@@ -2848,18 +2848,39 @@ class SectionManager {
                                         console.log(`[Tab ID Change] Successfully updated ${updateCount} resource(s) from "${change.oldId}" to "${change.newId}"`);
                                     }
                                     
-                                    // Collect ID change as an UPDATE (id field changed), not a separate "rename"
+                                    // Check for other property changes (name, icon, order) when ID changes
+                                    const oldIndex = prevIds.indexOf(change.oldId);
+                                    const newIndex = nextIds.indexOf(change.newId);
+                                    
+                                    const prevType = prevTypesArr.find(t => String(t?.id || '').trim() === change.oldId) || {};
+                                    const oldTab = {
+                                        id: change.oldId,
+                                        name: prevNameById.get(change.oldId) || change.oldId,
+                                        icon: prevType.icon || '',
+                                        order: oldIndex
+                                    };
+                                    
+                                    const nextRow = rowById.get(change.newId) || {};
+                                    const newTab = {
+                                        id: change.newId,
+                                        name: nextNameById.get(change.newId) || change.newId,
+                                        icon: nextRow.icon || '',
+                                        order: newIndex
+                                    };
+                                    
+                                    // Get ALL changes including ID
+                                    const allChanges = this.compareTabChanges(oldTab, newTab);
+                                    
+                                    // The ID change is already in allChanges, now we have name/icon/order too!
+                                    console.log(`[Tab ID Change] "${change.oldId}" → "${change.newId}" changed:`, Object.keys(allChanges).join(', '), allChanges);
+                                    
+                                    // Collect ID change as an UPDATE with ALL property changes
                                     batchChanges.updated.push({
                                         tabId: change.newId,
-                                        tabName: nextNameById.get(change.newId) || change.newId,
-                                        changes: {
-                                            id: {
-                                                old: change.oldId,
-                                                new: change.newId
-                                            }
-                                        },
-                                        changedFields: ['id'],
-                                        changeCount: 1,
+                                        tabName: newTab.name,
+                                        changes: allChanges,
+                                        changedFields: Object.keys(allChanges),
+                                        changeCount: Object.keys(allChanges).length,
                                         resourceCount: count
                                     });
                                 }
@@ -2871,9 +2892,10 @@ class SectionManager {
 
                         // Tab updates (IDs unchanged - track name, icon, order changes)
                         // Use for loop instead of forEach to ensure synchronous execution
+                        // Skip tabs whose IDs changed (already handled above)
                         for (let newIndex = 0; newIndex < nextIds.length; newIndex++) {
                             const id = nextIds[newIndex];
-                            if (prevSet.has(id)) {
+                            if (prevSet.has(id) && !renamedNewIds.has(id)) {
                                 const oldIndex = prevIds.indexOf(id);
                                 
                                 // Build old and new tab objects for comparison
