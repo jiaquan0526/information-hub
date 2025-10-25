@@ -1024,53 +1024,54 @@ class InformationHub {
             })();
             const section = esc(a.section || a.section_id || '');
             
-            // Build detailed changes display from metadata
+            // Build detailed changes display from metadata - COMPACT SINGLE LINE
             let detailsHtml = '';
             try {
                 const meta = a.metadata || {};
                 
-                // Show detailed changes if available
+                // Show detailed changes if available - GROUP INTO ONE LINE
                 if (meta.changes && typeof meta.changes === 'object') {
                     const changes = meta.changes;
-                    const changeDetails = [];
+                    const changeSummaries = [];
                     
-                    // Format each field change
+                    // Format each field change compactly
                     for (const [field, change] of Object.entries(changes)) {
                         if (change && typeof change === 'object') {
                             if (field === 'tags' && change.added && change.removed) {
-                                // Special formatting for tags
+                                // Compact tag formatting
                                 const parts = [];
                                 if (change.added && change.added.length > 0) {
-                                    parts.push(`+${change.added.join(', ')}`);
+                                    parts.push(`+${change.added.join(',')}`);
                                 }
                                 if (change.removed && change.removed.length > 0) {
-                                    parts.push(`-${change.removed.join(', ')}`);
+                                    parts.push(`-${change.removed.join(',')}`);
                                 }
                                 if (parts.length > 0) {
-                                    changeDetails.push(`<span style="color:#666;">Tags:</span> ${esc(parts.join(' '))}`);
+                                    changeSummaries.push(`<strong>tags</strong>: ${esc(parts.join(' '))}`);
                                 }
                             } else if (change.old !== undefined && change.new !== undefined) {
-                                // Standard old → new format
-                                const oldVal = String(change.old || '(empty)');
-                                const newVal = String(change.new || '(empty)');
-                                changeDetails.push(`<span style="color:#666;">${esc(field)}:</span> ${esc(oldVal)} → ${esc(newVal)}`);
+                                // Compact old → new format
+                                const oldVal = String(change.old || '(empty)').substring(0, 30);
+                                const newVal = String(change.new || '(empty)').substring(0, 30);
+                                changeSummaries.push(`<strong>${esc(field)}</strong>: ${esc(oldVal)} → ${esc(newVal)}`);
                             }
                         }
                     }
                     
-                    if (changeDetails.length > 0) {
-                        detailsHtml = `<div class="audit-details" style="margin-top:4px; font-size:12px; color:#555; padding-left:12px; border-left:2px solid #e0e0e0;">
-                            ${changeDetails.join('<br>')}
+                    if (changeSummaries.length > 0) {
+                        // Single line with all changes separated by bullets
+                        detailsHtml = `<div class="audit-details" style="margin-top:4px; font-size:12px; color:#555;">
+                            📝 ${changeSummaries.join(' • ')}
                         </div>`;
                     }
                 }
                 
-                // Show change count if available
-                if (meta.changeCount && meta.changedFields) {
+                // Show change count if available (fallback)
+                if (meta.changeCount && meta.changedFields && !detailsHtml) {
                     const fields = Array.isArray(meta.changedFields) ? meta.changedFields : [];
-                    if (fields.length > 0 && !detailsHtml) {
+                    if (fields.length > 0) {
                         detailsHtml = `<div class="audit-details" style="margin-top:4px; font-size:12px; color:#555;">
-                            Changed ${meta.changeCount} field(s): ${esc(fields.join(', '))}
+                            📝 Changed ${meta.changeCount} field(s): <strong>${esc(fields.join(', '))}</strong>
                         </div>`;
                     }
                 }
