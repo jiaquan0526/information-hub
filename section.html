@@ -158,33 +158,61 @@
                 ensureKeys();
                 try {
                     if (window.supabase && !window.supabaseClient && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+                        console.log('[Section Init] Creating Supabase client with persistSession=true');
                         window.supabaseClient = window.supabase.createClient(
                             window.SUPABASE_URL,
                             window.SUPABASE_ANON_KEY,
-                            { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+                            { 
+                                auth: { 
+                                    persistSession: true, 
+                                    autoRefreshToken: true, 
+                                    detectSessionInUrl: true
+                                    // Use default storageKey to match hub page
+                                } 
+                            }
                         );
-                        (async function setSessionFromUrl(){
+                        
+                        // Try to restore session immediately
+                        (async function restoreSession(){
                             try {
+                                console.log('[Section Init] Attempting to restore session...');
+                                const { data: { session } } = await window.supabaseClient.auth.getSession();
+                                if (session) {
+                                    console.log('[Section Init] ✅ Session restored for:', session.user?.email);
+                                } else {
+                                    console.warn('[Section Init] ⚠️ No session found in storage');
+                                }
+                                
+                                // Also check for URL tokens
                                 const u = new URL(window.location.href);
                                 const at = u.searchParams.get('access_token');
                                 const rt = u.searchParams.get('refresh_token');
                                 const tt = u.searchParams.get('token_type');
-                                if (at && rt && window.supabaseClient && window.supabaseClient.auth && window.supabaseClient.auth.setSession) {
-                                    await window.supabaseClient.auth.setSession({ access_token: at, refresh_token: rt, token_type: tt || 'bearer' });
+                                if (at && rt) {
+                                    console.log('[Section Init] Setting session from URL tokens');
+                                    await window.supabaseClient.auth.setSession({ 
+                                        access_token: at, 
+                                        refresh_token: rt, 
+                                        token_type: tt || 'bearer' 
+                                    });
                                     u.searchParams.delete('access_token');
                                     u.searchParams.delete('refresh_token');
                                     u.searchParams.delete('token_type');
                                     history.replaceState({}, document.title, u.toString());
+                                    console.log('[Section Init] ✅ Session set from URL tokens');
                                 }
-                            } catch(_) {}
+                            } catch(e) {
+                                console.error('[Section Init] Session restore error:', e);
+                            }
                         })();
+                        
                         // Keep loading screen visible - section-script.js will hide it when data is ready
                         if (typeof window.updateSectionLoadingProgress === 'function') {
                             window.updateSectionLoadingProgress('Initializing...', 20);
                         }
                     }
                 } catch (e) { 
-                    console.warn('Supabase init (section) failed', e);
+                    console.error('[Section Init] Supabase init failed:', e);
                     if (typeof window.updateSectionLoadingProgress === 'function') {
                         window.updateSectionLoadingProgress('Connection issue...', 30);
                     }

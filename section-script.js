@@ -619,37 +619,54 @@ class SectionManager {
         // Validate session using Supabase auth (wait for client/session to be ready)
         try {
             let tries = 0;
-            while (tries < 100 && (!window.supabaseClient || !window.supabaseClient.auth)) {
+            while (tries < 150 && (!window.supabaseClient || !window.supabaseClient.auth)) {
                 await new Promise(r => setTimeout(r, 100));
                 tries++;
             }
             if (!window.supabaseClient) {
+                console.error('[Section] Supabase client not available after 15 seconds');
                 window.location.href = 'auth.html';
                 return false;
             }
-            // Give the session a moment to restore
+            
+            // Give the session more time to restore from localStorage/cookies
+            // especially when navigating from hub page without URL tokens
             let user = null;
             let authTries = 0;
-            while (authTries < 50 && !user) {
+            const maxAuthTries = 100; // 10 seconds total
+            
+            while (authTries < maxAuthTries && !user) {
                 try {
                     const { data: { user: u } } = await window.supabaseClient.auth.getUser();
                     user = u || null;
-                    if (user) break;
-                } catch (_) {}
+                    if (user) {
+                        console.log('[Section] Session validated for user:', user.email);
+                        break;
+                    }
+                } catch (e) {
+                    console.warn('[Section] Auth check attempt', authTries + 1, '/', maxAuthTries, e.message);
+                }
                 await new Promise(r => setTimeout(r, 100));
                 authTries++;
             }
+            
             if (!user) {
+                console.error('[Section] No user session found after', maxAuthTries * 100, 'ms');
                 window.location.href = 'auth.html';
                 return false;
             }
+            
             this.currentUser = await this.getCurrentUser();
             if (!this.currentUser) {
+                console.error('[Section] Failed to get current user profile');
                 window.location.href = 'auth.html';
                 return false;
             }
+            
+            console.log('[Section] ✅ Session validated successfully');
             return true;
-        } catch (_) {
+        } catch (e) {
+            console.error('[Section] Session validation error:', e);
             window.location.href = 'auth.html';
             return false;
         }
