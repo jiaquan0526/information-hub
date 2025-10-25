@@ -2201,8 +2201,16 @@ class SectionManager {
 }
 
 // Initialize section manager when DOM is loaded
-document.addEventListener('DOMContentLoaded', async () => {
-    const sectionManager = new SectionManager();
-    await sectionManager.init();
-});
+(async function initSectionManager() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', async () => {
+            const sectionManager = new SectionManager();
+            await sectionManager.init();
+        });
+    } else {
+        // DOM already loaded (defer script)
+        const sectionManager = new SectionManager();
+        await sectionManager.init();
+    }
+})();
 
