@@ -1000,7 +1000,8 @@ class SectionManager {
                 const resTitle = String(resource.title || 'Resource');
                 const resUrl = String(resource.url || '');
                 const subject = encodeURIComponent('Issue with resource: ' + resTitle);
-                const body = encodeURIComponent('Hi ' + creatorName + ',\n\nI am having trouble accessing this resource:\n\nResource: ' + resTitle + '\nURL: ' + resUrl + '\n\nIssue details:\n[Please describe the issue]\n\nThanks!');
+                // Use proper line breaks for email clients (CRLF)
+                const body = encodeURIComponent('Hi ' + creatorName + ',\n\nI am having trouble accessing this resource:\n\nResource: ' + resTitle + '\nURL: ' + resUrl + '\n\nIssue details:\n[Please describe the issue]\n\nThanks!').replace(/%0A/g, '%0D%0A');
                 contactHtml = `
                     <div class="resource-contact">
                         <i class="fas fa-envelope"></i>
