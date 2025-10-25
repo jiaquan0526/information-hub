@@ -2650,22 +2650,23 @@ class SectionManager {
                         };
 
                         // STEP 2: Creates (skip IDs that are the result of renaming)
-                        // But also verify if resources exist - if so, it's an UPDATE not a CREATE
+                        // But also verify if resources exist - if so, it might be a missed rename
+                        const unmatchedDisappearedIds = disappearedIds.filter(id => !renamedOldIds.has(id) && !explicitlyDeletedTabIds.has(id));
+                        
                         const createdTabPromises = nextIds
                             .filter(id => !prevSet.has(id) && !renamedNewIds.has(id))
                             .map(async (id) => {
                                 try {
-                                    // Check if resources already exist for this tab ID
-                                    const { count } = await window.supabaseClient
+                                    // Check if resources already exist for this NEW tab ID
+                                    const { count: newIdCount } = await window.supabaseClient
                                         .from('resources')
                                         .select('*', { count: 'exact', head: true })
                                         .eq('section_id', sid)
                                         .eq('type', id);
                                     
-                                    if (count > 0) {
-                                        // Resources exist - this is an UPDATE, not a CREATE
-                                        console.log(`[Tab Create Check] "${id}" has ${count} existing resources - treating as UPDATE not CREATE`);
-                                        // Add to updated list instead
+                                    if (newIdCount > 0) {
+                                        // Resources exist under new ID - this is an UPDATE
+                                        console.log(`[Tab Create Check] "${id}" has ${newIdCount} existing resources - treating as UPDATE not CREATE`);
                                         batchChanges.updated.push({
                                             tabId: id,
                                             tabName: nextNameById.get(id) || id,
@@ -2674,14 +2675,56 @@ class SectionManager {
                                             changeCount: 1,
                                             note: 'Tab was added to config (already had resources)'
                                         });
-                                    } else {
-                                        // No resources - genuinely new tab
-                                        console.log(`[Tab Create Check] "${id}" has no resources - treating as CREATE`);
-                                        batchChanges.created.push({
-                                            tabId: id,
-                                            tabName: nextNameById.get(id) || id
-                                        });
+                                        return; // Done
                                     }
+                                    
+                                    // No resources under new ID - check if this might be an ID change
+                                    // Look for any unmatched disappeared ID that might be this tab's old ID
+                                    if (unmatchedDisappearedIds.length > 0) {
+                                        console.log(`[Tab Create Check] "${id}" has no resources under new ID, checking for potential old IDs with resources...`);
+                                        
+                                        // Check each unmatched disappeared ID for resources
+                                        for (const oldId of unmatchedDisappearedIds) {
+                                            const { count: oldIdCount } = await window.supabaseClient
+                                                .from('resources')
+                                                .select('*', { count: 'exact', head: true })
+                                                .eq('section_id', sid)
+                                                .eq('type', oldId);
+                                            
+                                            if (oldIdCount > 0) {
+                                                const oldName = prevNameById.get(oldId) || oldId;
+                                                const newName = nextNameById.get(id) || id;
+                                                
+                                                // Prompt user to confirm if this is a rename
+                                                const confirmMsg = `⚠️ POSSIBLE ID CHANGE DETECTED:\n\n` +
+                                                                  `New tab "${newName}" (ID: ${id}) has no resources,\n` +
+                                                                  `but old tab "${oldName}" (ID: ${oldId}) has ${oldIdCount} resource(s).\n\n` +
+                                                                  `Did you rename "${oldId}" to "${id}"?\n\n` +
+                                                                  `• Click OK to MIGRATE resources from "${oldId}" to "${id}"\n` +
+                                                                  `• Click CANCEL if these are separate tabs`;
+                                                
+                                                if (confirm(confirmMsg)) {
+                                                    console.log(`[Tab Create Check] User confirmed rename: "${oldId}" → "${id}", will migrate ${oldIdCount} resources`);
+                                                    // Add to rename list for migration
+                                                    idChanges.push({ oldId, newId: id, method: 'create-check-confirmed', resourceCount: oldIdCount });
+                                                    renamedOldIds.add(oldId);
+                                                    renamedNewIds.add(id);
+                                                    // Remove from unmatched lists
+                                                    const idx = unmatchedDisappearedIds.indexOf(oldId);
+                                                    if (idx > -1) unmatchedDisappearedIds.splice(idx, 1);
+                                                    return; // Don't create, will be handled as rename
+                                                }
+                                                // User said no - check next old ID
+                                            }
+                                        }
+                                    }
+                                    
+                                    // No resources found anywhere - genuinely new tab
+                                    console.log(`[Tab Create Check] "${id}" has no resources - treating as CREATE`);
+                                    batchChanges.created.push({
+                                        tabId: id,
+                                        tabName: nextNameById.get(id) || id
+                                    });
                                 } catch (err) {
                                     console.warn(`[Tab Create Check] Failed to check resources for "${id}":`, err);
                                     // Fallback: treat as created
