@@ -1046,15 +1046,7 @@ class InformationHub {
                         detailsParts.push(`<strong>Deleted (${changes.deleted.length}):</strong> ${tabNames}`);
                     }
                     
-                    // Renamed tabs
-                    if (changes.renamed && changes.renamed.length > 0) {
-                        const renames = changes.renamed.map(t => 
-                            `${esc(t.oldTabName || t.oldTabId)} → ${esc(t.newTabName || t.newTabId)}`
-                        ).join(', ');
-                        detailsParts.push(`<strong>Renamed (${changes.renamed.length}):</strong> ${renames}`);
-                    }
-                    
-                    // Updated tabs
+                    // Updated tabs (including ID changes)
                     if (changes.updated && changes.updated.length > 0) {
                         const updates = changes.updated.map(t => {
                             const changedFields = t.changedFields || Object.keys(t.changes || {});

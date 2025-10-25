@@ -2677,8 +2677,7 @@ class SectionManager {
                         const batchChanges = {
                             created: [],
                             deleted: [],
-                            renamed: [],
-                            updated: []
+                            updated: []  // ID changes are now included here as "id" field updates
                         };
 
                         // STEP 2: Creates (skip IDs that are the result of renaming)
@@ -2849,12 +2848,18 @@ class SectionManager {
                                         console.log(`[Tab ID Change] Successfully updated ${updateCount} resource(s) from "${change.oldId}" to "${change.newId}"`);
                                     }
                                     
-                                    // Collect rename for batch logging
-                                    batchChanges.renamed.push({
-                                        oldTabId: change.oldId,
-                                        oldTabName: prevNameById.get(change.oldId) || change.oldId,
-                                        newTabId: change.newId,
-                                        newTabName: nextNameById.get(change.newId) || change.newId,
+                                    // Collect ID change as an UPDATE (id field changed), not a separate "rename"
+                                    batchChanges.updated.push({
+                                        tabId: change.newId,
+                                        tabName: nextNameById.get(change.newId) || change.newId,
+                                        changes: {
+                                            id: {
+                                                old: change.oldId,
+                                                new: change.newId
+                                            }
+                                        },
+                                        changedFields: ['id'],
+                                        changeCount: 1,
                                         resourceCount: count
                                     });
                                 }
@@ -2935,21 +2940,17 @@ class SectionManager {
                         }
                         
                         // Create single batch activity entry for all tab changes
-                        const totalChanges = batchChanges.created.length + batchChanges.deleted.length + 
-                                           batchChanges.renamed.length + batchChanges.updated.length;
+                        const totalChanges = batchChanges.created.length + batchChanges.deleted.length + batchChanges.updated.length;
                         
                         if (totalChanges > 0) {
                             try {
-                                // Build summary for display
+                                // Build summary for display (renamed is now merged into updated)
                                 const summaryParts = [];
                                 if (batchChanges.created.length > 0) {
                                     summaryParts.push(`${batchChanges.created.length} created`);
                                 }
                                 if (batchChanges.deleted.length > 0) {
                                     summaryParts.push(`${batchChanges.deleted.length} deleted`);
-                                }
-                                if (batchChanges.renamed.length > 0) {
-                                    summaryParts.push(`${batchChanges.renamed.length} renamed`);
                                 }
                                 if (batchChanges.updated.length > 0) {
                                     summaryParts.push(`${batchChanges.updated.length} updated`);
