@@ -2641,23 +2641,29 @@ class SectionManager {
                             }
                             
                             // Strategy: If old ID has resources but new ID doesn't → likely a rename
-                            const oldIdsWithResources = Array.from(oldIdResources.keys());
-                            const newIdsWithoutResources = unmatchedAppeared.filter(id => !newIdResources.has(id));
+                            // IMPORTANT: Sort by actual position in prevIds/nextIds before pairing!
+                            const oldIdsWithResources = Array.from(oldIdResources.keys())
+                                .sort((a, b) => prevIds.indexOf(a) - prevIds.indexOf(b));
+                            const newIdsWithoutResources = unmatchedAppeared
+                                .filter(id => !newIdResources.has(id))
+                                .sort((a, b) => nextIds.indexOf(a) - nextIds.indexOf(b));
                             
-                            console.log(`[Tab Changes] Old IDs with resources: ${oldIdsWithResources.length}`);
-                            console.log(`[Tab Changes] New IDs without resources: ${newIdsWithoutResources.length}`);
+                            console.log(`[Tab Changes] Old IDs with resources (sorted by position): ${oldIdsWithResources.join(', ')}`);
+                            console.log(`[Tab Changes] New IDs without resources (sorted by position): ${newIdsWithoutResources.join(', ')}`);
                             
                             if (oldIdsWithResources.length > 0 && newIdsWithoutResources.length > 0) {
                                 // Auto-pair by position for the minimum count (avoids prompts when possible)
                                 const pairCount = Math.min(oldIdsWithResources.length, newIdsWithoutResources.length);
-                                console.log(`[Tab Changes] Auto-pairing ${pairCount} tabs by position (${oldIdsWithResources.length} old with resources, ${newIdsWithoutResources.length} new without)`);
+                                console.log(`[Tab Changes] Auto-pairing ${pairCount} tabs by position (${oldIdsWithResources.length} old, ${newIdsWithoutResources.length} new)`);
                                 
                                 for (let i = 0; i < pairCount; i++) {
                                     const oldId = oldIdsWithResources[i];
                                     const newId = newIdsWithoutResources[i];
                                     const resourceCount = oldIdResources.get(oldId);
+                                    const oldPos = prevIds.indexOf(oldId);
+                                    const newPos = nextIds.indexOf(newId);
                                     
-                                    console.log(`[Tab Changes] ✅ Auto-detected rename: "${oldId}" → "${newId}" (${resourceCount} resources)`);
+                                    console.log(`[Tab Changes] ✅ Auto-detected rename: "${oldId}" (pos ${oldPos}) → "${newId}" (pos ${newPos}) [${resourceCount} resources]`);
                                     idChanges.push({ oldId, newId, method: 'resource-auto-detected', resourceCount });
                                     renamedOldIds.add(oldId);
                                     renamedNewIds.add(newId);
