@@ -1029,8 +1029,49 @@ class InformationHub {
             try {
                 const meta = a.metadata || {};
                 
+                // Special handling for batch tab updates - show detailed breakdown
+                if (act === 'BATCH_UPDATE_TABS' && meta.changes) {
+                    const changes = meta.changes;
+                    const detailsParts = [];
+                    
+                    // Created tabs
+                    if (changes.created && changes.created.length > 0) {
+                        const tabNames = changes.created.map(t => esc(t.tabName || t.tabId)).join(', ');
+                        detailsParts.push(`<strong>Created (${changes.created.length}):</strong> ${tabNames}`);
+                    }
+                    
+                    // Deleted tabs
+                    if (changes.deleted && changes.deleted.length > 0) {
+                        const tabNames = changes.deleted.map(t => esc(t.tabName || t.tabId)).join(', ');
+                        detailsParts.push(`<strong>Deleted (${changes.deleted.length}):</strong> ${tabNames}`);
+                    }
+                    
+                    // Renamed tabs
+                    if (changes.renamed && changes.renamed.length > 0) {
+                        const renames = changes.renamed.map(t => 
+                            `${esc(t.oldTabName || t.oldTabId)} → ${esc(t.newTabName || t.newTabId)}`
+                        ).join(', ');
+                        detailsParts.push(`<strong>Renamed (${changes.renamed.length}):</strong> ${renames}`);
+                    }
+                    
+                    // Updated tabs
+                    if (changes.updated && changes.updated.length > 0) {
+                        const updates = changes.updated.map(t => {
+                            const changedFields = t.changedFields || Object.keys(t.changes || {});
+                            return `${esc(t.tabName)} (${changedFields.join(', ')})`;
+                        }).join('; ');
+                        detailsParts.push(`<strong>Updated (${changes.updated.length}):</strong> ${updates}`);
+                    }
+                    
+                    if (detailsParts.length > 0) {
+                        detailsHtml = `<div class="audit-details" style="margin-top:4px; font-size:12px; color:#555;">
+                            📝 ${detailsParts.join(' • ')}
+                        </div>`;
+                    }
+                }
+                
                 // Show detailed changes if available - GROUP INTO ONE LINE
-                if (meta.changes && typeof meta.changes === 'object') {
+                if (!detailsHtml && meta.changes && typeof meta.changes === 'object') {
                     const changes = meta.changes;
                     const changeSummaries = [];
                     

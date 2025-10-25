@@ -2177,6 +2177,13 @@
                     const section = a.section || a.sectionId || a.category || 'general';
                     const sectionLabel = (sectionNames && sectionNames[section]) ? sectionNames[section] : prettyName(section);
                     
+                    // Special handling for batch tab updates
+                    if (action === 'BATCH_UPDATE_TABS') {
+                        const summary = meta.summary || `${meta.totalChanges || 0} tabs changed`;
+                        const message = `<strong>${safe(who)}</strong> updated tabs in <em>${safe(sectionLabel)}</em> (${safe(summary)})`;
+                        return `<span class="info-item">${message}</span>`;
+                    }
+                    
                     // Determine hierarchy level (resource/tab/section)
                     let level = 'resource';
                     if (actionLower.includes('tab') || String(a.type||'').toLowerCase().includes('tab')) {
@@ -2432,6 +2439,55 @@
                     const action = esc(actionRaw);
                     const actionLower = String(actionRaw).toLowerCase();
                     const resourceId = a.resource_id || a.resourceId || '';
+                    
+                    // Special handling for batch tab updates - show detailed breakdown
+                    if (actionRaw === 'BATCH_UPDATE_TABS') {
+                        const changes = meta.changes || {};
+                        const detailsParts = [];
+                        
+                        // Created tabs
+                        if (changes.created && changes.created.length > 0) {
+                            const tabNames = changes.created.map(t => esc(t.tabName || t.tabId)).join(', ');
+                            detailsParts.push(`<strong>Created (${changes.created.length}):</strong> ${tabNames}`);
+                        }
+                        
+                        // Deleted tabs
+                        if (changes.deleted && changes.deleted.length > 0) {
+                            const tabNames = changes.deleted.map(t => esc(t.tabName || t.tabId)).join(', ');
+                            detailsParts.push(`<strong>Deleted (${changes.deleted.length}):</strong> ${tabNames}`);
+                        }
+                        
+                        // Renamed tabs
+                        if (changes.renamed && changes.renamed.length > 0) {
+                            const renames = changes.renamed.map(t => 
+                                `${esc(t.oldTabName || t.oldTabId)} → ${esc(t.newTabName || t.newTabId)}`
+                            ).join(', ');
+                            detailsParts.push(`<strong>Renamed (${changes.renamed.length}):</strong> ${renames}`);
+                        }
+                        
+                        // Updated tabs
+                        if (changes.updated && changes.updated.length > 0) {
+                            const updates = changes.updated.map(t => {
+                                const changedFields = t.changedFields || Object.keys(t.changes || {});
+                                return `${esc(t.tabName)} (${changedFields.join(', ')})`;
+                            }).join('; ');
+                            detailsParts.push(`<strong>Updated (${changes.updated.length}):</strong> ${updates}`);
+                        }
+                        
+                        const detailsHtml = detailsParts.length > 0 ? 
+                            `📝 ${detailsParts.join(' • ')}` : 
+                            `📝 ${meta.summary || `${meta.totalChanges || 0} tabs changed`}`;
+                        
+                        return `<tr>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;"><strong>${who}</strong></td>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${action}</td>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${section}</td>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;color:#6366f1;">—</td>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">—</td>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;font-size:0.85rem;color:#555;max-width:350px;">${detailsHtml}</td>
+                            <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;color:#999;font-size:0.9rem;white-space:nowrap;">${esc(when)}</td>
+                        </tr>`;
+                    }
                     
                     // Determine hierarchy level
                     let level = 'resource';

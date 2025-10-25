@@ -2637,10 +2637,21 @@ class SectionManager {
                             }
                         }
 
+                        // Collect all tab changes for batch logging
+                        const batchChanges = {
+                            created: [],
+                            deleted: [],
+                            renamed: [],
+                            updated: []
+                        };
+
                         // STEP 2: Creates (skip IDs that are the result of renaming)
-                        nextIds.forEach(async (id) => {
+                        nextIds.forEach((id) => {
                             if (!prevSet.has(id) && !renamedNewIds.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, tabName: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                batchChanges.created.push({
+                                    tabId: id,
+                                    tabName: nextNameById.get(id) || id
+                                });
                             }
                         });
 
@@ -2679,13 +2690,11 @@ class SectionManager {
                                         console.log(`[Tab Deletion] Successfully deleted ${count} resource(s) for tab "${id}"`);
                                     }
                                     
-                                    // Log the deletion activity
-                                    await window.supabaseClient.from('activities').insert({ 
-                                        user_id: this.currentUser ? this.currentUser.id : null, 
-                                        action: 'DELETE_TAB', 
-                                        section_id: sid, 
-                                        metadata: { tabId: id, tabName: prevNameById.get(id) || id, resourceCount: resourceCount || 0, username: uname, name: uname }, 
-                                        timestamp: new Date(ts) 
+                                    // Collect deletion for batch logging
+                                    batchChanges.deleted.push({
+                                        tabId: id,
+                                        tabName: prevNameById.get(id) || id,
+                                        resourceCount: resourceCount || 0
                                     });
                                 } catch (err) {
                                     console.error(`[Tab Deletion] Failed to delete tab ${id} and its resources:`, err);
@@ -2725,18 +2734,13 @@ class SectionManager {
                                         console.log(`[Tab ID Change] Successfully updated ${updateCount} resource(s) from "${change.oldId}" to "${change.newId}"`);
                                     }
                                     
-                                    // Log the ID change activity
-                                    await window.supabaseClient.from('activities').insert({
-                                        user_id: this.currentUser ? this.currentUser.id : null,
-                                        action: 'RENAME_TAB_ID',
-                                        section_id: sid,
-                                        metadata: { 
-                                            oldTabId: change.oldId, 
-                                            newTabId: change.newId,
-                                            resourceCount: count,
-                                            username: uname 
-                                        },
-                                        timestamp: new Date(ts)
+                                    // Collect rename for batch logging
+                                    batchChanges.renamed.push({
+                                        oldTabId: change.oldId,
+                                        oldTabName: prevNameById.get(change.oldId) || change.oldId,
+                                        newTabId: change.newId,
+                                        newTabName: nextNameById.get(change.newId) || change.newId,
+                                        resourceCount: count
                                     });
                                 }
                             } catch (err) {
@@ -2770,25 +2774,15 @@ class SectionManager {
                                 // Compare for detailed changes
                                 const tabChanges = this.compareTabChanges(oldTab, newTab);
                                 
-                                // Log if any changes detected
+                                // Collect update if any changes detected
                                 if (Object.keys(tabChanges).length > 0) {
-                                    try {
-                                        await window.supabaseClient.from('activities').insert({
-                                            user_id: this.currentUser ? this.currentUser.id : null,
-                                            action: 'UPDATE_TAB',
-                                            section_id: sid,
-                                            metadata: {
-                                                tabId: id,
-                                                tabName: newTab.name,
-                                                changes: tabChanges,
-                                                changedFields: Object.keys(tabChanges),
-                                                changeCount: Object.keys(tabChanges).length,
-                                                username: uname,
-                                                name: uname
-                                            },
-                                            timestamp: new Date(ts)
-                                        });
-                                    } catch (_) {}
+                                    batchChanges.updated.push({
+                                        tabId: id,
+                                        tabName: newTab.name,
+                                        changes: tabChanges,
+                                        changedFields: Object.keys(tabChanges),
+                                        changeCount: Object.keys(tabChanges).length
+                                    });
                                 }
                             }
                         });
@@ -2823,6 +2817,46 @@ class SectionManager {
                                     timestamp: new Date(ts)
                                 });
                             } catch (_) {}
+                        }
+                        
+                        // Create single batch activity entry for all tab changes
+                        const totalChanges = batchChanges.created.length + batchChanges.deleted.length + 
+                                           batchChanges.renamed.length + batchChanges.updated.length;
+                        
+                        if (totalChanges > 0) {
+                            try {
+                                // Build summary for display
+                                const summaryParts = [];
+                                if (batchChanges.created.length > 0) {
+                                    summaryParts.push(`${batchChanges.created.length} created`);
+                                }
+                                if (batchChanges.deleted.length > 0) {
+                                    summaryParts.push(`${batchChanges.deleted.length} deleted`);
+                                }
+                                if (batchChanges.renamed.length > 0) {
+                                    summaryParts.push(`${batchChanges.renamed.length} renamed`);
+                                }
+                                if (batchChanges.updated.length > 0) {
+                                    summaryParts.push(`${batchChanges.updated.length} updated`);
+                                }
+                                
+                                await window.supabaseClient.from('activities').insert({
+                                    user_id: this.currentUser ? this.currentUser.id : null,
+                                    action: 'BATCH_UPDATE_TABS',
+                                    section_id: sid,
+                                    metadata: {
+                                        totalChanges: totalChanges,
+                                        summary: summaryParts.join(', '),
+                                        changes: batchChanges,
+                                        username: uname,
+                                        name: uname
+                                    },
+                                    timestamp: new Date(ts)
+                                });
+                                console.log(`[Batch Update] Logged ${totalChanges} tab changes: ${summaryParts.join(', ')}`);
+                            } catch (err) {
+                                console.error('[Batch Update] Failed to log batch activity:', err);
+                            }
                         }
 					}
 				} catch (_) { /* best-effort logging; ignore */ }
