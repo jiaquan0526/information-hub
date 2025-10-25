@@ -1023,11 +1023,65 @@ class InformationHub {
                 } catch(_) { return ''; }
             })();
             const section = esc(a.section || a.section_id || '');
+            
+            // Build detailed changes display from metadata
+            let detailsHtml = '';
+            try {
+                const meta = a.metadata || {};
+                
+                // Show detailed changes if available
+                if (meta.changes && typeof meta.changes === 'object') {
+                    const changes = meta.changes;
+                    const changeDetails = [];
+                    
+                    // Format each field change
+                    for (const [field, change] of Object.entries(changes)) {
+                        if (change && typeof change === 'object') {
+                            if (field === 'tags' && change.added && change.removed) {
+                                // Special formatting for tags
+                                const parts = [];
+                                if (change.added && change.added.length > 0) {
+                                    parts.push(`+${change.added.join(', ')}`);
+                                }
+                                if (change.removed && change.removed.length > 0) {
+                                    parts.push(`-${change.removed.join(', ')}`);
+                                }
+                                if (parts.length > 0) {
+                                    changeDetails.push(`<span style="color:#666;">Tags:</span> ${esc(parts.join(' '))}`);
+                                }
+                            } else if (change.old !== undefined && change.new !== undefined) {
+                                // Standard old → new format
+                                const oldVal = String(change.old || '(empty)');
+                                const newVal = String(change.new || '(empty)');
+                                changeDetails.push(`<span style="color:#666;">${esc(field)}:</span> ${esc(oldVal)} → ${esc(newVal)}`);
+                            }
+                        }
+                    }
+                    
+                    if (changeDetails.length > 0) {
+                        detailsHtml = `<div class="audit-details" style="margin-top:4px; font-size:12px; color:#555; padding-left:12px; border-left:2px solid #e0e0e0;">
+                            ${changeDetails.join('<br>')}
+                        </div>`;
+                    }
+                }
+                
+                // Show change count if available
+                if (meta.changeCount && meta.changedFields) {
+                    const fields = Array.isArray(meta.changedFields) ? meta.changedFields : [];
+                    if (fields.length > 0 && !detailsHtml) {
+                        detailsHtml = `<div class="audit-details" style="margin-top:4px; font-size:12px; color:#555;">
+                            Changed ${meta.changeCount} field(s): ${esc(fields.join(', '))}
+                        </div>`;
+                    }
+                }
+            } catch (_) {}
+            
             return `<div class="audit-entry">
                 <div class="audit-info">
                     <div class="audit-user">${who}</div>
                     <div class="audit-action">${act}${section ? ` · ${section}` : ''}</div>
                     <div class="audit-description">${desc}</div>
+                    ${detailsHtml}
                 </div>
                 <div class="audit-time">${esc(when)}</div>
             </div>`;
