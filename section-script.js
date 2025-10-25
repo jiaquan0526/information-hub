@@ -2254,14 +2254,14 @@ class SectionManager {
                         // Creates
                         nextIds.forEach(async (id) => {
                             if (!prevSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, name: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try { await window.supabaseClient.from('activities').insert({ action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, tabName: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 
                         // Deletions
                         prevIds.forEach(async (id) => {
                             if (!nextSet.has(id)) {
-                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, name: prevNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
+                                try { await window.supabaseClient.from('activities').insert({ action: 'DELETE_TAB', section_id: sid, metadata: { tabId: id, tabName: prevNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 

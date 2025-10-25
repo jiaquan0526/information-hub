@@ -2185,8 +2185,8 @@
                             const newName = meta.newName || '';
                             resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            const tabId = meta.tabId || meta.name || '';
-                            resource = tabNameBySection[section] && tabId ? (tabNameBySection[section][tabId] || tabId) : (meta.name || tabId || '');
+                            const tabId = meta.tabId || meta.tabName || '';
+                            resource = tabNameBySection[section] && tabId ? (tabNameBySection[section][tabId] || tabId) : (meta.tabName || tabId || '');
                         }
                     }
                     // Prefer section names for section-related actions
@@ -2196,7 +2196,7 @@
                             const newName = meta.newName || '';
                             resource = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resource = meta.name || sectionLabel || '';
+                            resource = meta.sectionName || sectionLabel || '';
                         }
                     }
                     // Resolve resource title by ID when needed
@@ -2414,8 +2414,8 @@
                             const newName = meta.newName || '';
                             resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            const tabId = meta.tabId || meta.name || '';
-                            resourceRaw = tabNameBySection[sectionKey] && tabId ? (tabNameBySection[sectionKey][tabId] || tabId) : (meta.name || tabId || '');
+                            const tabId = meta.tabId || meta.tabName || '';
+                            resourceRaw = tabNameBySection[sectionKey] && tabId ? (tabNameBySection[sectionKey][tabId] || tabId) : (meta.tabName || tabId || '');
                         }
                     }
                     if (!resourceRaw && (actionLower.includes('section') || String(a.type||'').toLowerCase().includes('section'))) {
@@ -2424,7 +2424,7 @@
                             const newName = meta.newName || '';
                             resourceRaw = oldName && newName ? `${oldName} → ${newName}` : (oldName || newName || '');
                         } else {
-                            resourceRaw = meta.name || sectionLabelRaw || '';
+                            resourceRaw = meta.sectionName || sectionLabelRaw || '';
                         }
                     }
                     if ((isUuidLike(resourceRaw) || (resourceId && resourceId === resourceRaw) || !resourceRaw) && resourceId) {
@@ -5660,13 +5660,13 @@ Permissions:
                             // Created tabs
                             nextTypes.forEach(id => {
                                 if (!prevSet.has(id)) {
-                                    try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, name: nextNames.get(id) || id } }); } catch(_) {}
+                                    try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, tabName: nextNames.get(id) || id } }); } catch(_) {}
                                 }
                             });
                             // Deleted tabs
                             prevTypes.forEach(id => {
                                 if (!nextSet.has(id)) {
-                                    try { hubDatabase.saveActivity({ action: 'DELETE_TAB', sectionId: target.id, metadata: { tabId: id, name: prevNames.get(id) || id } }); } catch(_) {}
+                                    try { hubDatabase.saveActivity({ action: 'DELETE_TAB', sectionId: target.id, metadata: { tabId: id, tabName: prevNames.get(id) || id } }); } catch(_) {}
                                 }
                             });
                             // Renamed tabs (id exists in both but name changed)
@@ -5707,7 +5707,7 @@ Permissions:
                     try {
                         await hubDatabase.createSection(target);
                         console.log('Section created in Supabase:', target);
-                        try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { name: target.name || target.id } }); } catch(_) {}
+                        try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { sectionName: target.name || target.id } }); } catch(_) {}
                         // Log initial tabs/types as CREATE_TAB
                         try {
                             const cfg = target && target.config ? target.config : {};
@@ -5717,7 +5717,7 @@ Permissions:
                                 (cfg.tabs || []).forEach((id, i) => { const nid = String(id||''); if (!names.has(nid)) names.set(nid, String(cfg.tab_names[i] || nid)); });
                             }
                             initTypes.forEach(id => {
-                                try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, name: names.get(id) || id } }); } catch(_) {}
+                                try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, tabName: names.get(id) || id } }); } catch(_) {}
                             });
                         } catch(_) {}
                     } catch (wrapperErr) {
@@ -5738,7 +5738,7 @@ Permissions:
                             .single();
                         if (upErr) throw upErr;
                         console.log('Section created via direct Supabase:', up);
-                        try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { name: target.name || target.id } }); } catch(_) {}
+                        try { hubDatabase.saveActivity({ action: 'CREATE_SECTION', sectionId: target.id, metadata: { sectionName: target.name || target.id } }); } catch(_) {}
                         // Log initial tabs/types as CREATE_TAB
                         try {
                             const cfg = target && target.config ? target.config : {};
@@ -5748,7 +5748,7 @@ Permissions:
                                 (cfg.tabs || []).forEach((id, i) => { const nid = String(id||''); if (!names.has(nid)) names.set(nid, String(cfg.tab_names[i] || nid)); });
                             }
                             initTypes.forEach(id => {
-                                try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, name: names.get(id) || id } }); } catch(_) {}
+                                try { hubDatabase.saveActivity({ action: 'CREATE_TAB', sectionId: target.id, metadata: { tabId: id, tabName: names.get(id) || id } }); } catch(_) {}
                             });
                         } catch(_) {}
                     }
@@ -5936,7 +5936,7 @@ Permissions:
                         hubDatabase.saveActivity({ 
                             action: 'UPDATE_SECTION_VISIBILITY', 
                             sectionId, 
-                            metadata: { name: section.name, visible: isVisible }
+                            metadata: { sectionName: section.name, visible: isVisible }
                         });
                     }
                 } catch(_) {}

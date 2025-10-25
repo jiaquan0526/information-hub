@@ -548,7 +548,8 @@ class HubDatabase {
             const userId = activity.userId || currentUserId || null;
             // Resolve username/email for display if not explicitly provided
             let resolvedUsername = activity.username || activity.user || null;
-            if (!resolvedUsername) {
+            let resolvedName = activity.name || null;
+            if (!resolvedUsername || !resolvedName) {
                 try {
                     const { data: authData } = await window.supabaseClient.auth.getUser();
                     const authUser = authData && authData.user ? authData.user : null;
@@ -560,23 +561,30 @@ class HubDatabase {
                                 .select('username, name, email')
                                 .eq('id', profileId)
                                 .single();
-                            if (prof) resolvedUsername = prof.username || prof.name || prof.email || null;
+                            if (prof) {
+                                if (!resolvedName) resolvedName = prof.name || prof.username || prof.email || null;
+                                if (!resolvedUsername) resolvedUsername = prof.username || prof.email || null;
+                            }
                         } catch (_) {}
                     }
                     if (!resolvedUsername) {
                         resolvedUsername = (authUser && (authUser.user_metadata && (authUser.user_metadata.username || authUser.user_metadata.user_name))) || (authUser && authUser.email) || null;
                     }
-                    if (!resolvedUsername && userId) {
+                    if ((!resolvedUsername || !resolvedName) && userId) {
                         const { data: prof } = await client
                             .from('profiles')
                             .select('username, name, email')
                             .eq('id', userId)
                             .single();
-                        if (prof) resolvedUsername = prof.username || prof.name || prof.email || null;
+                        if (prof) {
+                            if (!resolvedName) resolvedName = prof.name || prof.username || prof.email || null;
+                            if (!resolvedUsername) resolvedUsername = prof.username || prof.email || null;
+                        }
                     }
                 } catch (_) { /* ignore */ }
             }
             const meta = Object.assign({}, activity.metadata || {}, {
+                name: resolvedName || null,
                 username: resolvedUsername || null,
                 title: activity.title || null,
                 description: activity.description || null,
