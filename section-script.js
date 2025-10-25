@@ -2593,50 +2593,82 @@ class SectionManager {
                         console.log('[Tab Changes] IDs being renamed:', Array.from(renamedOldIds), '→', Array.from(renamedNewIds));
                         
                         // CRITICAL: Check for unmatched tabs that might be renames we missed
+                        // Enhanced: Check resources FIRST to auto-detect renames without prompts
                         const unmatchedDisappeared = disappearedIds.filter(id => !renamedOldIds.has(id) && !explicitlyDeletedTabIds.has(id));
                         const unmatchedAppeared = appearedIds.filter(id => !renamedNewIds.has(id));
                         
                         console.log('[Tab Changes] Unmatched disappeared IDs:', unmatchedDisappeared);
                         console.log('[Tab Changes] Unmatched appeared IDs:', unmatchedAppeared);
                         
-                        // If we have unmatched pairs and they're equal in number, try to pair them
-                        if (unmatchedDisappeared.length > 0 && unmatchedDisappeared.length === unmatchedAppeared.length) {
-                            console.log('[Tab Changes] Found unmatched pairs - these might be renames we missed!');
+                        // ENHANCED: Auto-detect renames by checking resources for ALL unmatched pairs
+                        if (unmatchedDisappeared.length > 0 && unmatchedAppeared.length > 0) {
+                            console.log('[Tab Changes] Checking resources for unmatched tabs to auto-detect renames...');
                             
-                            // For each unmatched pair, check if it has resources and ask user
-                            for (let i = 0; i < unmatchedDisappeared.length; i++) {
-                                const oldId = unmatchedDisappeared[i];
-                                const newId = unmatchedAppeared[i];
-                                
-                                // Check if old ID has resources
+                            // Build a map of oldId → resourceCount
+                            const oldIdResources = new Map();
+                            for (const oldId of unmatchedDisappeared) {
                                 try {
-                                    const { count: resourceCount } = await window.supabaseClient
+                                    const { count } = await window.supabaseClient
                                         .from('resources')
                                         .select('*', { count: 'exact', head: true })
                                         .eq('section_id', sid)
                                         .eq('type', oldId);
-                                    
-                                    if (resourceCount > 0) {
-                                        const oldName = prevNameById.get(oldId) || oldId;
-                                        const newName = nextNameById.get(newId) || newId;
-                                        
-                                        const confirmMsg = `⚠️ MIGRATION NEEDED:\n\n` +
-                                                          `Did you rename tab "${oldName}" (ID: ${oldId}) to "${newName}" (ID: ${newId})?\n\n` +
-                                                          `This tab has ${resourceCount} resource(s).\n\n` +
-                                                          `• Click OK to MIGRATE resources from "${oldId}" to "${newId}"\n` +
-                                                          `• Click CANCEL to KEEP resources under "${oldId}"`;
-                                        
-                                        if (confirm(confirmMsg)) {
-                                            console.log(`[User Confirmed] Migrating resources: "${oldId}" → "${newId}"`);
-                                            idChanges.push({ oldId, newId, method: 'user-confirmed', resourceCount });
-                                            renamedOldIds.add(oldId);
-                                            renamedNewIds.add(newId);
-                                        } else {
-                                            console.log(`[User Declined] Keeping resources under "${oldId}"`);
-                                        }
+                                    if (count > 0) {
+                                        oldIdResources.set(oldId, count);
+                                        console.log(`[Tab Changes] Old ID "${oldId}" has ${count} resources`);
                                     }
                                 } catch (err) {
-                                    console.warn(`Failed to check resources for unmatched tab "${oldId}":`, err);
+                                    console.warn(`[Tab Changes] Failed to check resources for "${oldId}":`, err);
+                                }
+                            }
+                            
+                            // Build a map of newId → resourceCount
+                            const newIdResources = new Map();
+                            for (const newId of unmatchedAppeared) {
+                                try {
+                                    const { count } = await window.supabaseClient
+                                        .from('resources')
+                                        .select('*', { count: 'exact', head: true })
+                                        .eq('section_id', sid)
+                                        .eq('type', newId);
+                                    if (count > 0) {
+                                        newIdResources.set(newId, count);
+                                        console.log(`[Tab Changes] New ID "${newId}" has ${count} resources`);
+                                    }
+                                } catch (err) {
+                                    console.warn(`[Tab Changes] Failed to check resources for "${newId}":`, err);
+                                }
+                            }
+                            
+                            // Strategy: If old ID has resources but new ID doesn't → likely a rename
+                            const oldIdsWithResources = Array.from(oldIdResources.keys());
+                            const newIdsWithoutResources = unmatchedAppeared.filter(id => !newIdResources.has(id));
+                            
+                            console.log(`[Tab Changes] Old IDs with resources: ${oldIdsWithResources.length}`);
+                            console.log(`[Tab Changes] New IDs without resources: ${newIdsWithoutResources.length}`);
+                            
+                            if (oldIdsWithResources.length > 0 && newIdsWithoutResources.length > 0) {
+                                // Auto-pair by position for the minimum count (avoids prompts when possible)
+                                const pairCount = Math.min(oldIdsWithResources.length, newIdsWithoutResources.length);
+                                console.log(`[Tab Changes] Auto-pairing ${pairCount} tabs by position (${oldIdsWithResources.length} old with resources, ${newIdsWithoutResources.length} new without)`);
+                                
+                                for (let i = 0; i < pairCount; i++) {
+                                    const oldId = oldIdsWithResources[i];
+                                    const newId = newIdsWithoutResources[i];
+                                    const resourceCount = oldIdResources.get(oldId);
+                                    
+                                    console.log(`[Tab Changes] ✅ Auto-detected rename: "${oldId}" → "${newId}" (${resourceCount} resources)`);
+                                    idChanges.push({ oldId, newId, method: 'resource-auto-detected', resourceCount });
+                                    renamedOldIds.add(oldId);
+                                    renamedNewIds.add(newId);
+                                }
+                                
+                                // Log remaining unpaired tabs
+                                if (oldIdsWithResources.length > pairCount) {
+                                    console.log(`[Tab Changes] ⚠️ ${oldIdsWithResources.length - pairCount} old tabs with resources have no new match (possibly deleted)`);
+                                }
+                                if (newIdsWithoutResources.length > pairCount) {
+                                    console.log(`[Tab Changes] ✨ ${newIdsWithoutResources.length - pairCount} new tabs without resources will be treated as CREATE`);
                                 }
                             }
                         }
