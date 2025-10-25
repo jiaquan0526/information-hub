@@ -74,20 +74,114 @@ class SectionManager {
         } catch (_) {}
     }
 
-    // Content activity logger (Supabase-only)
-    async logContentActivity(action, resourceType, title) {
+    // Compare old and new resource values to track detailed changes
+    compareResourceChanges(oldResource, newResource) {
+        const changes = {};
+        
+        // Track title changes
+        if (oldResource.title !== newResource.title) {
+            changes.title = {
+                old: oldResource.title,
+                new: newResource.title
+            };
+        }
+        
+        // Track URL changes
+        if (oldResource.url !== newResource.url) {
+            changes.url = {
+                old: oldResource.url,
+                new: newResource.url
+            };
+        }
+        
+        // Track description changes
+        const oldDesc = oldResource.description || '';
+        const newDesc = newResource.description || '';
+        if (oldDesc !== newDesc) {
+            changes.description = {
+                old: oldDesc,
+                new: newDesc
+            };
+        }
+        
+        // Track category changes
+        const oldCat = oldResource.category || '';
+        const newCat = newResource.category || '';
+        if (oldCat !== newCat) {
+            changes.category = {
+                old: oldCat,
+                new: newCat
+            };
+        }
+        
+        // Track tags changes
+        const oldTags = Array.isArray(oldResource.tags) ? oldResource.tags.sort() : [];
+        const newTags = Array.isArray(newResource.tags) ? newResource.tags.sort() : [];
+        const oldTagsStr = JSON.stringify(oldTags);
+        const newTagsStr = JSON.stringify(newTags);
+        if (oldTagsStr !== newTagsStr) {
+            const added = newTags.filter(t => !oldTags.includes(t));
+            const removed = oldTags.filter(t => !newTags.includes(t));
+            changes.tags = {
+                old: oldTags,
+                new: newTags,
+                added: added,
+                removed: removed
+            };
+        }
+        
+        // Track icon changes (if icon field exists in extra or resource object)
+        const oldIcon = oldResource.icon || (oldResource.extra && oldResource.extra.icon) || '';
+        const newIcon = newResource.icon || (newResource.extra && newResource.extra.icon) || '';
+        if (oldIcon !== newIcon && (oldIcon || newIcon)) {
+            changes.icon = {
+                old: oldIcon,
+                new: newIcon
+            };
+        }
+        
+        // Track order/position changes (if order field exists)
+        if (oldResource.order !== undefined && newResource.order !== undefined 
+            && oldResource.order !== newResource.order) {
+            changes.order = {
+                old: oldResource.order,
+                new: newResource.order
+            };
+        }
+        
+        return changes;
+    }
+
+    // Content activity logger (Supabase-only) with detailed change tracking
+    async logContentActivity(action, resourceType, title, detailedChanges = null, resourceId = null) {
         try {
             if (!window.supabaseClient) return;
             const mapped = String(action || 'updated').toUpperCase();
             const payload = {
                 action: mapped,
-                resourceId: null,
+                resourceId: resourceId || null,
                 section: this.currentSection || null,
                 title: title || '',
                 type: resourceType || '',
                 username: (this.currentUser && (this.currentUser.name || this.currentUser.email)) || null,
                 timestamp: new Date().toISOString()
             };
+            
+            // Build metadata with detailed changes
+            const metadata = {
+                name: payload.username,
+                username: payload.username,
+                title: payload.title,
+                type: payload.type
+            };
+            
+            // Add detailed field changes if provided
+            if (detailedChanges && Object.keys(detailedChanges).length > 0) {
+                metadata.changes = detailedChanges;
+                metadata.changedFields = Object.keys(detailedChanges);
+                metadata.changeCount = Object.keys(detailedChanges).length;
+            }
+            
             // Use activities table directly
             try {
                 await window.supabaseClient.from('activities').insert({
@@ -95,12 +189,7 @@ class SectionManager {
                     action: payload.action,
                     section_id: payload.section,
                     resource_id: payload.resourceId,
-                    metadata: {
-                        name: payload.username,
-                        username: payload.username,
-                        title: payload.title,
-                        type: payload.type
-                    },
+                    metadata: metadata,
                     timestamp: new Date(payload.timestamp)
                 });
             } catch (_) {}
@@ -1450,9 +1539,22 @@ class SectionManager {
             return false;
         }
 
+        // Compare old and new values to track detailed changes
+        const detailedChanges = this.compareResourceChanges(original, updatedResource);
+        
         await this.updateResourceInSection(type, original.id || id, updatedResource, original);
-        // Log content update
-        try { this.logContentActivity('updated', type, updatedResource.title); } catch(_) {}
+        
+        // Log content update with detailed field changes
+        try { 
+            this.logContentActivity(
+                'updated', 
+                type, 
+                updatedResource.title, 
+                detailedChanges,
+                original.id || id
+            ); 
+        } catch(_) {}
+        
         this.renderCurrentTab();
         this.showMessage(`${type.replace('-', ' ')} updated successfully!`, 'success');
         return true;
@@ -2313,16 +2415,39 @@ class SectionManager {
 						const uname = this.currentUser.name || this.currentUser.username || this.currentUser.email || null;
 						const sid = this.currentSection;
 
-                        // Creates
+                        // STEP 1: Tab ID changes (MUST be first to prevent deletion of renamed tabs)
+                        // Build a mapping of what IDs might have been renamed by checking positions
+                        console.log('[Tab Changes] Previous IDs:', prevIds);
+                        console.log('[Tab Changes] Next IDs:', nextIds);
+                        
+                        const idChanges = [];
+                        if (prevIds.length === nextIds.length) {
+                            // If same number of tabs, check if IDs changed at same positions
+                            for (let i = 0; i < prevIds.length; i++) {
+                                const oldId = prevIds[i];
+                                const newId = nextIds[i];
+                                if (oldId !== newId && !nextIds.includes(oldId) && !prevIds.includes(newId)) {
+                                    // This position had an ID change
+                                    console.log(`[Tab ID Change] Detected: position ${i}, "${oldId}" → "${newId}"`);
+                                    idChanges.push({ oldId, newId, position: i });
+                                }
+                            }
+                        }
+                        
+                        // Track which old IDs are being renamed (don't delete these)
+                        const renamedOldIds = new Set(idChanges.map(c => c.oldId));
+                        console.log('[Tab Changes] IDs being renamed:', Array.from(renamedOldIds));
+
+                        // STEP 2: Creates
                         nextIds.forEach(async (id) => {
                             if (!prevSet.has(id)) {
                                 try { await window.supabaseClient.from('activities').insert({ user_id: this.currentUser ? this.currentUser.id : null, action: 'CREATE_TAB', section_id: sid, metadata: { tabId: id, tabName: nextNameById.get(id) || id, username: uname, name: uname }, timestamp: new Date(ts) }); } catch (_) {}
                             }
                         });
 
-                        // Deletions
+                        // STEP 3: Deletions (skip tabs that are being renamed)
                         for (const id of prevIds) {
-                            if (!nextSet.has(id)) {
+                            if (!nextSet.has(id) && !renamedOldIds.has(id)) {
                                 console.log(`[Tab Deletion] Deleting tab "${id}" from section "${sid}"`);
                                 try {
                                     // Delete all resources associated with this tab/type
@@ -2351,21 +2476,8 @@ class SectionManager {
                                 } catch (err) {
                                     console.error(`[Tab Deletion] Failed to delete tab ${id} and its resources:`, err);
                                 }
-                            }
-                        }
-
-                        // Tab ID changes (id changed, need to update resources)
-                        // Build a mapping of what IDs might have been renamed by checking positions
-                        const idChanges = [];
-                        if (prevIds.length === nextIds.length) {
-                            // If same number of tabs, check if IDs changed at same positions
-                            for (let i = 0; i < prevIds.length; i++) {
-                                const oldId = prevIds[i];
-                                const newId = nextIds[i];
-                                if (oldId !== newId && !nextIds.includes(oldId) && !prevIds.includes(newId)) {
-                                    // This position had an ID change
-                                    idChanges.push({ oldId, newId, position: i });
-                                }
+                            } else if (renamedOldIds.has(id)) {
+                                console.log(`[Tab Deletion] Skipping "${id}" - being renamed, not deleted`);
                             }
                         }
                         
