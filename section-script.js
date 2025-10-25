@@ -2085,6 +2085,31 @@ class SectionManager {
                 <div class=\"icon-grid\" style=\"display:grid; grid-template-columns:repeat(auto-fill, minmax(44px,1fr)); gap:8px; max-height:160px; overflow:auto; border:1px solid #eee; padding:8px; border-radius:6px; background:#fff;\"></div>
             `;
             row.appendChild(panel);
+            
+            // Real-time duplicate ID validation
+            const idInput = row.querySelector('.type-id');
+            idInput.addEventListener('input', () => {
+                const currentId = idInput.value.trim();
+                if (!currentId) return;
+                
+                // Check for duplicates across all rows except this one
+                const allRows = Array.from(typeList.querySelectorAll('.type-row'));
+                const otherIds = allRows
+                    .filter(r => r !== row)
+                    .map(r => r.querySelector('.type-id')?.value.trim())
+                    .filter(Boolean);
+                
+                if (otherIds.includes(currentId)) {
+                    idInput.style.border = '2px solid #dc3545';
+                    idInput.style.backgroundColor = '#ffe6e6';
+                    idInput.title = `⚠️ Duplicate ID: "${currentId}" already exists`;
+                } else {
+                    idInput.style.border = '';
+                    idInput.style.backgroundColor = '';
+                    idInput.title = '';
+                }
+            });
+            
             row.querySelector('.btn-up').addEventListener('click', () => {
                 const prev = row.previousElementSibling;
                 if (prev) typeList.insertBefore(row, prev);
@@ -2201,6 +2226,20 @@ class SectionManager {
                 icon: String(r.querySelector('.type-icon')?.value || '').trim(),
                 idx
             })).filter(t => t.rawId);
+            
+            // Check for duplicate IDs
+            const idCounts = new Map();
+            normalized.forEach(t => {
+                const id = t.rawId;
+                idCounts.set(id, (idCounts.get(id) || 0) + 1);
+            });
+            const duplicates = Array.from(idCounts.entries()).filter(([id, count]) => count > 1);
+            if (duplicates.length > 0) {
+                const dupList = duplicates.map(([id, count]) => `"${id}" (appears ${count} times)`).join(', ');
+                showAlert(`Duplicate tab IDs found: ${dupList}. Each tab must have a unique ID.`, 'error');
+                return;
+            }
+            
             const lastIndexById = new Map();
             const rowById = new Map();
             normalized.forEach(t => {
@@ -2284,13 +2323,22 @@ class SectionManager {
                         // Deletions
                         for (const id of prevIds) {
                             if (!nextSet.has(id)) {
+                                console.log(`[Tab Deletion] Deleting tab "${id}" from section "${sid}"`);
                                 try {
                                     // Delete all resources associated with this tab/type
-                                    await window.supabaseClient
+                                    const { data: deletedResources, error: deleteError } = await window.supabaseClient
                                         .from('resources')
                                         .delete()
                                         .eq('section_id', sid)
-                                        .eq('type', id);
+                                        .eq('type', id)
+                                        .select();
+                                    
+                                    if (deleteError) {
+                                        console.error(`[Tab Deletion] Error deleting resources for tab ${id}:`, deleteError);
+                                    } else {
+                                        const count = Array.isArray(deletedResources) ? deletedResources.length : 0;
+                                        console.log(`[Tab Deletion] Successfully deleted ${count} resource(s) for tab "${id}"`);
+                                    }
                                     
                                     // Log the deletion activity
                                     await window.supabaseClient.from('activities').insert({ 
@@ -2301,7 +2349,7 @@ class SectionManager {
                                         timestamp: new Date(ts) 
                                     });
                                 } catch (err) {
-                                    console.warn(`Failed to delete tab ${id} and its resources:`, err);
+                                    console.error(`[Tab Deletion] Failed to delete tab ${id} and its resources:`, err);
                                 }
                             }
                         }
