@@ -143,8 +143,8 @@
             } catch(_) {}
         })();
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
+        // Wait for Supabase library to load, then initialize
         (function(){
             function ensureKeys(){
                 try {
@@ -179,16 +179,33 @@
                             } catch(_) {}
                         })();
                         // Keep loading screen visible - section-script.js will hide it when data is ready
-                        window.updateSectionLoadingProgress('Initializing...', 20);
+                        if (typeof window.updateSectionLoadingProgress === 'function') {
+                            window.updateSectionLoadingProgress('Initializing...', 20);
+                        }
                     }
                 } catch (e) { 
                     console.warn('Supabase init (section) failed', e);
-                    window.updateSectionLoadingProgress('Connection issue...', 30);
+                    if (typeof window.updateSectionLoadingProgress === 'function') {
+                        window.updateSectionLoadingProgress('Connection issue...', 30);
+                    }
                 }
             }
-            if (!(window.supabase && window.supabase.createClient)) { console.error('Supabase library not available'); } else { initClient(); }
+            
+            // Wait for Supabase library to be available
+            var attempts = 0;
+            var checkInterval = setInterval(function() {
+                attempts++;
+                if (window.supabase && window.supabase.createClient) {
+                    clearInterval(checkInterval);
+                    initClient();
+                } else if (attempts > 50) {
+                    clearInterval(checkInterval);
+                    console.error('Supabase library failed to load after 5 seconds');
+                }
+            }, 100);
         })();
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="database-supabase.js" defer></script>
     <script src="section-script.js" defer></script>
     <script>
