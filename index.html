@@ -2375,6 +2375,7 @@
                 } catch(_) {}
                 const isUuidLike = (s) => { try { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||'')); } catch(_) { return false; } };
                 // Prepend broadcast if available
+                let broadcastRow = '';
                 try {
                     let enabled = false; let message = ''; let link = '';
                     if (typeof broadcastValue === 'string') {
@@ -2387,16 +2388,12 @@
                     }
                     if (enabled && message) {
                         const linkHtml = link ? ` <a href="${esc(link)}" target="_blank" rel="noopener">Learn more</a>` : '';
-                        const header = `<div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                            <span><strong>Announcement</strong></span>
-                            <span style=\"opacity:.6\">•</span>
-                            <span>${esc(message)}${linkHtml}</span>
-                        </div>`;
-                        recent = [{ __broadcast: header }].concat(recent);
+                        broadcastRow = `<tr style="background:#fffbeb;">
+                            <td colspan="6" style="padding:12px;border-bottom:2px solid #fcd34d;"><strong>📢 Announcement:</strong> ${esc(message)}${linkHtml}</td>
+                        </tr>`;
                     }
                 } catch(_) {}
                 const content = recent.map(a => {
-                    if (a && a.__broadcast) return a.__broadcast;
                     const when = (() => { try { return new Date(a.timestamp).toLocaleString(); } catch(_) { return ''; } })();
                     const meta = (a && a.metadata) ? a.metadata : {};
                     const who = esc(a.name || meta.name || a.username || meta.username || a.user || 'Someone');
@@ -2432,15 +2429,30 @@
                         if (resolved) resourceRaw = resolved;
                     }
                     const resource = esc(resourceRaw);
-                    return `<div style=\"padding:8px 0;border-bottom:1px solid #eee;display:flex;gap:10px;flex-wrap:wrap;align-items:center;\">\n                        <span><strong>${who}</strong></span>\n                        <span style=\\\"opacity:.6\\\">•</span>\n                        <span>${action}</span>\n                        <span style=\\\"opacity:.6\\\">•</span>\n                        <span>${section}</span>\n                        ${resource ? `<span style=\\\"opacity:.6\\\">•</span><span>${resource}</span>` : ''}\n                        <span style=\\\"margin-left:auto;color:#999;font-size:0.85rem;\\\">${esc(when)}</span>\n                    </div>`;
+                    // Extract tab/type information
+                    let tabDisplay = '';
+                    const resourceType = a.type || a.resourceType || meta.type || '';
+                    if (resourceType && sectionKey && tabNameBySection[sectionKey] && tabNameBySection[sectionKey][resourceType]) {
+                        tabDisplay = esc(tabNameBySection[sectionKey][resourceType]);
+                    } else if (resourceType) {
+                        tabDisplay = esc(String(resourceType).replace(/-/g, ' '));
+                    }
+                    return `<tr>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;"><strong>${who}</strong></td>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${action}</td>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${section}</td>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;color:#6366f1;">${tabDisplay || '—'}</td>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;">${resource || '—'}</td>
+                        <td style="padding:10px 8px;border-bottom:1px solid #f0f0f0;color:#999;font-size:0.9rem;white-space:nowrap;">${esc(when)}</td>
+                    </tr>`;
                 }).join('');
                 const wrapper = document.createElement('div');
                 wrapper.className = 'modal';
                 wrapper.style.display = 'block';
                 wrapper.innerHTML = `
-                    <div class=\"modal-content\" style=\"max-width:700px;\">
+                    <div class=\"modal-content\" style=\"max-width:900px;\">
                         <div class=\"modal-header\"><h2>Recent Updates (7 days)</h2><span class=\"close\" onclick=\"this.closest('.modal').remove()\">&times;</span></div>
-                        <div class=\"modal-body\" style=\"max-height:60vh;overflow:auto;padding:20px;\">\n                            <div style=\\\"display:flex;gap:10px;align-items:center;font-weight:600;border-bottom:1px solid #e9ecef;padding:6px 0;margin-bottom:6px;\\\">\n                                <span>Who</span>\n                                <span style=\\\"opacity:.6\\\">•</span>\n                                <span>Action</span>\n                                <span style=\\\"opacity:.6\\\">•</span>\n                                <span>Section</span>\n                                <span style=\\\"opacity:.6\\\">•</span>\n                                <span>Resource</span>\n                                <span style=\\\"margin-left:auto;\\\">When</span>\n                            </div>\n                            ${content || '<div>No recent updates.</div>'}\n                        </div>
+                        <div class=\"modal-body\" style=\"max-height:60vh;overflow:auto;padding:0;\">\n                            <table style=\\\"width:100%;border-collapse:collapse;font-size:0.95rem;\\\">\n                                <thead style=\\\"position:sticky;top:0;background:#f8f9fa;z-index:1;\\\">\n                                    <tr>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Who</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Action</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Section</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Type</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">Resource</th>\n                                        <th style=\\\"padding:12px 8px;text-align:left;border-bottom:2px solid #dee2e6;font-weight:600;\\\">When</th>\n                                    </tr>\n                                </thead>\n                                <tbody>\n                                    ${broadcastRow}\n                                    ${content || '<tr><td colspan=\\\"6\\\" style=\\\"padding:20px;text-align:center;color:#999;\\\">No recent updates.</td></tr>'}\n                                </tbody>\n                            </table>\n                        </div>
                     </div>`;
                 document.body.appendChild(wrapper);
             } catch (e) { alert('Unable to open updates: ' + e.message); }
