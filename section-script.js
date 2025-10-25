@@ -818,12 +818,30 @@ class SectionManager {
         try {
             const timestamp = Date.now(); // Cache buster reference
             console.log(`[Section] Fetching fresh ${type} resources from Supabase (timestamp: ${timestamp})...`);
-            const { data, error } = await window.supabaseClient
-                .from('resources')
-                .select('*, sections(name), profiles!created_by(email, name, username)')
-                .eq('section_id', this.currentSection)
-                .eq('type', type)
-                .order('created_at', { ascending: false });
+            
+            // Try to fetch with creator email, fallback to basic query if it fails
+            let data, error;
+            try {
+                const response = await window.supabaseClient
+                    .from('resources')
+                    .select('*, sections(name), profiles!created_by(email, name, username)')
+                    .eq('section_id', this.currentSection)
+                    .eq('type', type)
+                    .order('created_at', { ascending: false });
+                data = response.data;
+                error = response.error;
+            } catch (joinError) {
+                console.warn('[Section] Could not fetch with creator info, trying basic query:', joinError);
+                const response = await window.supabaseClient
+                    .from('resources')
+                    .select('*, sections(name)')
+                    .eq('section_id', this.currentSection)
+                    .eq('type', type)
+                    .order('created_at', { ascending: false });
+                data = response.data;
+                error = response.error;
+            }
+            
             if (error) throw error;
             const list = Array.isArray(data) ? data : [];
             console.log(`[Section] ✅ Loaded ${list.length} fresh ${type} resources from Supabase`);
