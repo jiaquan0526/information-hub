@@ -2534,14 +2534,28 @@ class SectionManager {
                         
                         const idChanges = [];
                         
-                        // Method 1: Check by position (when same count)
+                        // Method 1: Check by position (when same count) - IMPROVED with name check
                         if (prevIds.length === nextIds.length) {
                             for (let i = 0; i < prevIds.length; i++) {
                                 const oldId = prevIds[i];
                                 const newId = nextIds[i];
                                 if (oldId !== newId && !nextIds.includes(oldId) && !prevIds.includes(newId)) {
-                                    console.log(`[Tab ID Change] Detected by position: ${i}, "${oldId}" → "${newId}"`);
-                                    idChanges.push({ oldId, newId, position: i, method: 'position' });
+                                    // SAFETY: Also check if names are similar to avoid wrong pairings
+                                    const oldName = (prevNameById.get(oldId) || oldId).toLowerCase();
+                                    const newName = (nextNameById.get(newId) || newId).toLowerCase();
+                                    
+                                    const namesSimilar = oldName === newName || 
+                                                        oldName.includes(newName) || 
+                                                        newName.includes(oldName) ||
+                                                        oldId.toLowerCase() === newId.toLowerCase() ||
+                                                        oldId.toLowerCase().replace(/[-_\s]/g, '') === newId.toLowerCase().replace(/[-_\s]/g, '');
+                                    
+                                    if (namesSimilar) {
+                                        console.log(`[Tab ID Change] Detected by position ${i} with name similarity: "${oldId}" (${oldName}) → "${newId}" (${newName})`);
+                                        idChanges.push({ oldId, newId, position: i, method: 'position-with-name' });
+                                    } else {
+                                        console.log(`[Tab ID Change] Skipping position-based match ${i}: "${oldId}" → "${newId}" (names not similar: "${oldName}" vs "${newName}")`);
+                                    }
                                 }
                             }
                         }
@@ -2641,7 +2655,7 @@ class SectionManager {
                             }
                             
                             // Strategy: If old ID has resources but new ID doesn't → likely a rename
-                            // IMPORTANT: Sort by actual position in prevIds/nextIds before pairing!
+                            // Use NAME SIMILARITY first, fall back to position only as last resort
                             const oldIdsWithResources = Array.from(oldIdResources.keys())
                                 .sort((a, b) => prevIds.indexOf(a) - prevIds.indexOf(b));
                             const newIdsWithoutResources = unmatchedAppeared
@@ -2652,29 +2666,83 @@ class SectionManager {
                             console.log(`[Tab Changes] New IDs without resources (sorted by position): ${newIdsWithoutResources.join(', ')}`);
                             
                             if (oldIdsWithResources.length > 0 && newIdsWithoutResources.length > 0) {
-                                // Auto-pair by position for the minimum count (avoids prompts when possible)
-                                const pairCount = Math.min(oldIdsWithResources.length, newIdsWithoutResources.length);
-                                console.log(`[Tab Changes] Auto-pairing ${pairCount} tabs by position (${oldIdsWithResources.length} old, ${newIdsWithoutResources.length} new)`);
+                                // IMPROVED: Match by NAME SIMILARITY first (more reliable than position)
+                                const unmatchedOldIds = [...oldIdsWithResources];
+                                const unmatchedNewIds = [...newIdsWithoutResources];
                                 
-                                for (let i = 0; i < pairCount; i++) {
-                                    const oldId = oldIdsWithResources[i];
-                                    const newId = newIdsWithoutResources[i];
+                                // Phase 1: Strong name matches (exact or very similar)
+                                for (const oldId of [...unmatchedOldIds]) {
+                                    const oldName = (prevNameById.get(oldId) || oldId).toLowerCase();
+                                    let bestMatch = null;
+                                    let bestScore = 0;
+                                    
+                                    for (const newId of unmatchedNewIds) {
+                                        const newName = (nextNameById.get(newId) || newId).toLowerCase();
+                                        
+                                        // Calculate similarity score
+                                        let score = 0;
+                                        if (oldName === newName) score = 100; // Exact name match
+                                        else if (oldId.toLowerCase() === newId.toLowerCase()) score = 90; // Exact ID match (case-insensitive)
+                                        else if (newName.includes(oldName) || oldName.includes(newName)) score = 70; // Contains
+                                        else if (oldId.toLowerCase() === newId.toLowerCase().replace(/[-_\s]/g, '')) score = 60; // ID match ignoring separators
+                                        
+                                        if (score > bestScore) {
+                                            bestScore = score;
+                                            bestMatch = newId;
+                                        }
+                                    }
+                                    
+                                    // Only auto-pair if we have a strong match (score >= 60)
+                                    if (bestMatch && bestScore >= 60) {
+                                        const resourceCount = oldIdResources.get(oldId);
+                                        const oldPos = prevIds.indexOf(oldId);
+                                        const newPos = nextIds.indexOf(bestMatch);
+                                        
+                                        console.log(`[Tab Changes] ✅ Auto-detected rename by name (score ${bestScore}): "${oldId}" (pos ${oldPos}) → "${bestMatch}" (pos ${newPos}) [${resourceCount} resources]`);
+                                        idChanges.push({ oldId, newId: bestMatch, method: 'name-similarity-auto', resourceCount, similarity: bestScore });
+                                        renamedOldIds.add(oldId);
+                                        renamedNewIds.add(bestMatch);
+                                        
+                                        // Remove from unmatched lists
+                                        const oldIdx = unmatchedOldIds.indexOf(oldId);
+                                        if (oldIdx > -1) unmatchedOldIds.splice(oldIdx, 1);
+                                        const newIdx = unmatchedNewIds.indexOf(bestMatch);
+                                        if (newIdx > -1) unmatchedNewIds.splice(newIdx, 1);
+                                    }
+                                }
+                                
+                                // Phase 2: For remaining unmatched tabs, only auto-pair by position if:
+                                // - There's exactly ONE old tab with resources and ONE new tab without resources
+                                // - OR the counts match AND positions are close (within 1 position difference)
+                                if (unmatchedOldIds.length === 1 && unmatchedNewIds.length === 1) {
+                                    // Safe to auto-pair - only one possible match
+                                    const oldId = unmatchedOldIds[0];
+                                    const newId = unmatchedNewIds[0];
                                     const resourceCount = oldIdResources.get(oldId);
                                     const oldPos = prevIds.indexOf(oldId);
                                     const newPos = nextIds.indexOf(newId);
                                     
-                                    console.log(`[Tab Changes] ✅ Auto-detected rename: "${oldId}" (pos ${oldPos}) → "${newId}" (pos ${newPos}) [${resourceCount} resources]`);
-                                    idChanges.push({ oldId, newId, method: 'resource-auto-detected', resourceCount });
+                                    console.log(`[Tab Changes] ✅ Auto-detected rename (only match): "${oldId}" (pos ${oldPos}) → "${newId}" (pos ${newPos}) [${resourceCount} resources]`);
+                                    idChanges.push({ oldId, newId, method: 'single-match-auto', resourceCount });
                                     renamedOldIds.add(oldId);
                                     renamedNewIds.add(newId);
+                                    
+                                    unmatchedOldIds.splice(0, 1);
+                                    unmatchedNewIds.splice(0, 1);
+                                } else if (unmatchedOldIds.length > 1 || unmatchedNewIds.length > 1) {
+                                    // Ambiguous - do NOT auto-pair, let user confirm via prompts in CREATE checks
+                                    console.log(`[Tab Changes] ⚠️ Ambiguous tab changes detected:`);
+                                    console.log(`  - ${unmatchedOldIds.length} old tabs with resources: ${unmatchedOldIds.join(', ')}`);
+                                    console.log(`  - ${unmatchedNewIds.length} new tabs without resources: ${unmatchedNewIds.join(', ')}`);
+                                    console.log(`  - Will prompt user during CREATE checks for confirmation`);
                                 }
                                 
                                 // Log remaining unpaired tabs
-                                if (oldIdsWithResources.length > pairCount) {
-                                    console.log(`[Tab Changes] ⚠️ ${oldIdsWithResources.length - pairCount} old tabs with resources have no new match (possibly deleted)`);
+                                if (unmatchedOldIds.length > 0) {
+                                    console.log(`[Tab Changes] ⚠️ ${unmatchedOldIds.length} old tabs with resources remain unmatched: ${unmatchedOldIds.join(', ')}`);
                                 }
-                                if (newIdsWithoutResources.length > pairCount) {
-                                    console.log(`[Tab Changes] ✨ ${newIdsWithoutResources.length - pairCount} new tabs without resources will be treated as CREATE`);
+                                if (unmatchedNewIds.length > 0) {
+                                    console.log(`[Tab Changes] ✨ ${unmatchedNewIds.length} new tabs without resources remain unmatched: ${unmatchedNewIds.join(', ')}`);
                                 }
                             }
                         }
