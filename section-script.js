@@ -2250,6 +2250,9 @@ class SectionManager {
         
         // Track explicitly deleted tab IDs (when user clicks delete button)
         const explicitlyDeletedTabIds = new Set();
+        
+        // Store original config to check if tabs already exist (for readonly determination)
+        const existingCfg = JSON.parse(JSON.stringify(cfg || {}));
 
         const makeRow = (t) => {
             const row = document.createElement('div');
