@@ -2262,8 +2262,17 @@ class SectionManager {
             row.style.borderRadius = '8px';
             row.style.padding = '8px';
             const iconClassInit = t.icon || 'fas fa-circle';
+            // Make ID readonly for existing tabs (already in config), editable for new tabs
+            // Check if this tab exists in the original config (not just if it has an ID)
+            const existsInConfig = existingCfg && Array.isArray(existingCfg.tabs) && 
+                                   existingCfg.tabs.some(id => String(id || '').trim() === String(t.id || '').trim());
+            
+            const idFieldHtml = existsInConfig 
+                ? `<input type=\"text\" class=\"type-id\" placeholder=\"id (e.g., playbooks)\" value=\"${this.escapeHtml(t.id || '')}\" readonly style=\"background-color: #f5f5f5; cursor: not-allowed;\" title=\"Tab ID cannot be changed (immutable)\">`
+                : `<input type=\"text\" class=\"type-id\" placeholder=\"id (e.g., playbooks)\" value=\"${this.escapeHtml(t.id || '')}\" title=\"You can edit this ID (it will be immutable after saving)\">`;
+            
             row.innerHTML = `
-                <input type=\"text\" class=\"type-id\" placeholder=\"id (e.g., playbooks)\" value=\"${this.escapeHtml(t.id || '')}\">
+                ${idFieldHtml}
                 <input type=\"text\" class=\"type-name\" placeholder=\"name (e.g., Playbooks)\" value=\"${this.escapeHtml(t.name || t.id || '')}\">
                 <div class=\"icon-cell\" style=\"display:flex; align-items:center; gap:8px;\">
                     <button type=\"button\" class=\"btn btn-secondary icon-choose\" title=\"Choose icon\" style=\"display:flex; align-items:center; gap:8px;\">
@@ -2527,272 +2536,30 @@ class SectionManager {
 						const uname = this.currentUser.name || this.currentUser.username || this.currentUser.email || null;
 						const sid = this.currentSection;
 
-                        // STEP 1: Tab ID changes (MUST be first to prevent deletion of renamed tabs)
-                        // Build a mapping of what IDs might have been renamed
+                        // Tab IDs are now IMMUTABLE - no detection or migration needed!
+                        // Simply track creates, deletes, and property updates
                         console.log('[Tab Changes] Previous IDs:', prevIds);
                         console.log('[Tab Changes] Next IDs:', nextIds);
                         
-                        const idChanges = [];
-                        
-                        // Method 1: Check by position (when same count) - IMPROVED with name check
-                        if (prevIds.length === nextIds.length) {
-                            for (let i = 0; i < prevIds.length; i++) {
-                                const oldId = prevIds[i];
-                                const newId = nextIds[i];
-                                if (oldId !== newId && !nextIds.includes(oldId) && !prevIds.includes(newId)) {
-                                    // SAFETY: Also check if names are similar to avoid wrong pairings
-                                    const oldName = (prevNameById.get(oldId) || oldId).toLowerCase();
-                                    const newName = (nextNameById.get(newId) || newId).toLowerCase();
-                                    
-                                    const namesSimilar = oldName === newName || 
-                                                        oldName.includes(newName) || 
-                                                        newName.includes(oldName) ||
-                                                        oldId.toLowerCase() === newId.toLowerCase() ||
-                                                        oldId.toLowerCase().replace(/[-_\s]/g, '') === newId.toLowerCase().replace(/[-_\s]/g, '');
-                                    
-                                    if (namesSimilar) {
-                                        console.log(`[Tab ID Change] Detected by position ${i} with name similarity: "${oldId}" (${oldName}) → "${newId}" (${newName})`);
-                                        idChanges.push({ oldId, newId, position: i, method: 'position-with-name' });
-                                    } else {
-                                        console.log(`[Tab ID Change] Skipping position-based match ${i}: "${oldId}" → "${newId}" (names not similar: "${oldName}" vs "${newName}")`);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Method 2: Check by name/ID similarity (more robust for complex edits)
-                        // Find tabs that disappeared from prevIds and appeared in nextIds
                         const disappearedIds = prevIds.filter(id => !nextSet.has(id));
                         const appearedIds = nextIds.filter(id => !prevSet.has(id));
                         
-                        console.log('[Tab Changes] Disappeared IDs:', disappearedIds);
-                        console.log('[Tab Changes] Appeared IDs:', appearedIds);
-                        
-                        // Match by name/ID similarity - NO LONGER requires equal counts!
-                        // This allows detection even when adding/deleting tabs simultaneously
-                        if (disappearedIds.length > 0 && appearedIds.length > 0) {
-                            // Track matched IDs to avoid double-matching
-                            const matchedOldIds = new Set(idChanges.map(c => c.oldId));
-                            const matchedNewIds = new Set(idChanges.map(c => c.newId));
-                            
-                            // Match by name/ID similarity with scoring
-                            for (const oldId of disappearedIds) {
-                                // Skip if already matched by position method
-                                if (matchedOldIds.has(oldId)) continue;
-                                
-                                const oldName = (prevNameById.get(oldId) || oldId).toLowerCase();
-                                const oldIdLower = oldId.toLowerCase();
-                                const oldIdNormalized = oldIdLower.replace(/[-_\s]/g, '');
-                                
-                                let bestMatch = null;
-                                let bestScore = 0;
-                                
-                                // Try to find the best matching new ID
-                                for (const newId of appearedIds) {
-                                    // Skip if already matched
-                                    if (matchedNewIds.has(newId)) continue;
-                                    
-                                    const newName = (nextNameById.get(newId) || newId).toLowerCase();
-                                    const newIdLower = newId.toLowerCase();
-                                    const newIdNormalized = newIdLower.replace(/[-_\s]/g, '');
-                                    
-                                    // Calculate similarity score
-                                    let score = 0;
-                                    
-                                    // Name-based matching
-                                    if (oldName === newName) score = Math.max(score, 100);
-                                    else if (oldName && newName && (oldName.includes(newName) || newName.includes(oldName))) {
-                                        score = Math.max(score, 70);
-                                    }
-                                    
-                                    // ID-based matching (often more reliable than names)
-                                    if (oldIdLower === newIdLower) score = Math.max(score, 95);
-                                    else if (oldIdNormalized === newIdNormalized) score = Math.max(score, 85); // "type-1" vs "type_1"
-                                    else if (oldIdLower.includes(newIdLower) || newIdLower.includes(oldIdLower)) {
-                                        score = Math.max(score, 65);
-                                    }
-                                    
-                                    // Special case: only one unmatched pair left
-                                    if (disappearedIds.length === 1 && appearedIds.length === 1 && score === 0) {
-                                        score = 50; // Lower score for single match fallback
-                                    }
-                                    
-                                    if (score > bestScore) {
-                                        bestScore = score;
-                                        bestMatch = newId;
-                                    }
-                                }
-                                
-                                // Match if we have a good similarity (score >= 50)
-                                if (bestMatch && bestScore >= 50) {
-                                    const newName = nextNameById.get(bestMatch) || bestMatch;
-                                    console.log(`[Tab ID Change] Detected by name/ID similarity (score ${bestScore}): "${oldId}" (${prevNameById.get(oldId)}) → "${bestMatch}" (${newName})`);
-                                    idChanges.push({ oldId, newId: bestMatch, method: 'name-id-similarity', similarity: bestScore });
-                                    matchedOldIds.add(oldId);
-                                    matchedNewIds.add(bestMatch);
-                                }
-                            }
-                        }
-                        
-                        // Track which old IDs are being renamed (don't delete these)
-                        const renamedOldIds = new Set(idChanges.map(c => c.oldId));
-                        // Track which new IDs are the result of renaming (don't create these)
-                        const renamedNewIds = new Set(idChanges.map(c => c.newId));
-                        console.log('[Tab Changes] IDs being renamed:', Array.from(renamedOldIds), '→', Array.from(renamedNewIds));
-                        
-                        // CRITICAL: Check for unmatched tabs that might be renames we missed
-                        // Enhanced: Check resources FIRST to auto-detect renames without prompts
-                        const unmatchedDisappeared = disappearedIds.filter(id => !renamedOldIds.has(id) && !explicitlyDeletedTabIds.has(id));
-                        const unmatchedAppeared = appearedIds.filter(id => !renamedNewIds.has(id));
-                        
-                        console.log('[Tab Changes] Unmatched disappeared IDs:', unmatchedDisappeared);
-                        console.log('[Tab Changes] Unmatched appeared IDs:', unmatchedAppeared);
-                        
-                        // ENHANCED: Auto-detect renames by checking resources for ALL unmatched pairs
-                        if (unmatchedDisappeared.length > 0 && unmatchedAppeared.length > 0) {
-                            console.log('[Tab Changes] Checking resources for unmatched tabs to auto-detect renames...');
-                            
-                            // Build a map of oldId → resourceCount
-                            const oldIdResources = new Map();
-                            for (const oldId of unmatchedDisappeared) {
-                                try {
-                                    const { count } = await window.supabaseClient
-                                        .from('resources')
-                                        .select('*', { count: 'exact', head: true })
-                                        .eq('section_id', sid)
-                                        .eq('type', oldId);
-                                    if (count > 0) {
-                                        oldIdResources.set(oldId, count);
-                                        console.log(`[Tab Changes] Old ID "${oldId}" has ${count} resources`);
-                                    }
-                                } catch (err) {
-                                    console.warn(`[Tab Changes] Failed to check resources for "${oldId}":`, err);
-                                }
-                            }
-                            
-                            // Build a map of newId → resourceCount
-                            const newIdResources = new Map();
-                            for (const newId of unmatchedAppeared) {
-                                try {
-                                    const { count } = await window.supabaseClient
-                                        .from('resources')
-                                        .select('*', { count: 'exact', head: true })
-                                        .eq('section_id', sid)
-                                        .eq('type', newId);
-                                    if (count > 0) {
-                                        newIdResources.set(newId, count);
-                                        console.log(`[Tab Changes] New ID "${newId}" has ${count} resources`);
-                                    }
-                                } catch (err) {
-                                    console.warn(`[Tab Changes] Failed to check resources for "${newId}":`, err);
-                                }
-                            }
-                            
-                            // Strategy: If old ID has resources but new ID doesn't → likely a rename
-                            // Use NAME SIMILARITY first, fall back to position only as last resort
-                            const oldIdsWithResources = Array.from(oldIdResources.keys())
-                                .sort((a, b) => prevIds.indexOf(a) - prevIds.indexOf(b));
-                            const newIdsWithoutResources = unmatchedAppeared
-                                .filter(id => !newIdResources.has(id))
-                                .sort((a, b) => nextIds.indexOf(a) - nextIds.indexOf(b));
-                            
-                            console.log(`[Tab Changes] Old IDs with resources (sorted by position): ${oldIdsWithResources.join(', ')}`);
-                            console.log(`[Tab Changes] New IDs without resources (sorted by position): ${newIdsWithoutResources.join(', ')}`);
-                            
-                            if (oldIdsWithResources.length > 0 && newIdsWithoutResources.length > 0) {
-                                // IMPROVED: Match by NAME SIMILARITY first (more reliable than position)
-                                const unmatchedOldIds = [...oldIdsWithResources];
-                                const unmatchedNewIds = [...newIdsWithoutResources];
-                                
-                                // Phase 1: Strong name matches (exact or very similar)
-                                for (const oldId of [...unmatchedOldIds]) {
-                                    const oldName = (prevNameById.get(oldId) || oldId).toLowerCase();
-                                    let bestMatch = null;
-                                    let bestScore = 0;
-                                    
-                                    for (const newId of unmatchedNewIds) {
-                                        const newName = (nextNameById.get(newId) || newId).toLowerCase();
-                                        
-                                        // Calculate similarity score
-                                        let score = 0;
-                                        if (oldName === newName) score = 100; // Exact name match
-                                        else if (oldId.toLowerCase() === newId.toLowerCase()) score = 90; // Exact ID match (case-insensitive)
-                                        else if (newName.includes(oldName) || oldName.includes(newName)) score = 70; // Contains
-                                        else if (oldId.toLowerCase() === newId.toLowerCase().replace(/[-_\s]/g, '')) score = 60; // ID match ignoring separators
-                                        
-                                        if (score > bestScore) {
-                                            bestScore = score;
-                                            bestMatch = newId;
-                                        }
-                                    }
-                                    
-                                    // Only auto-pair if we have a strong match (score >= 60)
-                                    if (bestMatch && bestScore >= 60) {
-                                        const resourceCount = oldIdResources.get(oldId);
-                                        const oldPos = prevIds.indexOf(oldId);
-                                        const newPos = nextIds.indexOf(bestMatch);
-                                        
-                                        console.log(`[Tab Changes] ✅ Auto-detected rename by name (score ${bestScore}): "${oldId}" (pos ${oldPos}) → "${bestMatch}" (pos ${newPos}) [${resourceCount} resources]`);
-                                        idChanges.push({ oldId, newId: bestMatch, method: 'name-similarity-auto', resourceCount, similarity: bestScore });
-                                        renamedOldIds.add(oldId);
-                                        renamedNewIds.add(bestMatch);
-                                        
-                                        // Remove from unmatched lists
-                                        const oldIdx = unmatchedOldIds.indexOf(oldId);
-                                        if (oldIdx > -1) unmatchedOldIds.splice(oldIdx, 1);
-                                        const newIdx = unmatchedNewIds.indexOf(bestMatch);
-                                        if (newIdx > -1) unmatchedNewIds.splice(newIdx, 1);
-                                    }
-                                }
-                                
-                                // Phase 2: For remaining unmatched tabs, only auto-pair by position if:
-                                // - There's exactly ONE old tab with resources and ONE new tab without resources
-                                // - OR the counts match AND positions are close (within 1 position difference)
-                                if (unmatchedOldIds.length === 1 && unmatchedNewIds.length === 1) {
-                                    // Safe to auto-pair - only one possible match
-                                    const oldId = unmatchedOldIds[0];
-                                    const newId = unmatchedNewIds[0];
-                                    const resourceCount = oldIdResources.get(oldId);
-                                    const oldPos = prevIds.indexOf(oldId);
-                                    const newPos = nextIds.indexOf(newId);
-                                    
-                                    console.log(`[Tab Changes] ✅ Auto-detected rename (only match): "${oldId}" (pos ${oldPos}) → "${newId}" (pos ${newPos}) [${resourceCount} resources]`);
-                                    idChanges.push({ oldId, newId, method: 'single-match-auto', resourceCount });
-                                    renamedOldIds.add(oldId);
-                                    renamedNewIds.add(newId);
-                                    
-                                    unmatchedOldIds.splice(0, 1);
-                                    unmatchedNewIds.splice(0, 1);
-                                } else if (unmatchedOldIds.length > 1 || unmatchedNewIds.length > 1) {
-                                    // Ambiguous - do NOT auto-pair, let user confirm via prompts in CREATE checks
-                                    console.log(`[Tab Changes] ⚠️ Ambiguous tab changes detected:`);
-                                    console.log(`  - ${unmatchedOldIds.length} old tabs with resources: ${unmatchedOldIds.join(', ')}`);
-                                    console.log(`  - ${unmatchedNewIds.length} new tabs without resources: ${unmatchedNewIds.join(', ')}`);
-                                    console.log(`  - Will prompt user during CREATE checks for confirmation`);
-                                }
-                                
-                                // Log remaining unpaired tabs
-                                if (unmatchedOldIds.length > 0) {
-                                    console.log(`[Tab Changes] ⚠️ ${unmatchedOldIds.length} old tabs with resources remain unmatched: ${unmatchedOldIds.join(', ')}`);
-                                }
-                                if (unmatchedNewIds.length > 0) {
-                                    console.log(`[Tab Changes] ✨ ${unmatchedNewIds.length} new tabs without resources remain unmatched: ${unmatchedNewIds.join(', ')}`);
-                                }
-                            }
-                        }
+                        console.log('[Tab Changes] Disappeared IDs (deleted):', disappearedIds);
+                        console.log('[Tab Changes] Appeared IDs (created):', appearedIds);
 
-                        // Collect all tab changes for batch logging
+
+                        // Collect all tab changes for batch logging (simplified - no ID migration needed!)
                         const batchChanges = {
                             created: [],
                             deleted: [],
                             updated: []  // ID changes are now included here as "id" field updates
                         };
 
-                        // STEP 2: Creates (new tabs only - skip IDs that are renames)
-                        // After thorough detection in STEP 1, we trust the results
+                        // STEP 2: Creates (new tabs only)
+                        // Tab IDs are immutable - simply add new ones
                         // No need to query Supabase - just check uniqueness
                         
-                        const newTabIds = nextIds.filter(id => !prevSet.has(id) && !renamedNewIds.has(id));
+                        const newTabIds = appearedIds;
                         
                         // Check for duplicate IDs in the current configuration
                         const idCounts = new Map();
@@ -2816,14 +2583,13 @@ class SectionManager {
                             });
                         }
 
-                        // STEP 3: Deletions (ONLY for explicitly deleted tabs via delete button)
-                        // Do NOT delete tabs that are missing due to ID changes (those are renames, not deletions)
-                        for (const id of prevIds) {
+                        // STEP 3: Deletions (for tabs removed from config)
+                        // Tab IDs are immutable - if missing from config, it's deleted
+                        // Only delete if explicitly marked via delete button
+                        for (const id of disappearedIds) {
                             const isExplicitlyDeleted = explicitlyDeletedTabIds.has(id);
-                            const isRenamed = renamedOldIds.has(id);
-                            const isMissing = !nextSet.has(id);
                             
-                            console.log(`[Tab Deletion Check] ID="${id}", missing=${isMissing}, explicitlyDeleted=${isExplicitlyDeleted}, renamed=${isRenamed}`);
+                            console.log(`[Tab Deletion Check] ID="${id}", explicitlyDeleted=${isExplicitlyDeleted}`);
                             
                             // ONLY delete if explicitly deleted via delete button
                             if (isExplicitlyDeleted) {
@@ -2860,89 +2626,16 @@ class SectionManager {
                                 } catch (err) {
                                     console.error(`[Tab Deletion] Failed to delete tab ${id} and its resources:`, err);
                                 }
-                            } else if (isRenamed) {
-                                console.log(`[Tab Deletion] Skipping "${id}" - being renamed, not deleted`);
-                            } else if (isMissing && !isExplicitlyDeleted) {
-                                console.log(`[Tab Deletion] Skipping "${id}" - missing but NOT explicitly deleted (likely renamed with ID change)`);
+                            } else {
+                                console.log(`[Tab Deletion] Skipping "${id}" - not explicitly deleted (tab IDs are immutable)`);
                             }
                         }
                         
-                        // Update resources when tab IDs change
-                        for (const change of idChanges) {
-                            console.log(`[Tab ID Change] Renaming tab ID from "${change.oldId}" to "${change.newId}"`);
-                            try {
-                                // Count resources first
-                                const { count } = await window.supabaseClient
-                                    .from('resources')
-                                    .select('*', { count: 'exact', head: true })
-                                    .eq('section_id', sid)
-                                    .eq('type', change.oldId);
-                                
-                                if (count > 0) {
-                                    // Update all resources from old type to new type
-                                    const { data: updatedResources, error: updateError } = await window.supabaseClient
-                                        .from('resources')
-                                        .update({ type: change.newId })
-                                        .eq('section_id', sid)
-                                        .eq('type', change.oldId)
-                                        .select();
-                                    
-                                    if (updateError) {
-                                        console.error(`[Tab ID Change] Error updating resources:`, updateError);
-                                        showAlert(`Warning: Failed to update ${count} resource(s) from old tab ID "${change.oldId}" to "${change.newId}". Resources may be orphaned.`, 'error');
-                                    } else {
-                                        const updateCount = Array.isArray(updatedResources) ? updatedResources.length : 0;
-                                        console.log(`[Tab ID Change] Successfully updated ${updateCount} resource(s) from "${change.oldId}" to "${change.newId}"`);
-                                    }
-                                    
-                                    // Check for other property changes (name, icon, order) when ID changes
-                                    const oldIndex = prevIds.indexOf(change.oldId);
-                                    const newIndex = nextIds.indexOf(change.newId);
-                                    
-                                    const prevType = prevTypesArr.find(t => String(t?.id || '').trim() === change.oldId) || {};
-                                    const oldTab = {
-                                        id: change.oldId,
-                                        name: prevNameById.get(change.oldId) || change.oldId,
-                                        icon: prevType.icon || '',
-                                        order: oldIndex
-                                    };
-                                    
-                                    const nextRow = rowById.get(change.newId) || {};
-                                    const newTab = {
-                                        id: change.newId,
-                                        name: nextNameById.get(change.newId) || change.newId,
-                                        icon: nextRow.icon || '',
-                                        order: newIndex
-                                    };
-                                    
-                                    // Get ALL changes including ID
-                                    const allChanges = this.compareTabChanges(oldTab, newTab);
-                                    
-                                    // The ID change is already in allChanges, now we have name/icon/order too!
-                                    console.log(`[Tab ID Change] "${change.oldId}" → "${change.newId}" changed:`, Object.keys(allChanges).join(', '), allChanges);
-                                    
-                                    // Collect ID change as an UPDATE with ALL property changes
-                                    batchChanges.updated.push({
-                                        tabId: change.newId,
-                                        tabName: newTab.name,
-                                        changes: allChanges,
-                                        changedFields: Object.keys(allChanges),
-                                        changeCount: Object.keys(allChanges).length,
-                                        resourceCount: count
-                                    });
-                                }
-                            } catch (err) {
-                                console.error(`[Tab ID Change] Failed to update resources:`, err);
-                                showAlert(`Error: Failed to update resources when changing tab ID from "${change.oldId}" to "${change.newId}". ${err.message}`, 'error');
-                            }
-                        }
-
-                        // Tab updates (IDs unchanged - track name, icon, order changes)
-                        // Use for loop instead of forEach to ensure synchronous execution
-                        // Skip tabs whose IDs changed (already handled above)
+                        // STEP 4: Tab property updates (name, icon, order - IDs are immutable!)
+                        // Track changes to existing tabs (name, icon, order)
                         for (let newIndex = 0; newIndex < nextIds.length; newIndex++) {
                             const id = nextIds[newIndex];
-                            if (prevSet.has(id) && !renamedNewIds.has(id)) {
+                            if (prevSet.has(id)) {
                                 const oldIndex = prevIds.indexOf(id);
                                 
                                 // Build old and new tab objects for comparison
