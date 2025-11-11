@@ -232,7 +232,7 @@ class ExcelExporter {
             'URL': resource.url,
             'Type': this._displayTypeName(this._normalizeTypeId(resource.type)),
             'Section': nameById[String(resource.sectionId || '')] || String(resource.sectionId || ''),
-            'Category': resource.category || '',
+            'Category': (resource.extra && resource.extra.category) || resource.category || '',
             'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
             'Created By': resource.userId || resource.user_id || '',
             'Created At (CST)': (resource.createdAt || resource.created_at) ? this._formatDateChina(resource.createdAt || resource.created_at) : '',
@@ -486,7 +486,7 @@ class ExcelExporter {
                         'Title': resource.title,
                         'Description': resource.description || '',
                         'URL': resource.url,
-                        'Category': resource.category || '',
+                        'Category': (resource.extra && resource.extra.category) || resource.category || '',
                         'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
                         'Created At (CST)': this._formatDateChina(resource.createdAt)
                     }));
