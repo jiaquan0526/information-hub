@@ -234,7 +234,7 @@ class ExcelExporter {
             'Section': nameById[String(resource.sectionId || '')] || String(resource.sectionId || ''),
             'Category': (resource.extra && resource.extra.category) || resource.category || '',
             'Tags': Array.isArray(resource.tags) ? resource.tags.join(', ') : (typeof resource.tags === 'string' ? resource.tags : ''),
-            'Created By': resource.userId || resource.user_id || '',
+            'Created By': resource.created_by_name || resource.creator_email || resource.created_by || resource.userId || resource.user_id || '',
             'Created At (CST)': (resource.createdAt || resource.created_at) ? this._formatDateChina(resource.createdAt || resource.created_at) : '',
             'Updated At (CST)': (resource.updatedAt || resource.updated_at) ? this._formatDateChina(resource.updatedAt || resource.updated_at) : ''
         }));
